@@ -1,0 +1,19 @@
+
+--- STRATEGY SIMULATOR START ---
+
+Loaded trained XGBoost model.
+Saved precomputed predictions and prefix sums.
+Total strategies to evaluate: 18318
+Best strategy:
+{'best_compound_sequence': ('MEDIUM',), 'best_pit_laps': [], 'best_total_time': 41.962867736816406}
+
+OPTIMIZATION COMPLETE
+Best strategy: (('MEDIUM',), [])
+Total time: 41.962867736816406
+
+FILES GENERATED:
+  - strategy_simulator_precomputed_predictions.csv
+  - strategy_simulator_prefix_sums.csv
+  - strategy_simulator_all_strategy_results.csv
+  - strategy_simulator_best_strategy.json
+  - strategy_simulator_final_summary.txt

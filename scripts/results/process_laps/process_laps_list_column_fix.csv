@@ -1,0 +1,10 @@
+file,column,action
+laps_p1.csv,segments_sector_1,converted_list_to_len
+laps_p1.csv,segments_sector_2,converted_list_to_len
+laps_p1.csv,segments_sector_3,converted_list_to_len
+laps_p2.csv,segments_sector_1,converted_list_to_len
+laps_p2.csv,segments_sector_2,converted_list_to_len
+laps_p2.csv,segments_sector_3,converted_list_to_len
+laps_p3.csv,segments_sector_1,converted_list_to_len
+laps_p3.csv,segments_sector_2,converted_list_to_len
+laps_p3.csv,segments_sector_3,converted_list_to_len

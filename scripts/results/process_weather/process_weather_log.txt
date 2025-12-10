@@ -1,0 +1,12 @@
+Loaded weather.csv with 1739 rows
+Dropped meeting/session keys if present.
+[weather.csv] Removed 165 weather outliers (Z-score)
+[weather.csv] Scaled continuous weather features: ['air_temperature', 'track_temperature', 'humidity', 'pressure', 'wind_speed', 'rainfall']
+ → wind_direction kept unscaled (cyclical variable)
+Saved cleaned weather file: process_weather_cleaned_weather.csv
+
+PROCESS COMPLETE. Files generated:
+  - process_weather_zscore_summary.csv
+  - process_weather_scaling_summary.csv
+  - process_weather_cleaned_weather.csv
+  - process_weather_manifest.txt

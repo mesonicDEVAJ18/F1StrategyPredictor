@@ -1,0 +1,28 @@
+Loading preprocessed data...
+  → Laps:   839 rows
+  → Stints: 275 rows
+  → Weather:1574 rows
+
+Assigning stint numbers to laps...
+  → Missing stint numbers: 0
+
+Merging stints into laps...
+  → Stints merged successfully
+
+Merging weather using pseudo-time...
+  → Weather merged successfully
+
+Engineering features...
+
+Final cleanup...
+
+✅ Final engineered dataset saved as ./results/feature_engineer/feature_engineer_final_engineered_dataset.csv
+
+FILES GENERATED:
+  - feature_engineer_laps_initial_snapshot.csv
+  - feature_engineer_laps_with_stints.csv
+  - feature_engineer_laps_after_stint_merge.csv
+  - feature_engineer_laps_after_weather_merge.csv
+  - feature_engineer_feature_engineered_snapshot.csv
+  - feature_engineer_final_engineered_dataset.csv
+  - feature_engineer_manifest.txt

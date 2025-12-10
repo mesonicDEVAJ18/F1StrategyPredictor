@@ -1,0 +1,4 @@
+file,column,action
+stints_p1,compound,one_hot
+stints_p2,compound,one_hot
+stints_p3,compound,one_hot

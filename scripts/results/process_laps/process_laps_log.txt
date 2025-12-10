@@ -1,0 +1,47 @@
+
+Loaded laps_p1.csv with 426 rows
+  → Fixed list column: segments_sector_1
+  → Fixed list column: segments_sector_2
+  → Fixed list column: segments_sector_3
+  → Removed 90 pit-out laps
+[laps_p1.csv] Removed 0 invalid-sector laps
+[laps_p1.csv] Removed 0 extreme lap-time outliers
+[laps_p1.csv] Removed 25 unrealistic-speed laps
+[laps_p1.csv] Removed 2 IQR-residual outliers
+[laps_p1.csv] Scaled continuous features: ['lap_duration', 'duration_sector_1', 'duration_sector_2', 'duration_sector_3', 'i1_speed', 'i2_speed', 'st_speed']
+  → Saved cleaned file: process_laps_cleaned_laps_p1.csv
+
+Loaded laps_p2.csv with 522 rows
+  → Fixed list column: segments_sector_1
+  → Fixed list column: segments_sector_2
+  → Fixed list column: segments_sector_3
+  → Removed 89 pit-out laps
+[laps_p2.csv] Removed 1 invalid-sector laps
+[laps_p2.csv] Removed 1 extreme lap-time outliers
+[laps_p2.csv] Removed 70 unrealistic-speed laps
+[laps_p2.csv] Removed 31 IQR-residual outliers
+[laps_p2.csv] Scaled continuous features: ['lap_duration', 'duration_sector_1', 'duration_sector_2', 'duration_sector_3', 'i1_speed', 'i2_speed', 'st_speed']
+  → Saved cleaned file: process_laps_cleaned_laps_p2.csv
+
+Loaded laps_p3.csv with 309 rows
+  → Fixed list column: segments_sector_1
+  → Fixed list column: segments_sector_2
+  → Fixed list column: segments_sector_3
+  → Removed 96 pit-out laps
+[laps_p3.csv] Removed 5 invalid-sector laps
+[laps_p3.csv] Removed 0 extreme lap-time outliers
+[laps_p3.csv] Removed 7 unrealistic-speed laps
+[laps_p3.csv] Removed 1 IQR-residual outliers
+[laps_p3.csv] Scaled continuous features: ['lap_duration', 'duration_sector_1', 'duration_sector_2', 'duration_sector_3', 'i1_speed', 'i2_speed', 'st_speed']
+  → Saved cleaned file: process_laps_cleaned_laps_p3.csv
+
+Saved combined dataset: process_laps_combined_cleaned.csv
+
+PROCESS COMPLETED. Files generated:
+  - process_laps_cleaned_laps_p1.csv
+  - process_laps_cleaned_laps_p2.csv
+  - process_laps_cleaned_laps_p3.csv
+  - process_laps_combined_cleaned.csv
+  - process_laps_removed_rows_summary.csv
+  - process_laps_list_column_fix.csv
+  - process_laps_manifest.txt

@@ -1,0 +1,25 @@
+Loading engineered dataset...
+Dataset rows: 1126
+Rows after target shift drop: 613
+Saved feature snapshot.
+Completed train/test split.
+
+Training models...
+Training LinearRegression...
+Training RandomForest...
+Training XGBoost...
+
+Saved model metrics table.
+Saved feature importance CSVs.
+Saved trained XGB model.
+Saved all plots.
+
+Generated files:
+  - train_model_feature_matrix_snapshot.csv
+  - train_model_model_metrics.csv
+  - train_model_feature_importance_rf.csv
+  - train_model_feature_importance_xgb.csv
+  - train_model_xgb_model.pkl
+  - train_model_prediction_overlay.png
+  - train_model_metric_bars.png
+  - train_model_xgb_vs_true.png

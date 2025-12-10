@@ -1,0 +1,16 @@
+file,stage,rows_removed
+laps_p1.csv,pit_out,90
+laps_p1.csv,invalid_sector,0
+laps_p1.csv,unrealistic_laptime,0
+laps_p1.csv,unrealistic_speed,25
+laps_p1.csv,iqr_residual,2
+laps_p2.csv,pit_out,89
+laps_p2.csv,invalid_sector,1
+laps_p2.csv,unrealistic_laptime,1
+laps_p2.csv,unrealistic_speed,70
+laps_p2.csv,iqr_residual,31
+laps_p3.csv,pit_out,96
+laps_p3.csv,invalid_sector,5
+laps_p3.csv,unrealistic_laptime,0
+laps_p3.csv,unrealistic_speed,7
+laps_p3.csv,iqr_residual,1
