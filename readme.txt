@@ -1,238 +1,327 @@
-F1 RACE STRATEGY OPTIMISER PIPELINE
-Requirement for Data Science CSE558 at Indraprastha Institute of Information Technology Delhi
+# F1 Race Strategy Optimizer
 
-PROBLEM STATEMENT
-Use data collected over 3 practice sessions in a non sprint Formula 1 weekend to predict the optimal tyre strategy for a race where atleast
-two compounds are supposed to be used (out of 3, hard, medium and soft). 
+> A machine learning pipeline for predicting optimal tyre strategies in Formula 1 races using practice session telemetry data.
 
-DATA COLLECTION
-This analysis has been done on Bahrain 2025, same pipeline is applicable across weekends.
-All data has been collected from https://openf1.org/
+**Data Science Project (CSE558)**  
+Indraprastha Institute of Information Technology Delhi  
+*Author: Devaj Rathore*
 
-1. Identify the 3 practice sessions ids. https://api.openf1.org/v1/sessions?country_name=Bahrain&year=2025 
-1	10007	Practice 1	Practice	2025-04-11 11:30	2025-04-11 12:30	1 hr	Friday FP1
-2	10008	Practice 2	Practice	2025-04-11 15:00	2025-04-11 16:00	1 hr	Friday FP2
-3	10009	Practice 3	Practice	2025-04-12 12:30	2025-04-12 13:30	1 hr	Saturday FP3
+---
 
-2. Download all laps' data for the sessions 
-https://api.openf1.org/v1/laps?session_key=10007&csv=true
-https://api.openf1.org/v1/laps?session_key=10008&csv=true
-https://api.openf1.org/v1/laps?session_key=10009&csv=true
+## 📋 Problem Statement
 
-3. Download all stints's data for the sessions
-https://api.openf1.org/v1/stints?session_key=10007&csv=true
-https://api.openf1.org/v1/stints?session_key=10008&csv=true
-https://api.openf1.org/v1/stints?session_key=10009&csv=true
+Predict the optimal tyre strategy for a Formula 1 race weekend using data from three practice sessions (FP1, FP2, FP3). The strategy must utilize at least two of the three available compounds: **Soft**, **Medium**, and **Hard**.
 
-4. Download the weekend's weather related data
-https://api.openf1.org/v1/weather?meeting_key=1253&csv=true
+---
 
-DATA UNDERSTANDING
-Laps
-| **Feature**           | **Meaning / Real-World Interpretation**                  | **Type**                   | **Example / Units**     | **Analytical Role**                                                                 |
-| --------------------- | -------------------------------------------------------- | -------------------------- | ----------------------- | ----------------------------------------------------------------------------------- |
-| **date_start**        | UTC timestamp when the lap began.                        | *Datetime*                 | “2024-03-01 T14:23:15Z” | Enables ordering, track-evolution analysis, and time-based joins with weather data. |
-| **driver_number**     | Same as above — driver identifier.                       | *Categorical / identifier* | 16 = Leclerc            | Merge key across tables.                                                            |
-| **duration_sector_1** | Time to complete Sector 1.                               | *Numeric (float)*          | 29.374 s                | Used for localized performance analysis (track-segment performance).                |
-| **duration_sector_2** | Time to complete Sector 2.                               | *Numeric (float)*          | 38.452 s                | Used for lap-time composition.                                                      |
-| **duration_sector_3** | Time to complete Sector 3.                               | *Numeric (float)*          | 26.928 s                | Combined with others to get total lap time.                                         |
-| **i1_speed**          | Instantaneous speed at the first intermediate line.      | *Numeric (float)*          | 305 km/h                | Feature for pace modeling; indicates straight-line speed and DRS use.               |
-| **i2_speed**          | Instantaneous speed at second intermediate.              | *Numeric (float)*          | 280 km/h                | Captures mid-sector speed differences.                                              |
-| **is_pit_out_lap**    | Boolean flag: 1 = lap starts from pit exit.              | *Boolean / binary*         | True / False            | Helps exclude outlaps from analysis.                                                |
-| **lap_duration**      | Total lap time (sector1 + 2 + 3) — main target variable. | *Numeric (float)*          | 92.841 s                | Dependent variable for degradation & ML regression models.                          |
-| **lap_number**        | Sequential lap index within the session.                 | *Numeric (int)*            | 1 → 60                  | Enables stint segmentation and degradation trends.                                  |
-| **meeting_key**       | Same race-weekend identifier.                            | *Categorical / identifier* | 9161                    | Used for multi-GP aggregation.                                                      |
-| **segments_sector_1** | Sub-split timings or micro-segments in Sector 1.         | *Array / list (float)*     | [10.1, 9.9, 9.8]        | Optional fine-grained telemetry for advanced modeling.                              |
-| **segments_sector_2** | Same for Sector 2.                                       | *Array / list (float)*     | …                       | Optional.                                                                           |
-| **segments_sector_3** | Same for Sector 3.                                       | *Array / list (float)*     | …                       | Optional.                                                                           |
-| **session_key**       | Session identifier (FP1, FP2, FP3).                      | *Categorical / identifier* | 12345                   | Used to merge with `/stints`.                                                       |
-| **st_speed**          | Speed at the start/finish line.                          | *Numeric (float)*          | 310 km/h                | Proxy for DRS usage and straight-line performance.                                  |
+## 🏎️ Project Overview
 
-Stints
-| **Feature**           | **Meaning / Real-World Interpretation**                                                               | **Type**                   | **Example / Units** | **Analytical Role**                                              |
-| --------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------- | ------------------- | ---------------------------------------------------------------- |
-| **compound**          | Tyre compound used in a stint (Soft, Medium, Hard, Inter, Wet). Determines grip and degradation rate. | *Categorical (nominal)*    | “Soft”              | Key explanatory variable for pace and degradation models.        |
-| **driver_number**     | Unique car/driver code assigned during a Grand Prix weekend (e.g., 63 = Russell).                     | *Categorical / identifier* | 44, 1, 16           | Join key across all endpoints; used to merge lap and stint data. |
-| **lap_start**         | First lap number where this tyre set was used.                                                        | *Numeric (int)*            | 1 → 57              | Defines stint boundaries for degradation calculations.           |
-| **lap_end**           | Last lap number before a pit stop or tyre change.                                                     | *Numeric (int)*            | 18 → 32             | Determines stint length = `lap_end − lap_start + 1`.             |
-| **meeting_key**       | Unique race-weekend identifier (e.g., “2023-BahrainGP”).                                              | *Categorical / identifier* | 9161                | Used to group sessions by Grand Prix.                            |
-| **session_key**       | Unique identifier for a session (FP1, FP2, FP3).                                                      | *Categorical / identifier* | 12345               | Enables merging across multiple FP sessions.                     |
-| **stint_number**      | Sequential number of the stint for a given driver in that session (1, 2, 3 …).                        | *Numeric (int)*            | 1, 2, 3             | Helps analyze pace evolution per stint.                          |
-| **tyre_age_at_start** | Tyre age (laps already completed on this set) when the stint began — reused tyres start > 0.          | *Numeric (float)*          | 0 – 25 laps         | Used to adjust degradation modeling (fresh vs used sets).        |
+This pipeline analyzes practice session data to:
+- Model tyre degradation behavior across different compounds
+- Simulate race conditions lap-by-lap
+- Optimize pit stop timing and tyre compound selection
+- Minimize total race time through strategic planning
 
-Weather
-| **Feature**           | **Meaning / Real-World Interpretation**                                                                                            | **Type**                   | **Example / Units**        | **Analytical Role**                                                                   |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | -------------------------- | ------------------------------------------------------------------------------------- |
-| **air_temperature**   | The ambient temperature of the air surrounding the track at the recorded time. Affects engine cooling and aerodynamic performance. | *Numeric (float)*          | 27.3 °C                    | Used to assess how ambient conditions influence lap pace and degradation.             |
-| **date**              | UTC timestamp when the weather sample was recorded.                                                                                | *Datetime*                 | `2024-03-01T14:22:00Z`     | Allows time-based alignment with lap start times from `/laps`.                        |
-| **humidity**          | Relative humidity of the air. Higher humidity can affect tyre and engine efficiency.                                               | *Numeric (float)*          | 62 %                       | Used in correlation analysis and regression as an explanatory environmental variable. |
-| **meeting_key**       | Unique race-weekend identifier (same as in `/laps` and `/stints`).                                                                 | *Categorical / Identifier* | 9161                       | Enables merging of weather data with lap and stint data by race.                      |
-| **pressure**          | Atmospheric pressure measured at the circuit.                                                                                      | *Numeric (float)*          | 1012 mbar                  | Optional feature; can indicate altitude and air density effects.                      |
-| **rainfall**          | Measured precipitation during the sample interval.                                                                                 | *Numeric (float)*          | 0 mm/h                     | Critical for excluding wet laps or performing wet-vs-dry comparisons.                 |
-| **session_key**       | Session identifier (FP1, FP2, FP3, etc.) — consistent with `/laps` and `/stints`.                                                  | *Categorical / Identifier* | 12345                      | Used to filter data for specific practice sessions.                                   |
-| **track_temperature** | Temperature of the asphalt surface — directly affects tyre grip and degradation.                                                   | *Numeric (float)*          | 41.7 °C                    | One of the most important predictors for tyre performance.                            |
-| **wind_direction**    | Direction from which wind is blowing, usually measured in degrees (0–360).                                                         | *Numeric (float)*          | 250° (wind from WSW)       | Used for advanced aerodynamic or circuit-specific modeling.                           |
-| **wind_speed**        | Wind velocity at the track, often measured at a fixed reference point.                                                             | *Numeric (float)*          | 3.6 m/s                    | Can influence drag and straight-line speed variations.                                |
+**Case Study**: Bahrain Grand Prix 2025  
+*(Pipeline is generalizable to any non-sprint F1 weekend)*
 
-Relationship Mapping between these 3 raw tables
-| Relationship                         | Common Keys                                                                                          | Description                                                                             | Type                                    | Usage                                                                               |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------- |
-| **Laps ↔ Stints**                    | `meeting_key`, `session_key`, `driver_number`, and lap overlap (`lap_number ∈ [lap_start, lap_end]`) | Links each lap to the tyre compound, stint number, and tyre age in use during that lap. | **One-to-Many** (one stint → many laps) | To add tyre compound and degradation info to lap-level data.                        |
-| **Laps ↔ Weather**                   | `meeting_key`, `session_key`, and nearest timestamp (`date_start ≈ date`)                            | Associates each lap with environmental conditions at its start time.                    | **Many-to-One (approximate join)**      | To add ambient and track temperature, humidity, wind, etc., to lap-level pace data. |
-| **Stints ↔ Weather**                 | `meeting_key`, `session_key`, and midpoint timestamp of stint (`mid_stint_time ≈ date`)              | Connects each tyre stint to the average weather conditions during its duration.         | **Many-to-One (aggregate join)**        | To assess how weather influenced tyre wear and stint length.                        |
-| **Shared Identifiers (Global Keys)** | `meeting_key`, `session_key`, `driver_number`                                                        | Consistent across all datasets; ensure referential integrity.                           | —                                       | Enables merging of all three datasets into a unified event-level dataset.           |
+---
 
-DATA PREPARATION
-Scripts: clean_laps.py, clean_stints.py and clean_weather.py
-1. Remove redundant data from all of the data types
-These scripts remove session keys and meeeting keys, data points irrelevant to the pipeline.
-Also clean_laps.py removes out laps and in laps. (laps that are not complete, involve the driver coming out of the pit or going into the pit are removed.)
+## 📊 Data Collection
 
-2. Remove outliers
-Laps
-Removed laps with missing sector times and sector times below 0. Also removed laps with unrealsitic lap times (duration < 30s and ≥ 2× the median lap time of that session).
-Also removed laps with speed less than 50 km/h indicating aborted laps. (due to whatever reason)
-Removed laps whose residuals fall outside [Q1 – 3×IQR, Q3 + 3×IQR] where residuals are a rolling median, as a rolling median would compensate for the track improving across a single session.
+All data is sourced from the [OpenF1 API](https://openf1.org/).
 
-Stints
-No continous telemetry available, prompting use of logical checks only, removed rows where lap_start > lap_end, negative tyre_age_at_start, and missing compound.
+### Data Sources
 
-Weather
-Applied Z-score filtering (|z| > 3) on continuous atmospheric readings: Air temperature, Track temperature, Humidity, Pressure, Wind speed and Rainfall
+**1. Session Identification**
+```
+GET https://api.openf1.org/v1/sessions?country_name=Bahrain&year=2025
+```
 
-3. Encoding
-Laps
-None needed, driver number was kept numerical as its friendly to tree based models (descision to use trees explained later) and was used to combine with stints data.
-Driver number was removed altogether later as it was decided to not build a driver specific model later.
+| Session ID | Session Name | Date | Time (UTC) |
+|------------|-------------|------|------------|
+| 10007 | Practice 1 | 2025-04-11 | 11:30 - 12:30 |
+| 10008 | Practice 2 | 2025-04-11 | 15:00 - 16:00 |
+| 10009 | Practice 3 | 2025-04-12 | 12:30 - 13:30 |
 
-Stints
-None needed, driver number was kept numerical as its friendly to tree based models (descision to use trees explained later) and was used to combine with stints data.
-One-hot encoded compound → compound_Soft, compound_Medium, compound_Hard
+**2. Telemetry Data Downloads**
 
-Weather
-None needed, driver number was kept numerical as its friendly to tree based models (descision to use trees explained later) and was used to combine with stints data.
+```bash
+# Lap data for all three sessions
+curl "https://api.openf1.org/v1/laps?session_key=10007&csv=true" -o fp1_laps.csv
+curl "https://api.openf1.org/v1/laps?session_key=10008&csv=true" -o fp2_laps.csv
+curl "https://api.openf1.org/v1/laps?session_key=10009&csv=true" -o fp3_laps.csv
 
-4. Normalization
-Laps
-Applied StandardScaler to continuous telemetry: lap_duration, duration_sector_1/2/3, i1/2/3_speed, this ensures all physical telemetry signals are on comparable scales.
+# Stint data for all three sessions
+curl "https://api.openf1.org/v1/stints?session_key=10007&csv=true" -o fp1_stints.csv
+curl "https://api.openf1.org/v1/stints?session_key=10008&csv=true" -o fp2_stints.csv
+curl "https://api.openf1.org/v1/stints?session_key=10009&csv=true" -o fp3_stints.csv
 
-Stints
-No normalization applied — stints contain mostly integer metadata (stint number, lap ranges).
+# Weather data for the weekend
+curl "https://api.openf1.org/v1/weather?meeting_key=1253&csv=true" -o weather.csv
+```
 
-Weather
-Applied StandardScaler to: Air temperature, Track temperature, Humidity, Pressure, Wind speed, and Rainfall
-Wind direction kept raw due to circular nature.
+### Dataset Descriptions
 
-5. Feature Engineering
-Stint number, assigned to each lap based on stints data to enable per-stint tyre modeling and degradation analysis, kept session independent to include evolution information too.
+#### **Laps Dataset**
+Key features for lap-level telemetry:
+- `lap_duration`: Total lap time (primary target variable)
+- `duration_sector_1/2/3`: Individual sector times
+- `i1_speed`, `i2_speed`, `st_speed`: Speed measurements at key points
+- `lap_number`: Sequential lap index
+- `is_pit_out_lap`: Flag for pit exit laps (excluded from analysis)
 
-Pseudo Time alignment, because laps contain no timestamps, a pseudo_time axis is constructed: Laps sorted by lap_number → pseudo_time = lap_number,A nearest-neighbor merge_asof assigns each lap the closest matching weather observation.
-A nearest-neighbor merge_asof assigns each lap the closest matching weather observation
+#### **Stints Dataset**
+Tyre compound and usage information:
+- `compound`: Tyre type (Soft/Medium/Hard/Inter/Wet)
+- `lap_start`, `lap_end`: Stint boundaries
+- `stint_number`: Sequential stint identifier
+- `tyre_age_at_start`: Previous laps on this tyre set
 
-laps_since_stint_start, laps_since_stint_start=lap_number−lap_start+1
+#### **Weather Dataset**
+Environmental conditions:
+- `air_temperature`, `track_temperature`: Critical for tyre performance
+- `humidity`, `pressure`: Atmospheric conditions
+- `wind_speed`, `wind_direction`: Aerodynamic factors
+- `rainfall`: Wet vs dry condition indicator
 
-stint_avg_pace = mean(lap_duration of all other laps for that driver & stint, excluding the current lap) (Leave-One-Out average → no target leakage)
+---
 
-fuel_corrected_pace, laps_remaining=lap_end−lap_number and fuel_corrected_pace=lap_duration+k⋅laps_remaining(k=0.035 seconds per lap)
-This is a dependant variable used in final loss calculations not used in the model as it would cause leakage.
+## 🔧 Data Preparation
 
-track evolution was not chosen as an engineered parameter, as it would've been a derived dependant value that would not have contributed to the model.
+### Cleaning Scripts
+- `clean_laps.py`: Removes outliers and invalid laps
+- `clean_stints.py`: Validates stint metadata
+- `clean_weather.py`: Filters atmospheric anomalies
 
-EXPLORATORY DATA ANALYSIS AND STATISTICAL Inference
+### Data Cleaning Process
 
-ML MODELLING TO COMPUTE DEGRADATION RATE
-1. Remove dependant variables to avoid leakage
-lap_duration = segments_sector_1 + segments_sector_2 + segments_sector_3, and was therefore removed as it is clearly a dependant variable.
-Segments were not removed as they individual segment times may have smth to contribute in the model.
+**1. Redundancy Removal**
+- Removed session and meeting keys after merging
+- Excluded pit-in and pit-out laps (incomplete laps)
 
-laps_remaining is lap_start - lap_end, used to compute/approximate fuel_corrected_pace, not expected for the model.
+**2. Outlier Detection & Removal**
 
-2. What are we predicitng?
-Instead of explicitly computing a “degradation rate” label (which becomes circular and leak-prone), the model is trained to predict:
-fuel_corrected_pace on the NEXT lap
+*Laps:*
+- Missing or negative sector times
+- Unrealistic lap times (< 30s or ≥ 2× median)
+- Aborted laps (speed < 50 km/h)
+- Rolling median residual filtering: removed laps outside `[Q1 - 3×IQR, Q3 + 3×IQR]`
 
-Fully causal:
+*Stints:*
+- Logical validation: `lap_start ≤ lap_end`
+- Non-negative `tyre_age_at_start`
+- Non-null compound values
 
-All inputs belong to lap t
-The model learns how tyre, weather, stint age, and track conditions evolve into lap t+1
-No sneaky future-lap info (no target leakage)
-Works perfectly with race simulations (autoregressive rollout)
-Degradation is then obtained as an emergent property:
+*Weather:*
+- Z-score filtering (|z| > 3) on all continuous variables
 
-As XGBoost repeatedly predicts future fcp values, the falling trend in predicted pace is degradation.
-No slope assumptions.
-No fixed compound multipliers.
-Just learned tyre physics from FP laps.
+**3. Encoding**
+- `driver_number`: Kept numerical (tree-friendly, later removed for generalized model)
+- `compound`: One-hot encoded → `compound_Soft`, `compound_Medium`, `compound_Hard`
 
-3. Model choice
-After evaluating linear models, tree ensembles, and clustering-based approaches, the final decision was to use XGBoost as the primary degradation modelling engine.
+**4. Normalization**
+- **Laps**: StandardScaler on lap times, sector times, and speeds
+- **Weather**: StandardScaler on temperature, humidity, pressure, wind speed, rainfall
+- **Wind direction**: Kept raw (circular variable)
 
-Reasoning:
-Linear Regression underfits non-linear tyre behaviour (tyre warm-up phase, thermal degradation, cliffing, etc.).
-Random Forest produces noisy, stepwise predictions → unstable in autoregressive simulations.
-K-Means provides no predictive capability (only grouping).
-XGBoost hits the sweet spot →
-non-linear learning, extremely stable rollouts, low overfit, fast inference, and direct interpretability through feature importance and SHAP.
+**5. Feature Engineering**
 
-This choice also aligns with how real-world motorsport predictive pipelines are structured:
-“predict the next lap’s corrected pace and let degradation emerge naturally from repeated predictions.”
+| Feature | Formula | Purpose |
+|---------|---------|---------|
+| `stint_number` | Assigned from stints data | Track tyre degradation per stint |
+| `pseudo_time` | `lap_number` (sorted) | Enable time-alignment with weather |
+| `laps_since_stint_start` | `lap_number - lap_start + 1` | Measure tyre age in current stint |
+| `stint_avg_pace` | Leave-one-out mean of lap times | Capture stint-level performance |
+| `fuel_corrected_pace` | `lap_duration + 0.035 × laps_remaining` | Account for fuel load reduction |
 
-RACE SIMULATION AND OPTIMISATION
-1. Generate the feasible strategy space
-All valid race strategies are enumerated by combining:
-0-stop, 1-stop, 2-stop, and 3-stop structures
+> **Note**: Track evolution was excluded to avoid deriving dependent variables.
 
-All possible tyre-compound sequences for those structures
-Valid pit-lap windows (no pits on the formation laps, no pits too early or too late)
-This gives the full set of legal and physically meaningful strategies for the race.
+---
 
-2. Lap-by-lap simulation using the ML model
+## 🤖 Machine Learning Model
 
-Each candidate strategy is simulated one lap at a time.
-For every lap:
-Predict next-lap fuel-corrected pace via XGBoost
-Add a fuel penalty that reduces over the race distance
-Update all lap-state variables (laps_since_stint_start, tyre compound, tyre age, etc.)
+### Objective
+Predict **fuel-corrected pace on the next lap** rather than explicitly computing degradation rates.
 
-Objective function: minimize total race time
+**Why this approach?**
+- Fully causal: All inputs from lap `t` predict lap `t+1`
+- No target leakage
+- Degradation emerges naturally from repeated predictions
+- Perfect for autoregressive race simulation
 
-For each candidate strategy, total race time is computed as sum of all lap times + pit_time
-This gives a single scalar number for each strategy, allowing direct comparison.
+### Model Selection: XGBoost
 
-4️. Strategy optimisation
-The optimisation engine evaluates and ranks strategies by total race time.
-Dynamic Programming is used to prune clearly inferior strategies
+After evaluating multiple approaches:
 
-Future work: Optional Genetic Algorithm can be applied for deeper search across larger sequences
-The best compound order + pit windows are selected based on lowest predicted race time
-This produces the final recommended tyre strategy.
+| Model | Result |
+|-------|--------|
+| Linear Regression | Underfits non-linear tyre behavior |
+| Random Forest | Noisy, stepwise predictions |
+| K-Means Clustering | No predictive capability |
+| **XGBoost** | ✅ **Optimal balance of accuracy and stability** |
 
-EVALUATION AND VALIDATION
-1. Model Validation
+**XGBoost Advantages:**
+- Captures non-linear tyre physics (warm-up, thermal degradation, cliff effects)
+- Stable predictions in autoregressive simulations
+- Low overfitting risk
+- Fast inference
+- Interpretable via SHAP values
 
-The predictive model is validated using:
-5-fold cross-validation on next-lap fuel-corrected pace
-Residual plots to check for systematic bias
-SHAP or built-in feature importance to verify that the model follows physics
-(e.g., tyre age, compound, track temperature matter most)
+### Training Process
 
-Critical checks:
-Predictions remain smooth when rolled forward for multiple laps
-No drift or instability during stint simulation
-Feature influence aligns with expected tyre-degradation behaviour
+**1. Target Variable**
+```python
+y = fuel_corrected_pace_next_lap
+```
 
-2. Strategy Validation
+**2. Removed Dependent Variables**
+- `lap_duration` (sum of sector times)
+- `laps_remaining` (used in fuel correction formula)
 
-Once the model is verified, strategy validation ensures the chosen strategy actually makes sense.
-This includes:
-Running multiple simulated race conditions with small variations
-Comparing alternative strategies across pit windows and tyre sequences
-Inspecting heatmaps of predicted total race time across the strategy grid
-The purpose here is not statistical inference, but checking consistency:
-The recommended strategy remains optimal across plausible variations
-No alternative strategy becomes better under small perturbations
-The solution is stable and not sensitive to minor model noise
+**3. Validation**
+- 5-fold cross-validation
+- Residual analysis for systematic bias
+- SHAP feature importance verification
 
-THANK YOU
-DEVAJ RATHORE
-NEWLY SELF APPOINTED ML EXPERT
+---
+
+## 🏁 Race Simulation & Optimization
+
+### 1. Strategy Space Generation
+
+Enumerate all feasible strategies:
+- **Stop configurations**: 0-stop, 1-stop, 2-stop, 3-stop
+- **Compound sequences**: All valid combinations
+- **Pit windows**: Excluding formation laps and extreme early/late stops
+
+### 2. Lap-by-Lap Simulation
+
+For each candidate strategy:
+1. Predict next-lap fuel-corrected pace using XGBoost
+2. Apply fuel penalty (decreases over race distance)
+3. Update state variables:
+   - `laps_since_stint_start`
+   - `compound`
+   - `tyre_age`
+4. Accumulate lap times
+
+### 3. Objective Function
+
+```
+Minimize: Total Race Time = Σ(lap_times) + pit_time_penalties
+```
+
+### 4. Optimization Engine
+
+- **Primary method**: Dynamic Programming (prune inferior strategies)
+- **Future enhancement**: Genetic Algorithm for deeper search
+- **Output**: Optimal compound sequence + pit lap windows
+
+---
+
+## ✅ Evaluation & Validation
+
+### Model Validation
+- **Cross-validation**: 5-fold CV on next-lap predictions
+- **Residual analysis**: Check for systematic bias
+- **Feature importance**: Verify alignment with tyre physics
+  - Expected top features: tyre age, compound, track temperature
+- **Simulation stability**: Predictions remain smooth over multi-lap rollouts
+
+### Strategy Validation
+- Simulate multiple race conditions with variations
+- Compare alternative strategies across pit windows
+- Generate heatmaps of predicted race time vs strategy grid
+- **Stability check**: Ensure optimal strategy persists under small perturbations
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+```bash
+pip install pandas numpy scikit-learn xgboost shap matplotlib seaborn
+```
+
+### Usage
+
+**1. Data Collection**
+```bash
+python collect_data.py --country Bahrain --year 2025
+```
+
+**2. Data Cleaning**
+```bash
+python clean_laps.py
+python clean_stints.py
+python clean_weather.py
+```
+
+**3. Feature Engineering**
+```bash
+python engineer_features.py
+```
+
+**4. Model Training**
+```bash
+python train_model.py
+```
+
+**5. Strategy Optimization**
+```bash
+python optimize_strategy.py --race_distance 57
+```
+
+---
+
+## 📈 Key Insights
+
+### Physical Considerations Modeled
+- Tyre thermal degradation over stint length
+- Compound-specific grip vs durability trade-offs
+- Track temperature impact on tyre performance
+- Fuel load reduction over race distance
+- Track evolution across practice sessions
+
+### Real-World Alignment
+This pipeline mirrors professional motorsport analytics:
+> "Predict the next lap's corrected pace and let degradation emerge naturally from repeated predictions."
+
+---
+
+## 🔮 Future Enhancements
+
+- [ ] Incorporate qualifying position for overtaking probability
+- [ ] Add safety car probability modeling
+- [ ] Implement real-time strategy adjustment during races
+- [ ] Extend to sprint race weekends
+- [ ] Driver-specific modeling for personalized strategies
+- [ ] Genetic Algorithm integration for larger strategy spaces
+
+---
+
+## 📝 License
+
+This project is developed for academic purposes at IIIT Delhi.
+
+---
+
+## 👤 Author
+
+**Devaj Rathore**  
+*Newly Self-Appointed ML Expert*  
+Data Science CSE558  
+Indraprastha Institute of Information Technology Delhi
+
+---
+
+## 🙏 Acknowledgments
+
+- [OpenF1 API](https://openf1.org/) for comprehensive F1 telemetry data
+- The data science community for XGBoost and SHAP tools
+- Formula 1 for being the ultimate testing ground for optimization problems
+
+---
+
+*"In racing, they say that your car goes where your eyes go. The driver who cannot tear his eyes away from the wall as he spins out of control will meet that wall; the driver who looks down the track as he struggles to control his car will somehow manage to find his way back to the track."* — Garth Stein
