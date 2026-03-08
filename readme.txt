@@ -7,7 +7,7 @@ two compounds are supposed to be used (out of 3, hard, medium and soft).
 The problem statement limits us to the three practice sessions only, we can broaden our scope by going out of this limitation but for this project we wont.
 
 DATA COLLECTION
-This analysis has been done on Bahrain 2025, same pipeline is applicable across weekends.
+This analysis has been done on Ferrari in Bahrain 2025, same pipeline is applicable across weekends.
 All data has been collected from https://openf1.org/
 
 1. Identify the 3 practice sessions ids. https://api.openf1.org/v1/sessions?country_name=Bahrain&year=2025 
@@ -28,10 +28,13 @@ https://api.openf1.org/v1/stints?session_key=10009&csv=true
 4. Download the weekend's weather related data
 https://api.openf1.org/v1/weather?meeting_key=1253&csv=true
 
-5.
-https://api.openf1.org/v1/car_data?session_key=10007&csv=true
-https://api.openf1.org/v1/car_data?session_key=10008&csv=true
-https://api.openf1.org/v1/car_data?session_key=10009&csv=true
+5. Download the car data for the sessions
+https://api.openf1.org/v1/car_data?session_key=10007&driver_number=7&csv=true
+https://api.openf1.org/v1/car_data?session_key=10007&driver_number=44&csv=true
+https://api.openf1.org/v1/car_data?session_key=10008&driver_number=16&csv=true
+https://api.openf1.org/v1/car_data?session_key=10008&driver_number=44&csv=true
+https://api.openf1.org/v1/car_data?session_key=10009&driver_number=16&csv=true
+https://api.openf1.org/v1/car_data?session_key=10009&driver_number=44&csv=true
 
 DATA UNDERSTANDING
 Laps
@@ -80,16 +83,35 @@ Weather
 | **wind_direction**    | Direction from which wind is blowing, usually measured in degrees (0–360).                                                         | *Numeric (float)*          | 250° (wind from WSW)       | Used for advanced aerodynamic or circuit-specific modeling.                           |
 | **wind_speed**        | Wind velocity at the track, often measured at a fixed reference point.                                                             | *Numeric (float)*          | 3.6 m/s                    | Can influence drag and straight-line speed variations.                                |
 
+Car Data
+| **Feature**       | **Meaning / Real-World Interpretation**                                                                | **Type**                   | **Example / Units**    | **Analytical Role**                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------ | -------------------------- | ---------------------- | ---------------------------------------------------------------------------------- |
+| **brake**         | Indicates whether the brake pedal is engaged by the driver. `100` means braking, `0` means no braking. | *Binary / Numeric (int)*   | 0 or 100               | Used to analyze braking zones, driver behavior, and deceleration patterns.         |
+| **date**          | UTC timestamp when the telemetry data sample was recorded.                                             | *Datetime*                 | `2024-03-01T14:22:05Z` | Enables synchronization with lap, weather, or position data over time.             |
+| **driver_number** | The permanent racing number assigned to a Formula 1 driver for the season.                             | *Categorical / Identifier* | 1, 16, 44              | Used to group or filter telemetry data by specific drivers.                        |
+| **drs**           | Status of the Drag Reduction System (DRS), indicating whether the rear wing flap is open or closed.    | *Categorical / Numeric*    | 0, 1, 8, 10, 12        | Helps analyze overtaking zones, straight-line speed advantages, and race strategy. |
+| **meeting_key**   | Unique identifier for a race weekend (Grand Prix event).                                               | *Categorical / Identifier* | 9161                   | Allows merging telemetry with laps, weather, and stint data for the same event.    |
+| **n_gear**        | The currently selected gear in the car’s transmission. `0` represents neutral or no gear engaged.      | *Numeric (int)*            | 0–8                    | Useful for analyzing acceleration patterns, gear shifts, and driver control.       |
+| **rpm**           | Engine speed measured as revolutions per minute. Indicates how fast the engine crankshaft is rotating. | *Numeric (int)*            | 11500 rpm              | Used to study engine performance, power delivery, and gear efficiency.             |
+| **session_key**   | Unique identifier for the track session (FP1, FP2, FP3, Qualifying, etc.).                             | *Categorical / Identifier* | 12345                  | Enables filtering telemetry for a specific session during a race weekend.          |
+| **speed**         | Instantaneous velocity of the car measured by telemetry sensors.                                       | *Numeric (float)*          | 298 km/h               | Critical metric for performance analysis, sector speed comparison, and drag study. |
+| **throttle**      | Percentage of maximum engine power being applied by the driver through the throttle pedal.             | *Numeric (float)*          | 0–100 %                | Used to analyze acceleration behavior, power usage, and driver input patterns.     |
+
+
 Relationship Mapping between these 3 raw tables
-| Relationship                         | Common Keys                                                                                          | Description                                                                             | Type                                    | Usage                                                                               |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------- |
-| **Laps ↔ Stints**                    | `meeting_key`, `session_key`, `driver_number`, and lap overlap (`lap_number ∈ [lap_start, lap_end]`) | Links each lap to the tyre compound, stint number, and tyre age in use during that lap. | **One-to-Many** (one stint → many laps) | To add tyre compound and degradation info to lap-level data.                        |
-| **Laps ↔ Weather**                   | `meeting_key`, `session_key`, and nearest timestamp (`date_start ≈ date`)                            | Associates each lap with environmental conditions at its start time.                    | **Many-to-One (approximate join)**      | To add ambient and track temperature, humidity, wind, etc., to lap-level pace data. |
-| **Stints ↔ Weather**                 | `meeting_key`, `session_key`, and midpoint timestamp of stint (`mid_stint_time ≈ date`)              | Connects each tyre stint to the average weather conditions during its duration.         | **Many-to-One (aggregate join)**        | To assess how weather influenced tyre wear and stint length.                        |
-| **Shared Identifiers (Global Keys)** | `meeting_key`, `session_key`, `driver_number`                                                        | Consistent across all datasets; ensure referential integrity.                           | —                                       | Enables merging of all three datasets into a unified event-level dataset.           |
+| **Relationship**                     | **Common Keys**                                                                                             | **Description**                                                                            | **Type**                                        | **Usage**                                                                                       |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **Laps ↔ Stints**                    | `meeting_key`, `session_key`, `driver_number`, and lap overlap (`lap_number ∈ [lap_start, lap_end]`)        | Links each lap to the tyre compound, stint number, and tyre age used during that lap.      | **One-to-Many** (one stint → many laps)         | Adds tyre compound and degradation information to lap-level performance analysis.               |
+| **Laps ↔ Weather**                   | `meeting_key`, `session_key`, and nearest timestamp (`date_start ≈ date`)                                   | Associates each lap with environmental conditions at the time the lap started.             | **Many-to-One (time-based join)**               | Adds air/track temperature, humidity, wind, etc., to lap-level performance modeling.            |
+| **Stints ↔ Weather**                 | `meeting_key`, `session_key`, and midpoint timestamp of stint (`mid_stint_time ≈ date`)                     | Connects tyre stints to the weather conditions experienced during the stint duration.      | **Many-to-One (aggregate join)**                | Used to analyze how weather affects tyre degradation and stint strategy.                        |
+| **Laps ↔ Car Data**                  | `meeting_key`, `session_key`, `driver_number`, and timestamp alignment (`date_start ≤ date ≤ lap_end_time`) | Links lap records with high-frequency telemetry such as speed, throttle, braking, and RPM. | **One-to-Many** (one lap → many telemetry rows) | Enables detailed performance analysis like braking zones, acceleration patterns, and DRS usage. |
+| **Stints ↔ Car Data**                | `meeting_key`, `session_key`, `driver_number`, and timestamp range within stint duration                    | Maps telemetry data to the tyre stint in which it occurred.                                | **One-to-Many**                                 | Allows analysis of driving style and power usage across different tyre compounds.               |
+| **Car Data ↔ Weather**               | `meeting_key`, `session_key`, and nearest timestamp (`date ≈ date`)                                         | Aligns telemetry samples with the weather conditions at that moment.                       | **Many-to-One**                                 | Enables studies of how environmental factors affect speed, throttle usage, and engine RPM.      |
+| **Shared Identifiers (Global Keys)** | `meeting_key`, `session_key`, `driver_number`                                                               | Common identifiers present across all datasets ensuring consistent merging.                | —                                               | Allows creation of a unified dataset combining laps, stints, weather, and telemetry data.       |
+
 
 DATA PREPARATION
-Scripts: clean_laps.py, clean_stints.py and clean_weather.py
+Scripts: process_laps.py, process_stints.py, process_weather.py ,and process_cardata.py
 1. Remove redundant data from all of the data types
 These scripts remove session keys and meeeting keys, data points irrelevant to the pipeline.
 Also clean_laps.py removes out laps and in laps. (laps that are not complete, involve the driver coming out of the pit or going into the pit are removed.)
