@@ -109,7 +109,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **Fix:** remove the setting, or use it as the base feature vector once #9 is done.
   - **readme.txt:** Race Simulation step 2.
 
-- [ ] **#14 The car-data stage is not functional**
+- [x] **#14 The car-data stage is not functional**
   - **Where:** `scripts/process_cardata.py`.
   - **Problem:**
     - It's a copy of `process_laps.py` and looks for `cardata_p*_*.csv`, but the files are named `car_data_p*_*.csv`.
@@ -117,13 +117,40 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - It isn't called from `master.py`.
   - **Fix:** rename the inputs, clean the actual columns (`brake`, `throttle`, `speed`, `rpm`, `n_gear`, `drs`), and aggregate the ~4 Hz samples per lap by matching each sample's timestamp to the lap's time window. Then wire it into `master.py`.
   - **readme.txt:** Data Collection step 5; Running the Pipeline; Data Preparation, CarData.
+  - **Fixed:** `process_cardata.py` rewritten to read `car_data_p*_*.csv` and keep `session_key`.
+    - **Sample cleaning:** drops duplicate timestamps, no-input samples (`brake`/`throttle` = 104, about a third of all samples, all stationary) and out-of-range readings.
+    - **Encoding:** `brake` → `braking` (0/1), `drs` codes → `drs_open` (0/1 for 10/12/14).
+    - **Per-lap aggregation:** each sample is assigned to its lap window `[date_start, date_start + lap_duration)` from the raw `laps_p*.csv` with `merge_asof` by `(session_key, driver_number)`. Samples are then aggregated per lap: speed, throttle, full-throttle share, braking share, rpm, gear, gear changes and DRS-open share.
+    - **Lap filters:**
+      - laps with less than half the expected samples are dropped
+      - laps not in `data/laps_combined_clean.csv` are dropped (pit-out, invalid and outlier laps), so car data covers the same laps as the lap data
+      - per-session |z| > 3 outliers on the aggregates are dropped
+    - **Normalization:** per-session `StandardScaler`, the same scheme as the laps.
+    - **Output:** 90 laps (11–19 per driver-session) in `data/cardata_per_lap_clean.csv`. Also written: an unscaled copy, and the cleaned samples per input file in `scripts/results/process_cardata/`.
+    - **Pipeline:** wired into `master.py` after `process_weather.py`. It is not a model input yet, see #16.
+    - **Data fix:** `car_data_p1_1.csv` was driver #7 (Alpine). It was re-downloaded for #38, who ran Ferrari's #16 car in FP1.
+
+- [ ] **#16 Car data is not a model input yet**
+  - **Where:** `scripts/feature_engineer.py` and `scripts/feature_config.py`, reading `data/cardata_per_lap_clean.csv` (written by `scripts/process_cardata.py`).
+  - **Problem:**
+    - The car data is cleaned, aggregated per lap and scaled, but nothing reads it.
+    - It covers only the two Ferrari cars per session (2 of ~20 drivers), and the model is trained on the whole field. Adding it as a feature as-is would leave about 90% of training rows empty.
+  - **Fix:**
+    - Decide how to use it: a Ferrari-only model, a second model with the car-data features, or imputation for the other drivers.
+    - Merge on `(session_key, driver_number, lap_number)`, using only lap *t*'s car data to predict lap *t+1* (no leakage).
+    - Add the chosen columns to `MODEL_FEATURE_COLUMNS` / `SIM_FEATURE_COLUMNS` in `feature_config.py`, and decide what the simulator feeds for them.
+  - **Depends on:**
+    - #2, #3 and #4: the engineered dataset needs to keep `session_key` and `driver_number` before this merge is possible.
+    - #7: the car-data aggregates are scaled per session, like the laps.
+    - #9: the simulator needs a lap-*t* feature vector to roll forward.
+  - **readme.txt:** Data Collection step 5; Data Preparation, CarData.
 
 - [ ] **#15 Results documentation**
   - **Problem:** results currently exist only as raw files in `scripts/results/<script>/` and a few numbers in the readmes.
   - **Depends on:** all P1 items, plus #9 and #13. The numbers will change once those are fixed, so write this up afterwards.
   - **readme.txt:** Known Issues.
   - Cover:
-    - [ ] **Data cleaning:** rows removed per session and per filter (from the `*_removed_rows_summary.csv` files and the weather z-score summary), and the final row counts.
+    - [ ] **Data cleaning:** rows removed per session and per filter (from the `*_removed_rows_summary.csv` files and the weather z-score summary), and the final row counts. This includes car data: samples and laps removed per stage, and the laps kept per driver and session.
     - [ ] **Feature engineering:** final dataset shape, how many laps matched a stint, and how many rows are usable for training.
     - [ ] **Model comparison:** test MAE, RMSE and R² for all three models, in seconds rather than z-scores, with the metric chart and prediction overlay plots and what they show.
     - [ ] **Feature importance:** top features for Random Forest and XGBoost, and whether they match tyre physics (tyre age, compound, track temperature).

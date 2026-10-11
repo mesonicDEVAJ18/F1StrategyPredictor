@@ -28,7 +28,7 @@ scripts/            # ALL pipeline code lives here; run scripts FROM this direct
   process_laps.py       # clean + scale lap data
   process_stints.py     # clean stints, one-hot encode compound
   process_weather.py    # clean + scale weather
-  process_cardata.py    # clean car telemetry (NOT wired into master.py yet)
+  process_cardata.py    # clean car telemetry, aggregate per lap (not a model input yet)
   feature_engineer.py   # merge laps+stints+weather, build engineered features
   train_model.py        # train/compare models, persist XGBoost bundle
   strategy_simulator.py # enumerate + simulate strategies, pick best
@@ -55,15 +55,14 @@ python master.py            # run the full pipeline end-to-end
 python process_laps.py      # or run any single stage on its own
 ```
 
-`master.py` runs, in order: `process_laps` → `process_stints` → `process_weather`, then
-`feature_engineer` → `train_model` → `strategy_simulator` → `validate_strategy`. It aborts the
-whole run if any stage exits non-zero.
+`master.py` runs, in order: `process_laps` → `process_stints` → `process_weather` →
+`process_cardata`, then `feature_engineer` → `train_model` → `strategy_simulator` →
+`validate_strategy`. It aborts the whole run if any stage exits non-zero.
 
 **Known gaps (don't "fix" silently — confirm intent first):**
-- `process_cardata.py` is **not** included in `master.py`.
-- `process_cardata.py` expects files named `cardata_p*_*.csv`, but `data/` contains
-  `car_data_p*_*.csv`. Car data is only partially integrated (see the latest commit
-  "car_data integrated till data prep").
+- Car data is cleaned, encoded, aggregated per lap and scaled, but it is **not** merged into
+  the engineered dataset or used as a model feature (diagnostic.md #16). It only covers the two
+  Ferrari cars, while the model trains on the whole field.
 - Known modelling bugs (stint merge, cross-driver targets, mixed units in the simulator, the
   wrong weather event, etc.) are listed in [diagnostic.md](diagnostic.md). Fixing them changes
   results, so confirm before fixing, and update diagnostic.md when one is resolved.
@@ -76,6 +75,10 @@ hand-off file to `data/` in addition to its own `results/<name>/` copy:
 - `process_laps.py`   → `data/laps_combined_clean.csv`
 - `process_stints.py` → `data/stints_combined_clean.csv`
 - `process_weather.py`→ `data/cleaned_weather.csv`
+- `process_cardata.py`→ `data/cardata_per_lap_clean.csv` (keyed by `session_key`,
+  `driver_number`, `lap_number`; lap windows come from the raw `laps_p*.csv`, and only laps in
+  `data/laps_combined_clean.csv` are kept, so it must run after `process_laps.py`; not read
+  downstream yet)
 - `feature_engineer.py` reads the three above → `data/final_engineered_dataset.csv`
   (and a copy under `results/feature_engineer/`)
 - `train_model.py` reads the engineered dataset → `results/train_model/train_model_xgb_model.pkl`

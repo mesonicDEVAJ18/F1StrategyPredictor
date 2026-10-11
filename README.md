@@ -60,8 +60,9 @@ curl "https://api.openf1.org/v1/stints?session_key=10009&csv=true" -o data/stint
 # Weather data for the whole meeting (process_weather.py keeps the practice sessions)
 curl "https://api.openf1.org/v1/weather?meeting_key=1257&csv=true" -o data/weather.csv
 
-# Car data for the Ferrari cars (not used by the pipeline yet)
-curl "https://api.openf1.org/v1/car_data?session_key=10007&driver_number=7&csv=true" -o data/car_data_p1_1.csv
+# Car data for the Ferrari cars (cleaned and aggregated per lap, not a model input yet)
+# In FP1, driver 38 ran Ferrari's #16 car
+curl "https://api.openf1.org/v1/car_data?session_key=10007&driver_number=38&csv=true" -o data/car_data_p1_1.csv
 curl "https://api.openf1.org/v1/car_data?session_key=10007&driver_number=44&csv=true" -o data/car_data_p1_2.csv
 curl "https://api.openf1.org/v1/car_data?session_key=10008&driver_number=16&csv=true" -o data/car_data_p2_1.csv
 curl "https://api.openf1.org/v1/car_data?session_key=10008&driver_number=44&csv=true" -o data/car_data_p2_2.csv
@@ -103,7 +104,7 @@ Environmental conditions:
 - `process_laps.py`: Removes outliers and invalid laps
 - `process_stints.py`: Validates stint metadata
 - `process_weather.py`: Filters atmospheric anomalies
-- `process_cardata.py`: Work in progress, not functional and not part of `master.py` yet
+- `process_cardata.py`: Drops no-input (brake/throttle = 104) and out-of-range telemetry samples, encodes brake/DRS as 0/1, aggregates the ~4 Hz samples per lap (speed, throttle, braking, rpm, gears, DRS), keeps only laps that survive `process_laps.py`, removes z-score outliers and scales per session. Not a model input yet (see #16 in [diagnostic.md](diagnostic.md))
 
 ### Data Cleaning Process
 
@@ -275,10 +276,11 @@ python master.py
 | 1 | `process_laps.py` | `data/laps_combined_clean.csv` |
 | 2 | `process_stints.py` | `data/stints_combined_clean.csv` |
 | 3 | `process_weather.py` | `data/cleaned_weather.csv` |
-| 4 | `feature_engineer.py` | `data/final_engineered_dataset.csv` |
-| 5 | `train_model.py` | `scripts/results/train_model/train_model_xgb_model.pkl` |
-| 6 | `strategy_simulator.py` | best strategy |
-| 7 | `validate_strategy.py` | CV metrics, residual plot |
+| 4 | `process_cardata.py` | `data/cardata_per_lap_clean.csv` (not read by later stages yet) |
+| 5 | `feature_engineer.py` | `data/final_engineered_dataset.csv` |
+| 6 | `train_model.py` | `scripts/results/train_model/train_model_xgb_model.pkl` |
+| 7 | `strategy_simulator.py` | best strategy |
+| 8 | `validate_strategy.py` | CV metrics, residual plot |
 
 Each script can also be run on its own, and writes its log and outputs to `scripts/results/<script_name>/`.
 

@@ -9,7 +9,7 @@ The problem statement limits us to the three practice sessions only, we can broa
 DATA COLLECTION
 This analysis has been done for Ferrari in Bahrain 2025, same pipeline is applicable across weekends.
 Note: the laps and stints data cover the whole field (~20 drivers per session), and the model is trained on all of them.
-Only the car data is Ferrari specific (drivers 7, 16 and 44, see step 5).
+Only the car data is Ferrari specific (drivers 16, 38 and 44, see step 5).
 All data has been collected from https://openf1.org/ and is stored in data/ (laps_p1-3.csv, stints_p1-3.csv, weather.csv, car_data_p*_*.csv).
 
 1. Identify the 3 practice sessions ids. https://api.openf1.org/v1/sessions?country_name=Bahrain&year=2025 
@@ -32,14 +32,16 @@ https://api.openf1.org/v1/weather?meeting_key=1257&csv=true
 This covers the whole meeting (practice, qualifying and race); process_weather.py keeps only the practice sessions.
 
 5. Download the car data for the sessions
-https://api.openf1.org/v1/car_data?session_key=10007&driver_number=7&csv=true
+https://api.openf1.org/v1/car_data?session_key=10007&driver_number=38&csv=true
 https://api.openf1.org/v1/car_data?session_key=10007&driver_number=44&csv=true
 https://api.openf1.org/v1/car_data?session_key=10008&driver_number=16&csv=true
 https://api.openf1.org/v1/car_data?session_key=10008&driver_number=44&csv=true
 https://api.openf1.org/v1/car_data?session_key=10009&driver_number=16&csv=true
 https://api.openf1.org/v1/car_data?session_key=10009&driver_number=44&csv=true
-Saved as car_data_p<session>_<n>.csv (FP1: drivers 7 and 44, FP2 and FP3: drivers 16 and 44). Car data is not used by the pipeline yet.
-[TODO #14, P3, see diagnostic.md] The car-data stage is not functional and is not wired into master.py.
+Saved as car_data_p<session>_<n>.csv (FP1: drivers 38 and 44, FP2 and FP3: drivers 16 and 44).
+In FP1 driver 38 ran Ferrari's #16 car, so car 16 has no FP1 laps.
+process_cardata.py cleans, encodes, aggregates and scales the car data per lap (see Data Preparation). It is not a model input yet.
+[TODO #16, P3, see diagnostic.md] Car data covers only the two Ferrari cars, so it needs a decision on how to use it before it becomes a feature.
 
 DATA UNDERSTANDING
 Laps
@@ -123,20 +125,19 @@ All scripts live in scripts/ and use relative paths, so run them from inside scr
     cd scripts
     python master.py
 
-master.py runs process_laps.py -> process_stints.py -> process_weather.py -> feature_engineer.py -> train_model.py
+master.py runs process_laps.py -> process_stints.py -> process_weather.py -> process_cardata.py -> feature_engineer.py -> train_model.py
 -> strategy_simulator.py -> validate_strategy.py, and stops at the first script that fails.
 Every script writes a log, a manifest and its intermediate outputs to scripts/results/<script_name>/.
 Stages hand data to each other through CSVs in data/:
     process_laps.py      -> data/laps_combined_clean.csv
     process_stints.py    -> data/stints_combined_clean.csv
     process_weather.py   -> data/cleaned_weather.csv
+    process_cardata.py   -> data/cardata_per_lap_clean.csv (not read by later stages yet)
     feature_engineer.py  -> data/final_engineered_dataset.csv
     train_model.py       -> scripts/results/train_model/train_model_xgb_model.pkl (read by the simulator and validation)
-process_cardata.py is work in progress and is not part of master.py.
-[TODO #14, P3, see diagnostic.md] Fix process_cardata.py and add it to master.py's sequence.
 
 DATA PREPARATION
-Scripts: process_laps.py, process_stints.py, process_weather.py (process_cardata.py is work in progress, see below)
+Scripts: process_laps.py, process_stints.py, process_weather.py, process_cardata.py
 1. Remove redundant data from all of the data types
 These scripts remove session keys and meeting keys, data points irrelevant to the pipeline.
 [TODO #3, P1, see diagnostic.md] session_key is needed later to assign laps to the right session's stints, so it should be kept.
@@ -157,12 +158,27 @@ Kept only the practice sessions (the session_keys found in laps_p1-3.csv); quali
 Applied Z-score filtering (|z| > 3) on continuous atmospheric readings: Air temperature, Track temperature, Humidity, Pressure, Wind speed and Rainfall.
 Columns with zero variance are skipped.
 
-CarData (work in progress)
-process_cardata.py is not functional yet: it is a copy of process_laps.py, it looks for cardata_p*_*.csv while the files are named car_data_p*_*.csv,
-and it filters on lap columns (sector times, i1/i2/st speed) that car data does not have.
-Planned: drop samples where brake or throttle read 104, which indicates no valid input (e.g. the car sitting in the garage), then aggregate the
-~4 Hz samples per lap by matching timestamps to each lap's date_start.
-[TODO #14, P3, see diagnostic.md] Rename the inputs, clean the real car-data columns, aggregate per lap, then wire into master.py.
+CarData
+process_cardata.py keeps session_key, because it needs it to match samples to laps. Each car_data_p*_*.csv file is cleaned separately:
+Removed duplicate timestamps.
+Removed samples where brake or throttle read 104. This value means there is no valid input, and these samples are always at about 0 km/h in
+neutral (the car sitting in the garage). This is roughly a third of all samples.
+Removed physically impossible readings: speed outside 0-400 km/h, rpm outside 0-16000, gear outside 0-8, throttle outside 0-100, brake not 0 or 100.
+Each ~4.2 Hz sample is then assigned to the lap whose window [date_start, date_start + lap_duration) contains it, matched on session_key and
+driver_number. The windows come from the raw laps_p*.csv files, because the cleaned laps drop session_key and scale lap_duration.
+Samples outside every lap (pit lane, garage, laps with no lap time) are dropped.
+The samples of each lap are aggregated to mean/max speed, mean throttle, share of samples at full throttle (>= 99%), share braking,
+mean/max rpm, mean gear, gear changes and share with DRS open.
+Lap-level filters, in order:
+- Laps with fewer than half the expected samples (lap_duration x sample rate) are dropped, so gappy telemetry doesn't give misleading means.
+- Only laps that survive process_laps.py are kept (matched on driver_number + date_start against data/laps_combined_clean.csv). This removes
+  pit-out, invalid and outlier laps, so the car data describes the same laps as the lap data.
+- Z-score filtering (|z| > 3, per session) on the aggregates, except DRS share, which is mostly 0, so any DRS use would look like an outlier.
+The cleaned samples of the kept laps are saved per input file (scripts/results/process_cardata/process_cardata_cleaned_car_data_p*_*.csv).
+The output has 90 laps (11-19 per driver and session), saved to data/cardata_per_lap_clean.csv with session_key, driver_number and lap_number
+as join keys. lap_duration is dropped from it, because it is the dependent variable.
+[TODO #16, P3, see diagnostic.md] It is not merged into the engineered dataset yet. Car data only covers the two Ferrari cars, while the model is
+trained on the whole field.
 
 3. Encoding
 Laps
@@ -177,6 +193,10 @@ One-hot encoded compound -> compound_HARD, compound_MEDIUM, compound_SOFT (only 
 Weather
 None needed.
 
+CarData
+brake (0 or 100) -> braking (0/1). drs status codes -> drs_open (1 for 10, 12 or 14, i.e. flap open; 0 otherwise).
+n_gear kept as an ordinal number.
+
 4. Normalization
 Laps
 Applied StandardScaler, fitted separately per session, to lap_duration, duration_sector_1/2/3, i1_speed, i2_speed and st_speed. This ensures all physical signals are on comparable scales.
@@ -189,6 +209,11 @@ No normalization applied, stints contain mostly integer metadata (stint number, 
 Weather
 Applied StandardScaler to: Air temperature, Track temperature, Humidity, Pressure, Wind speed, and Rainfall.
 Wind direction kept raw due to its circular nature.
+
+CarData
+Applied StandardScaler, fitted separately per session (as for laps), to the per-lap aggregates: mean/max speed, mean throttle, full-throttle share,
+braking share, mean/max rpm, mean gear, gear changes and DRS share. The keys, n_samples and coverage are not scaled.
+An unscaled copy in physical units is kept in scripts/results/process_cardata/process_cardata_per_lap_unscaled.csv.
 
 5. Feature Engineering (feature_engineer.py)
 Stint number: stints are sorted by driver and lap_start and numbered 1, 2, 3 ... per driver across all three sessions (global_stint_number), kept session independent to include evolution information too.
@@ -345,7 +370,7 @@ Open TODOs by priority (IDs as in diagnostic.md; each is tagged [TODO #N, ...] w
 P1, results are invalid until fixed:  #2 stint merge key, #3 stint/session mask, #4 cross-driver target, #7 mixed units,
                                       #8 illegal strategies, #10 tyre age reset, #11 pit lap missing from sum
 P2, method or validation misleading:  #9 no autoregressive rollout, #6 residual plot leakage, #5 placeholder t-test, #13 model choice
-P3, completeness and cleanup:         #12 dead starting-compound setting, #14 car-data stage, #15 results documentation
+P3, completeness and cleanup:         #12 dead starting-compound setting, #16 car data not a model input, #15 results documentation
 [TODO #15, P3, see diagnostic.md] Results are not written up yet. Do this after the P1 fixes, since the numbers will change.
 
 THANK YOU

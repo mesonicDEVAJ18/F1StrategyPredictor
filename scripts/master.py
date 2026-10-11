@@ -32,7 +32,8 @@ def main():
     process_scripts = [
         "process_laps.py",
         "process_stints.py",
-        "process_weather.py"
+        "process_weather.py",
+        "process_cardata.py"
     ]
 
     for script in process_scripts:
