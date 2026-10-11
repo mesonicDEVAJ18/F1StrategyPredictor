@@ -32,6 +32,7 @@ https://api.openf1.org/v1/weather?meeting_key=1253&csv=true
 KNOWN ISSUE: meeting_key 1253 is Bahrain pre-season testing (sessions 9683-9685, 26-28 Feb 2025), not the Grand Prix weekend.
 The laps, stints and car data are from meeting_key 1257 (11-12 Apr 2025). The weather for the race weekend would be
 https://api.openf1.org/v1/weather?meeting_key=1257&csv=true
+[TODO #1, P1, see diagnostic.md] Re-download weather for meeting_key 1257 and merge it on timestamps per session.
 
 5. Download the car data for the sessions
 https://api.openf1.org/v1/car_data?session_key=10007&driver_number=7&csv=true
@@ -41,6 +42,7 @@ https://api.openf1.org/v1/car_data?session_key=10008&driver_number=44&csv=true
 https://api.openf1.org/v1/car_data?session_key=10009&driver_number=16&csv=true
 https://api.openf1.org/v1/car_data?session_key=10009&driver_number=44&csv=true
 Saved as car_data_p<session>_<n>.csv (FP1: drivers 7 and 44, FP2 and FP3: drivers 16 and 44). Car data is not used by the pipeline yet.
+[TODO #14, P3, see diagnostic.md] The car-data stage is not functional and is not wired into master.py.
 
 DATA UNDERSTANDING
 Laps
@@ -134,11 +136,13 @@ Stages hand data to each other through CSVs in data/:
     feature_engineer.py  -> data/final_engineered_dataset.csv
     train_model.py       -> scripts/results/train_model/train_model_xgb_model.pkl (read by the simulator and validation)
 process_cardata.py is work in progress and is not part of master.py.
+[TODO #14, P3, see diagnostic.md] Fix process_cardata.py and add it to master.py's sequence.
 
 DATA PREPARATION
 Scripts: process_laps.py, process_stints.py, process_weather.py (process_cardata.py is work in progress, see below)
 1. Remove redundant data from all of the data types
 These scripts remove session keys and meeting keys, data points irrelevant to the pipeline.
+[TODO #3, P1, see diagnostic.md] session_key is needed later to assign laps to the right session's stints, so it should be kept.
 Also process_laps.py removes pit-out laps (is_pit_out_lap = True), i.e. laps that start from the pit exit. There is no explicit in-lap flag in the
 data; slow in-laps are caught by the outlier filters below.
 
@@ -160,12 +164,14 @@ process_cardata.py is not functional yet: it is a copy of process_laps.py, it lo
 and it filters on lap columns (sector times, i1/i2/st speed) that car data does not have.
 Planned: drop samples where brake or throttle read 104, which indicates no valid input (e.g. the car sitting in the garage), then aggregate the
 ~4 Hz samples per lap by matching timestamps to each lap's date_start.
+[TODO #14, P3, see diagnostic.md] Rename the inputs, clean the real car-data columns, aggregate per lap, then wire into master.py.
 
 3. Encoding
 Laps
 segments_sector_1/2/3 arrive as lists of mini-sector status codes; each list is replaced by its length (the number of mini-sectors).
 Driver number was kept numerical as it's friendly to tree based models (decision to use trees explained later) and was used to combine with stints data.
 Driver number was removed altogether in feature_engineer.py as it was decided to not build a driver specific model.
+[TODO #4, P1, see diagnostic.md] Without a driver/session id the next-lap target is shifted across drivers. Keep the id (not as a model input).
 
 Stints
 One-hot encoded compound -> compound_HARD, compound_MEDIUM, compound_SOFT (only dry compounds occur in this weekend's data).
@@ -177,6 +183,7 @@ None needed.
 Laps
 Applied StandardScaler, fitted separately per session, to lap_duration, duration_sector_1/2/3, i1_speed, i2_speed and st_speed. This ensures all physical signals are on comparable scales.
 Because lap_duration is scaled, fuel_corrected_pace and every model prediction are in standardised units (z-scores), not seconds.
+[TODO #7, P1, see diagnostic.md] The simulator adds second-based fuel and pit penalties to these z-score predictions.
 
 Stints
 No normalization applied, stints contain mostly integer metadata (stint number, lap ranges).
@@ -189,11 +196,15 @@ Wind direction kept raw due to its circular nature.
 Stint number: stints are sorted by driver and lap_start and numbered 1, 2, 3 ... per driver across all three sessions (global_stint_number), kept session independent to include evolution information too.
 Each lap is assigned the global number of the stint whose [lap_start, lap_end] contains its lap_number.
 
+[TODO #3, P1, see diagnostic.md] The lap-to-stint mask ignores the session, so a lap can be given another session's stint.
+
 Stint metadata (lap_start, lap_end, tyre_age_at_start, compound) is then merged onto the laps on driver_number + stint_number.
+[TODO #2, P1, see diagnostic.md] The merge matches the global stint number against the per-session one: 839 laps -> 1126 rows, 507 without pace.
 
 Pseudo time alignment: the laps do carry a date_start timestamp, but the weather file comes from a different event (see diagnostic.md), so
 timestamps cannot be matched. Instead a pseudo_time axis is constructed: pseudo_time = lap_number for laps, and the weather rows (in file order)
 are spread evenly across the same lap_number range. A nearest-neighbour merge_asof then assigns each lap the closest weather observation.
+[TODO #1, P1, see diagnostic.md] Each lap's weather is effectively arbitrary. Replace with a timestamp merge once the right weather is downloaded.
 
 laps_since_stint_start = lap_number - lap_start + 1 (clipped to at least 1)
 
@@ -203,6 +214,7 @@ fuel_corrected_pace: laps_remaining = lap_end - lap_number (laps left in the sti
 The current lap's fuel_corrected_pace is not a model input; the NEXT lap's value is the model's target.
 
 Finally driver_number, date_start, date, lap_duration, pseudo_time and laps_remaining are dropped, and the result is saved as data/final_engineered_dataset.csv.
+[TODO #4, P1, see diagnostic.md] Dropping driver_number (and session) here is what lets the training target cross drivers.
 
 track evolution was not chosen as an engineered parameter, as it would've been a derived dependant value that would not have contributed to the model.
 
@@ -237,9 +249,12 @@ As XGBoost repeatedly predicts future fcp values, the falling trend in predicted
 No slope assumptions.
 No fixed compound multipliers.
 Just learned tyre physics from FP laps.
+[TODO #9, P2, see diagnostic.md] The simulator does not roll predictions forward yet. Each lap is predicted on its own.
 
 Training: the target is built by shifting fuel_corrected_pace back one lap within each stint_number group; rows without a next-lap target are dropped
 (1126 -> 613 rows). Missing feature values are filled with the column median, then an 80/20 shuffled train/test split (random_state 42) is used.
+[TODO #4, P1, see diagnostic.md] Grouping by stint_number alone mixes drivers. Group by driver/session + stint and require lap_number + 1.
+[TODO #2, P1, see diagnostic.md] The 1126 starting rows include duplicates from the faulty stint merge.
 
 3. Model choice
 train_model.py fits and compares Linear Regression, Random Forest (200 trees) and XGBoost (300 trees, learning rate 0.05, max depth 7,
@@ -258,6 +273,7 @@ Held-out test results on the current data (standardised units):
 | RandomForest      | 0.779 | 1.011 | 0.232 |
 | XGBoost           | 0.817 | 1.094 | 0.102 |
 On this data XGBoost scores lowest of the three on the test split; it is kept for the reasons above.
+[TODO #13, P2, see diagnostic.md] Re-run the comparison after the P1 data fixes and confirm (or change) the saved model.
 
 This choice also aligns with how real-world motorsport predictive pipelines are structured:
 "predict the next lap's corrected pace and let degradation emerge naturally from repeated predictions."
@@ -269,22 +285,30 @@ A 57-lap race is assumed. Strategies are enumerated by brute force over:
 Every compound sequence for that structure (any of SOFT/MEDIUM/HARD per stint, repeats allowed)
 Every combination of pit laps between lap 10 and lap 46
 This gives 18,318 candidate strategies. The rule that at least two compounds must be used is not enforced yet.
+[TODO #8, P1, see diagnostic.md] Drop 0-stop and single-compound sequences (keep len(set(seq)) >= 2).
 
 2. Lap time prediction
 For each compound, the XGBoost model predicts a lap time for every race lap 1-57:
 the compound one-hot is set, laps_since_stint_start is set to the race lap number, and all other features are held at 0 (the average,
 since they are standardised).
+[TODO #10, P1, see diagnostic.md] Tyre age is the race lap, so it never resets after a pit stop. Index each stint from tyre age 1.
+[TODO #9, P2, see diagnostic.md] Laps are predicted independently with fixed features, not rolled forward.
+[TODO #12, P3, see diagnostic.md] The starting-compound setting in start_features is overwritten and has no effect.
 A fuel penalty of 0.035 x (laps of fuel remaining) is added to each lap.
 These per-lap predictions are stored as cumulative sums, so any stint's time is a single subtraction.
 
 3. Objective function: minimize total race time
 For each candidate strategy, total race time = sum of predicted lap times of each stint + 22 per pit stop.
 This gives a single scalar number for each strategy, allowing direct comparison.
+[TODO #11, P1, see diagnostic.md] The pit lap itself is never summed, so each stop removes a whole lap from the total.
+[TODO #7, P1, see diagnostic.md] Lap times are z-scores but the 22 pit loss and fuel penalty are seconds.
 
 4. Strategy optimisation
 All 18,318 strategies are evaluated and the one with the lowest predicted race time is selected.
 Results: scripts/results/strategy_simulator/ (all_strategy_results.csv, best_strategy.json, final_summary.txt).
 Current output: HARD, no pit stop, total 95.97 (not seconds, see diagnostic.md).
+[TODO #8, P1, see diagnostic.md] This recommendation breaks the two-compound rule.
+[TODO #7, P1, see diagnostic.md] The mixed units make a stop cost about 13 laps, so 0 stops always wins.
 
 Future work: Dynamic Programming to prune inferior strategies and an optional Genetic Algorithm for deeper search across larger sequences.
 
@@ -294,12 +318,15 @@ Implemented:
 5-fold shuffled cross-validation (random_state 42) of the XGBoost configuration on next-lap fuel-corrected pace.
 Current result: CV MAE 0.827, CV RMSE 1.093 (standardised units).
 Residual plot (predicted vs residual) to check for systematic bias.
+[TODO #6, P2, see diagnostic.md] The plot uses the last fold's model on all rows, including its training rows. Use out-of-fold predictions.
 Feature importance from Random Forest and XGBoost, saved by train_model.py.
 An example two-sample t-test on randomly generated data. This is a placeholder: it does not test anything about the model or the
 strategy, and its p-value changes from run to run.
+[TODO #5, P2, see diagnostic.md] Replace with a meaningful test or remove it.
 
 Planned critical checks:
 Predictions remain smooth when rolled forward for multiple laps
+[TODO #9, P2, see diagnostic.md] Not checkable until the simulator actually rolls predictions forward.
 No drift or instability during stint simulation
 Feature influence aligns with expected tyre-degradation behaviour (e.g. tyre age, compound, track temperature matter most)
 
@@ -317,6 +344,12 @@ The solution is stable and not sensitive to minor model noise
 
 KNOWN ISSUES
 Known bugs and their effect on the results are documented in diagnostic.md.
+Open TODOs by priority (IDs as in diagnostic.md; each is tagged [TODO #N, ...] where it applies above):
+P1, results are invalid until fixed:  #1 weather event, #2 stint merge key, #3 stint/session mask, #4 cross-driver target, #7 mixed units,
+                                      #8 illegal strategies, #10 tyre age reset, #11 pit lap missing from sum
+P2, method or validation misleading:  #9 no autoregressive rollout, #6 residual plot leakage, #5 placeholder t-test, #13 model choice
+P3, completeness and cleanup:         #12 dead starting-compound setting, #14 car-data stage, #15 results documentation
+[TODO #15, P3, see diagnostic.md] Results are not written up yet. Do this after the P1 fixes, since the numbers will change.
 
 THANK YOU
 DEVAJ RATHORE
