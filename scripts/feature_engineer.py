@@ -204,6 +204,11 @@ generated_files.append(final_output_file.split("/")[-1])
 
 log(f"\n✅ Final engineered dataset saved as {final_output_file}")
 
+# Hand-off for train_model.py / validate_strategy.py
+handoff_path = data_dir / "final_engineered_dataset.csv"
+laps.to_csv(handoff_path, index=False)
+log(f"Saved hand-off dataset: {handoff_path}")
+
 
 # ============================================================
 # SAVE MANIFEST

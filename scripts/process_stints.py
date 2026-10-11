@@ -102,6 +102,11 @@ generated_files.append(combined_name)
 
 log(f"\nSaved combined stints dataset: {combined_name}")
 
+# Hand-off for feature_engineer.py
+handoff_path = os.path.join(data_dir, "stints_combined_clean.csv")
+combined.to_csv(handoff_path, index=False)
+log(f"Saved hand-off dataset: {handoff_path}")
+
 # ============================================================
 # SAVE SUMMARY TABLES
 # ============================================================

@@ -121,6 +121,11 @@ generated_files.append(cleaned_name)
 
 log(f"Saved cleaned weather file: {cleaned_name}")
 
+# Hand-off for feature_engineer.py
+handoff_path = data_dir / "cleaned_weather.csv"
+weather.to_csv(handoff_path, index=False)
+log(f"Saved hand-off dataset: {handoff_path}")
+
 
 # ============================================================
 # MANIFEST FILE

@@ -48,18 +48,28 @@ GET https://api.openf1.org/v1/sessions?country_name=Bahrain&year=2025
 
 ```bash
 # Lap data for all three sessions
-curl "https://api.openf1.org/v1/laps?session_key=10007&csv=true" -o fp1_laps.csv
-curl "https://api.openf1.org/v1/laps?session_key=10008&csv=true" -o fp2_laps.csv
-curl "https://api.openf1.org/v1/laps?session_key=10009&csv=true" -o fp3_laps.csv
+curl "https://api.openf1.org/v1/laps?session_key=10007&csv=true" -o data/laps_p1.csv
+curl "https://api.openf1.org/v1/laps?session_key=10008&csv=true" -o data/laps_p2.csv
+curl "https://api.openf1.org/v1/laps?session_key=10009&csv=true" -o data/laps_p3.csv
 
 # Stint data for all three sessions
-curl "https://api.openf1.org/v1/stints?session_key=10007&csv=true" -o fp1_stints.csv
-curl "https://api.openf1.org/v1/stints?session_key=10008&csv=true" -o fp2_stints.csv
-curl "https://api.openf1.org/v1/stints?session_key=10009&csv=true" -o fp3_stints.csv
+curl "https://api.openf1.org/v1/stints?session_key=10007&csv=true" -o data/stints_p1.csv
+curl "https://api.openf1.org/v1/stints?session_key=10008&csv=true" -o data/stints_p2.csv
+curl "https://api.openf1.org/v1/stints?session_key=10009&csv=true" -o data/stints_p3.csv
 
-# Weather data for the weekend
-curl "https://api.openf1.org/v1/weather?meeting_key=1253&csv=true" -o weather.csv
+# Weather data (meeting 1253 is Bahrain pre-season testing, see diagnostic.md)
+curl "https://api.openf1.org/v1/weather?meeting_key=1253&csv=true" -o data/weather.csv
+
+# Car data for the Ferrari cars (not used by the pipeline yet)
+curl "https://api.openf1.org/v1/car_data?session_key=10007&driver_number=7&csv=true" -o data/car_data_p1_1.csv
+curl "https://api.openf1.org/v1/car_data?session_key=10007&driver_number=44&csv=true" -o data/car_data_p1_2.csv
+curl "https://api.openf1.org/v1/car_data?session_key=10008&driver_number=16&csv=true" -o data/car_data_p2_1.csv
+curl "https://api.openf1.org/v1/car_data?session_key=10008&driver_number=44&csv=true" -o data/car_data_p2_2.csv
+curl "https://api.openf1.org/v1/car_data?session_key=10009&driver_number=16&csv=true" -o data/car_data_p3_1.csv
+curl "https://api.openf1.org/v1/car_data?session_key=10009&driver_number=44&csv=true" -o data/car_data_p3_2.csv
 ```
+
+Laps and stints cover the whole field (~20 drivers per session), and the model is trained on all of them.
 
 ### Dataset Descriptions
 
@@ -90,23 +100,24 @@ Environmental conditions:
 ## 🔧 Data Preparation
 
 ### Cleaning Scripts
-- `clean_laps.py`: Removes outliers and invalid laps
-- `clean_stints.py`: Validates stint metadata
-- `clean_weather.py`: Filters atmospheric anomalies
+- `process_laps.py`: Removes outliers and invalid laps
+- `process_stints.py`: Validates stint metadata
+- `process_weather.py`: Filters atmospheric anomalies
+- `process_cardata.py`: Work in progress, not functional and not part of `master.py` yet
 
 ### Data Cleaning Process
 
 **1. Redundancy Removal**
-- Removed session and meeting keys after merging
-- Excluded pit-in and pit-out laps (incomplete laps)
+- Removed session and meeting keys
+- Excluded pit-out laps (slow in-laps are caught by the outlier filters)
 
 **2. Outlier Detection & Removal**
 
-*Laps:*
-- Missing or negative sector times
-- Unrealistic lap times (< 30s or ≥ 2× median)
-- Aborted laps (speed < 50 km/h)
-- Rolling median residual filtering: removed laps outside `[Q1 - 3×IQR, Q3 + 3×IQR]`
+*Laps (per session):*
+- Missing or non-positive sector times
+- Unrealistic lap times (≤ 30s or ≥ 2× session median)
+- Aborted laps (`i1_speed`, `i2_speed` or `st_speed` ≤ 50 km/h)
+- Rolling median residual filtering: residual = lap time − 5-lap centred rolling median per driver; removed laps outside `[Q1 - 3×IQR, Q3 + 3×IQR]`
 
 *Stints:*
 - Logical validation: `lap_start ≤ lap_end`
@@ -118,10 +129,11 @@ Environmental conditions:
 
 **3. Encoding**
 - `driver_number`: Kept numerical (tree-friendly, later removed for generalized model)
-- `compound`: One-hot encoded → `compound_Soft`, `compound_Medium`, `compound_Hard`
+- `compound`: One-hot encoded → `compound_SOFT`, `compound_MEDIUM`, `compound_HARD`
+- `segments_sector_1/2/3`: List of mini-sector codes replaced by its length
 
 **4. Normalization**
-- **Laps**: StandardScaler on lap times, sector times, and speeds
+- **Laps**: StandardScaler (fitted per session) on lap times, sector times, and speeds, so pace values are z-scores, not seconds
 - **Weather**: StandardScaler on temperature, humidity, pressure, wind speed, rainfall
 - **Wind direction**: Kept raw (circular variable)
 
@@ -129,11 +141,11 @@ Environmental conditions:
 
 | Feature | Formula | Purpose |
 |---------|---------|---------|
-| `stint_number` | Assigned from stints data | Track tyre degradation per stint |
-| `pseudo_time` | `lap_number` (sorted) | Enable time-alignment with weather |
+| `stint_number` | Stints numbered 1, 2, 3… per driver across all sessions | Track tyre degradation per stint |
+| `pseudo_time` | `lap_number` for laps; weather rows spread evenly over the same range | Align weather to laps (nearest `merge_asof`) |
 | `laps_since_stint_start` | `lap_number - lap_start + 1` | Measure tyre age in current stint |
 | `stint_avg_pace` | Leave-one-out mean of lap times | Capture stint-level performance |
-| `fuel_corrected_pace` | `lap_duration + 0.035 × laps_remaining` | Account for fuel load reduction |
+| `fuel_corrected_pace` | `lap_duration + 0.035 × laps_remaining` (`laps_remaining = lap_end - lap_number`) | Account for fuel load reduction |
 
 > **Note**: Track evolution was excluded to avoid deriving dependent variables.
 
@@ -152,21 +164,21 @@ Predict **fuel-corrected pace on the next lap** rather than explicitly computing
 
 ### Model Selection: XGBoost
 
-After evaluating multiple approaches:
+`train_model.py` trains Linear Regression, Random Forest and XGBoost on the same split and saves XGBoost. K-Means was ruled out without being implemented.
 
-| Model | Result |
-|-------|--------|
-| Linear Regression | Underfits non-linear tyre behavior |
-| Random Forest | Noisy, stepwise predictions |
-| K-Means Clustering | No predictive capability |
-| **XGBoost** | ✅ **Optimal balance of accuracy and stability** |
+| Model | Reasoning | Test MAE | Test RMSE | Test R² |
+|-------|-----------|----------|-----------|---------|
+| Linear Regression | Underfits non-linear tyre behavior | 0.784 | 0.961 | 0.306 |
+| Random Forest | Noisy, stepwise predictions | 0.779 | 1.011 | 0.232 |
+| **XGBoost** | Chosen for non-linear learning and smooth predictions | 0.817 | 1.094 | 0.102 |
+
+*Metrics are in standardised (z-score) units, from the current run. On this data XGBoost scores lowest on the test split; see [diagnostic.md](diagnostic.md).*
 
 **XGBoost Advantages:**
 - Captures non-linear tyre physics (warm-up, thermal degradation, cliff effects)
-- Stable predictions in autoregressive simulations
-- Low overfitting risk
+- Smooth predictions for repeated (autoregressive) use
 - Fast inference
-- Interpretable via SHAP values
+- Interpretable via built-in feature importance
 
 ### Training Process
 
@@ -179,10 +191,14 @@ y = fuel_corrected_pace_next_lap
 - `lap_duration` (sum of sector times)
 - `laps_remaining` (used in fuel correction formula)
 
-**3. Validation**
+**3. Features and Split**
+- 22 inputs defined in `scripts/feature_config.py` (`MODEL_FEATURE_COLUMNS`)
+- Missing values filled with column medians; 80/20 shuffled train/test split (`random_state=42`)
+
+**4. Validation**
 - 5-fold cross-validation
 - Residual analysis for systematic bias
-- SHAP feature importance verification
+- Random Forest and XGBoost feature importances
 
 ---
 
@@ -190,46 +206,43 @@ y = fuel_corrected_pace_next_lap
 
 ### 1. Strategy Space Generation
 
-Enumerate all feasible strategies:
-- **Stop configurations**: 0-stop, 1-stop, 2-stop, 3-stop
-- **Compound sequences**: All valid combinations
-- **Pit windows**: Excluding formation laps and extreme early/late stops
+Enumerate strategies for a 57-lap race (18,318 in total):
+- **Stop configurations**: 0-stop, 1-stop, 2-stop
+- **Compound sequences**: Every SOFT/MEDIUM/HARD sequence (the two-compound rule is not enforced yet)
+- **Pit windows**: Pit laps between lap 10 and lap 46
 
-### 2. Lap-by-Lap Simulation
+### 2. Lap Time Prediction
 
-For each candidate strategy:
-1. Predict next-lap fuel-corrected pace using XGBoost
-2. Apply fuel penalty (decreases over race distance)
-3. Update state variables:
-   - `laps_since_stint_start`
-   - `compound`
-   - `tyre_age`
-4. Accumulate lap times
+For each compound, once:
+1. Predict a lap time with XGBoost for every race lap 1–57 (compound one-hot set, `laps_since_stint_start` = race lap, all other features at 0)
+2. Add a fuel penalty of `0.035 × laps of fuel remaining`
+3. Store cumulative sums so any stint's time is a single subtraction
 
 ### 3. Objective Function
 
 ```
-Minimize: Total Race Time = Σ(lap_times) + pit_time_penalties
+Minimize: Total Race Time = Σ(stint lap times) + 22 × number of pit stops
 ```
 
 ### 4. Optimization Engine
 
-- **Primary method**: Dynamic Programming (prune inferior strategies)
-- **Future enhancement**: Genetic Algorithm for deeper search
-- **Output**: Optimal compound sequence + pit lap windows
+- **Method**: Brute force: every strategy is evaluated and the lowest total wins
+- **Future enhancement**: Dynamic Programming to prune inferior strategies, Genetic Algorithm for deeper search
+- **Output**: `scripts/results/strategy_simulator/` (best strategy JSON, all strategy results CSV)
 
 ---
 
 ## ✅ Evaluation & Validation
 
-### Model Validation
-- **Cross-validation**: 5-fold CV on next-lap predictions
+### Model Validation (`validate_strategy.py`)
+- **Cross-validation**: 5-fold CV on next-lap predictions (current: MAE 0.827, RMSE 1.093, z-score units)
 - **Residual analysis**: Check for systematic bias
 - **Feature importance**: Verify alignment with tyre physics
   - Expected top features: tyre age, compound, track temperature
-- **Simulation stability**: Predictions remain smooth over multi-lap rollouts
+- **t-test**: Placeholder on random sample data
+- **Simulation stability** *(planned)*: Predictions remain smooth over multi-lap rollouts
 
-### Strategy Validation
+### Strategy Validation *(planned, not implemented yet)*
 - Simulate multiple race conditions with variations
 - Compare alternative strategies across pit windows
 - Generate heatmaps of predicted race time vs strategy grid
@@ -240,38 +253,36 @@ Minimize: Total Race Time = Σ(lap_times) + pit_time_penalties
 ## 🚀 Getting Started
 
 ### Prerequisites
+Python 3.10. Dependencies are pinned in `requirements.txt` (UTF-16 encoded):
 ```bash
-pip install pandas numpy scikit-learn xgboost shap matplotlib seaborn
+pip install pandas numpy scikit-learn xgboost scipy matplotlib seaborn joblib requests
 ```
 
 ### Usage
 
-**1. Data Collection**
+**1. Data Collection**: download the CSVs into `data/` with the URLs under [Data Sources](#data-sources).
+
+**2. Run the pipeline.** Scripts use relative paths, so run them from `scripts/`:
 ```bash
-python collect_data.py --country Bahrain --year 2025
+cd scripts
+python master.py
 ```
 
-**2. Data Cleaning**
-```bash
-python clean_laps.py
-python clean_stints.py
-python clean_weather.py
-```
+`master.py` runs these in order and stops at the first failure:
 
-**3. Feature Engineering**
-```bash
-python engineer_features.py
-```
+| Step | Script | Hands off |
+|------|--------|-----------|
+| 1 | `process_laps.py` | `data/laps_combined_clean.csv` |
+| 2 | `process_stints.py` | `data/stints_combined_clean.csv` |
+| 3 | `process_weather.py` | `data/cleaned_weather.csv` |
+| 4 | `feature_engineer.py` | `data/final_engineered_dataset.csv` |
+| 5 | `train_model.py` | `scripts/results/train_model/train_model_xgb_model.pkl` |
+| 6 | `strategy_simulator.py` | best strategy |
+| 7 | `validate_strategy.py` | CV metrics, residual plot |
 
-**4. Model Training**
-```bash
-python train_model.py
-```
+Each script can also be run on its own, and writes its log and outputs to `scripts/results/<script_name>/`.
 
-**5. Strategy Optimization**
-```bash
-python optimize_strategy.py --race_distance 57
-```
+Detailed methodology: [readme.txt](readme.txt). Known bugs: [diagnostic.md](diagnostic.md).
 
 ---
 
@@ -282,7 +293,6 @@ python optimize_strategy.py --race_distance 57
 - Compound-specific grip vs durability trade-offs
 - Track temperature impact on tyre performance
 - Fuel load reduction over race distance
-- Track evolution across practice sessions
 
 ### Real-World Alignment
 This pipeline mirrors professional motorsport analytics:
