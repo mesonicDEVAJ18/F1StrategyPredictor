@@ -87,3 +87,16 @@ The pipeline runs end to end (`python master.py` from `scripts/`), but the issue
   - It filters on lap columns (`duration_sector_*`, `i1_speed`, `lap_duration`) that car data doesn't have.
   - It isn't called from `master.py`.
 - **Fix direction:** rename the inputs, clean the actual columns (`brake`, `throttle`, `speed`, `rpm`, `n_gear`, `drs`), and aggregate the ~4 Hz samples per lap by matching each sample's timestamp to the lap's time window.
+
+## TODO
+
+### Results documentation
+Results currently exist only as raw files in `scripts/results/<script>/` and a few numbers in the readmes. Write them up properly once the bugs above are fixed, since the numbers will change. Cover:
+- [ ] **Data cleaning:** rows removed per session and per filter (from the `*_removed_rows_summary.csv` files and the weather z-score summary), and the final row counts.
+- [ ] **Feature engineering:** final dataset shape, how many laps matched a stint, and how many rows are usable for training.
+- [ ] **Model comparison:** test MAE, RMSE and R² for all three models, in seconds rather than z-scores, with the metric chart and prediction overlay plots and what they show.
+- [ ] **Feature importance:** top features for Random Forest and XGBoost, and whether they match tyre physics (tyre age, compound, track temperature).
+- [ ] **Validation:** CV results per fold with the spread, the residual plot and what it shows about bias, and the t-test replaced with a meaningful test (or removed).
+- [ ] **Strategy:** recommended strategy (compound sequence and pit laps), predicted race time in seconds, the next-best alternatives and the gap to them, and predicted pace by compound across the race.
+- [ ] **Limitations:** a short note on which results depend on the open bugs above.
+- [ ] Decide where this lives (a results section in `readme.txt` / `README.md`, or a separate `RESULTS.md`) and link it from both readmes.
