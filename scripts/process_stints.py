@@ -72,8 +72,9 @@ for file in stints_files:
 
     log(f"\nLoaded {file} with {len(df)} rows")
 
-    # Drop metadata columns
-    df = df.drop(columns=[c for c in ["meeting_key", "session_key"] if c in df.columns], errors="ignore")
+    # Drop metadata columns (session_key is kept: stint_number and lap ranges restart
+    # every session, so feature_engineer.py needs it to assign laps to stints)
+    df = df.drop(columns=[c for c in ["meeting_key"] if c in df.columns], errors="ignore")
 
     # 1. Logical outlier removal
     df = apply_logical_filters(df, fname)

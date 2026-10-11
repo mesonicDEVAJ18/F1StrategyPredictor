@@ -12,6 +12,7 @@ import warnings
 from datetime import datetime
 
 from feature_config import MODEL_FEATURE_COLUMNS as FEATURES
+from feature_config import TARGET_GROUP_COLUMNS, build_next_lap_target
 
 warnings.filterwarnings("ignore")
 
@@ -39,17 +40,19 @@ def log(msg: str):
 log("Loading engineered dataset...")
 
 df = pd.read_csv("../data/final_engineered_dataset.csv")
-df = df.sort_values(["stint_number", "lap_number"]).reset_index(drop=True)
 
 log(f"Dataset rows: {len(df)}")
 
 # ======================================================
 # BUILD TARGET
 # ======================================================
-df["target_next_fcp"] = df.groupby("stint_number")["fuel_corrected_pace"].shift(-1)
-df = df.dropna(subset=["target_next_fcp"]).reset_index(drop=True)
+rows_before = len(df)
+n_stints = df.groupby(TARGET_GROUP_COLUMNS).ngroups
+df = build_next_lap_target(df)
 
 log(f"Rows after target shift drop: {len(df)}")
+log(f"  → Dropped as last lap of a stint: {n_stints}")
+log(f"  → Dropped for a gap to the next lap: {rows_before - len(df) - n_stints}")
 
 
 # ======================================================

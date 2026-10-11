@@ -1,23 +1,22 @@
 Loaded model and feature metadata.
-Loaded dataset with 1126 rows.
-Sorting columns used: ['stint_number', 'lap_number']
-Rows after target shift drop: 613
+Loaded dataset with 839 rows.
+Rows after target shift drop: 514
 
 Running 5-fold cross-validation...
- Fold 1 → MAE=0.6511, RMSE=0.8929
- Fold 2 → MAE=0.8587, RMSE=1.1211
- Fold 3 → MAE=0.6943, RMSE=0.9476
- Fold 4 → MAE=0.5700, RMSE=0.7534
- Fold 5 → MAE=0.7141, RMSE=1.0016
+ Fold 1 → MAE=0.4116, RMSE=0.5701
+ Fold 2 → MAE=0.4684, RMSE=0.6798
+ Fold 3 → MAE=0.3644, RMSE=0.5242
+ Fold 4 → MAE=0.3841, RMSE=0.5089
+ Fold 5 → MAE=0.4178, RMSE=0.6051
 
-CV MAE = 0.6976510252348256
-CV RMSE = 0.9433268195465416
+CV MAE = 0.40925449249713397
+CV RMSE = 0.5776247128277467
 
 Generating residual plot...
 Residual plot saved.
 
 Running example t-test...
-T-test p-value: 2.0355295410590502e-163
+T-test p-value: 4.7055231867359895e-150
 
 Validation summary saved.
 

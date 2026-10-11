@@ -132,15 +132,16 @@ Stages hand data to each other through CSVs in data/:
     process_laps.py      -> data/laps_combined_clean.csv
     process_stints.py    -> data/stints_combined_clean.csv
     process_weather.py   -> data/cleaned_weather.csv
-    process_cardata.py   -> data/cardata_per_lap_clean.csv (not read by later stages yet)
+    process_cardata.py   -> data/cardata_per_lap_clean.csv 
     feature_engineer.py  -> data/final_engineered_dataset.csv
     train_model.py       -> scripts/results/train_model/train_model_xgb_model.pkl (read by the simulator and validation)
 
 DATA PREPARATION
 Scripts: process_laps.py, process_stints.py, process_weather.py, process_cardata.py
 1. Remove redundant data from all of the data types
-These scripts remove session keys and meeting keys, data points irrelevant to the pipeline.
-[TODO #3, P1, see diagnostic.md] session_key is needed later to assign laps to the right session's stints, so it should be kept.
+These scripts remove meeting keys, data points irrelevant to the pipeline. process_laps.py and process_stints.py keep session_key, because
+lap numbers and stint numbers restart every session and feature_engineer.py needs it to assign each lap to its own session's stint.
+process_weather.py drops session_key after filtering, since weather is joined on timestamps.
 Also process_laps.py removes pit-out laps (is_pit_out_lap = True), i.e. laps that start from the pit exit. There is no explicit in-lap flag in the
 data; slow in-laps are caught by the outlier filters below.
 
@@ -165,7 +166,7 @@ Removed samples where brake or throttle read 104. This value means there is no v
 neutral (the car sitting in the garage). This is roughly a third of all samples.
 Removed physically impossible readings: speed outside 0-400 km/h, rpm outside 0-16000, gear outside 0-8, throttle outside 0-100, brake not 0 or 100.
 Each ~4.2 Hz sample is then assigned to the lap whose window [date_start, date_start + lap_duration) contains it, matched on session_key and
-driver_number. The windows come from the raw laps_p*.csv files, because the cleaned laps drop session_key and scale lap_duration.
+driver_number. The windows come from the raw laps_p*.csv files, because the cleaned laps scale lap_duration.
 Samples outside every lap (pit lane, garage, laps with no lap time) are dropped.
 The samples of each lap are aggregated to mean/max speed, mean throttle, share of samples at full throttle (>= 99%), share braking,
 mean/max rpm, mean gear, gear changes and share with DRS open.
@@ -184,8 +185,8 @@ trained on the whole field.
 Laps
 segments_sector_1/2/3 arrive as lists of mini-sector status codes; each list is replaced by its length (the number of mini-sectors).
 Driver number was kept numerical as it's friendly to tree based models (decision to use trees explained later) and was used to combine with stints data.
-Driver number was removed altogether in feature_engineer.py as it was decided to not build a driver specific model.
-[TODO #4, P1, see diagnostic.md] Without a driver/session id the next-lap target is shifted across drivers. Keep the id (not as a model input).
+Driver number is not a model input, as it was decided to not build a driver specific model. It is kept in the engineered dataset as an
+identifier only, so the next-lap target can be built per driver.
 
 Stints
 One-hot encoded compound -> compound_HARD, compound_MEDIUM, compound_SOFT (only dry compounds occur in this weekend's data).
@@ -216,13 +217,14 @@ braking share, mean/max rpm, mean gear, gear changes and DRS share. The keys, n_
 An unscaled copy in physical units is kept in scripts/results/process_cardata/process_cardata_per_lap_unscaled.csv.
 
 5. Feature Engineering (feature_engineer.py)
-Stint number: stints are sorted by driver and lap_start and numbered 1, 2, 3 ... per driver across all three sessions (global_stint_number), kept session independent to include evolution information too.
-Each lap is assigned the global number of the stint whose [lap_start, lap_end] contains its lap_number.
+Stint number: stints are sorted by driver, session and per-session stint_number, and numbered 1, 2, 3 ... per driver across all three sessions
+(global_stint_number), kept session independent to include evolution information too.
+Each lap is assigned the global number of the stint from the same session (session_key) and driver whose [lap_start, lap_end] contains its
+lap_number. Lap numbers restart every session, so the session has to match as well.
 
-[TODO #3, P1, see diagnostic.md] The lap-to-stint mask ignores the session, so a lap can be given another session's stint.
-
-Stint metadata (lap_start, lap_end, tyre_age_at_start, compound) is then merged onto the laps on driver_number + stint_number.
-[TODO #2, P1, see diagnostic.md] The merge matches the global stint number against the per-session one: 839 laps -> 1126 rows, 507 without pace.
+Stint metadata (lap_start, lap_end, tyre_age_at_start, compound) is then merged onto the laps on driver_number + global stint number, which is
+unique per driver, so the merge is one-to-one: all 839 cleaned laps get a stint and keep exactly one row.
+session_key and driver_number are kept in the final dataset as identifiers (not model inputs).
 
 Weather alignment: each lap is joined to the weather sample nearest its date_start (merge_asof on date_start ~ date, 5 minute tolerance).
 Weather is sampled about once a minute and the sessions are hours apart, so the match always comes from the lap's own session
@@ -230,13 +232,15 @@ Weather is sampled about once a minute and the sessions are hours apart, so the 
 
 laps_since_stint_start = lap_number - lap_start + 1 (clipped to at least 1)
 
-stint_avg_pace = mean(lap_duration of all other laps for that driver & stint, excluding the current lap) (Leave-One-Out average -> no target leakage)
+stint_avg_pace = mean(lap_duration of all other laps for that driver & stint, excluding the current lap) (Leave-One-Out average)
+[TODO #17, P2, see diagnostic.md] The other laps include lap t+1, whose lap_duration is part of the target, so this leaks the target.
 
 fuel_corrected_pace: laps_remaining = lap_end - lap_number (laps left in the stint) and fuel_corrected_pace = lap_duration + k*laps_remaining (k = 0.035 per lap)
 The current lap's fuel_corrected_pace is not a model input; the NEXT lap's value is the model's target.
 
-Finally driver_number, date_start, date, lap_duration and laps_remaining are dropped, and the result is saved as data/final_engineered_dataset.csv.
-[TODO #4, P1, see diagnostic.md] Dropping driver_number (and session) here is what lets the training target cross drivers.
+Finally date_start, date, lap_duration and laps_remaining are dropped, and the result is saved as data/final_engineered_dataset.csv.
+session_key and driver_number stay in it as identifiers for building the target (and later the car-data merge); the models only read the
+columns listed in feature_config.py.
 
 track evolution was not chosen as an engineered parameter, as it would've been a derived dependant value that would not have contributed to the model.
 
@@ -273,10 +277,12 @@ No fixed compound multipliers.
 Just learned tyre physics from FP laps.
 [TODO #9, P2, see diagnostic.md] The simulator does not roll predictions forward yet. Each lap is predicted on its own.
 
-Training: the target is built by shifting fuel_corrected_pace back one lap within each stint_number group; rows without a next-lap target are dropped
-(1126 -> 613 rows). Missing feature values are filled with the column median, then an 80/20 shuffled train/test split (random_state 42) is used.
-[TODO #4, P1, see diagnostic.md] Grouping by stint_number alone mixes drivers. Group by driver/session + stint and require lap_number + 1.
-[TODO #2, P1, see diagnostic.md] The 1126 starting rows include duplicates from the faulty stint merge.
+Training: the target is built by build_next_lap_target() in feature_config.py (shared by train_model.py and validate_strategy.py).
+fuel_corrected_pace is shifted back one lap within each driver_number + stint_number group (stint_number is the global per-driver number,
+so a group is one stint in one session), and a row is kept only if the next row is exactly lap_number + 1.
+This drops the last lap of every stint (260 rows) and laps followed by a gap left by cleaning (65 rows): 839 -> 514 rows.
+Missing feature values are filled with the column median, then an 80/20 shuffled train/test split (random_state 42) is used.
+[TODO #18, P2, see diagnostic.md] The split shuffles single laps, so most stints are in both train and test. Split by stint instead.
 
 3. Model choice
 train_model.py fits and compares Linear Regression, Random Forest (200 trees) and XGBoost (300 trees, learning rate 0.05, max depth 7,
@@ -291,10 +297,13 @@ non-linear learning, stable rollouts, fast inference, and direct interpretabilit
 
 Held-out test results on the current data (standardised units):
 | Model             | MAE   | RMSE  | R2    |
-| LinearRegression  | 0.676 | 0.907 | 0.425 |
-| RandomForest      | 0.642 | 0.868 | 0.474 |
-| XGBoost           | 0.674 | 0.912 | 0.419 |
-On this data Random Forest scores best on the test split and XGBoost is level with Linear Regression; XGBoost is kept for the reasons above.
+| LinearRegression  | 0.504 | 0.687 | 0.534 |
+| RandomForest      | 0.435 | 0.616 | 0.625 |
+| XGBoost           | 0.419 | 0.594 | 0.652 |
+XGBoost is the best of the three on this split, and is kept for the reasons above. Before the target was restricted to the same driver's next
+lap, every model's R2 was about 0 (-0.04 to 0.06).
+[TODO #17, P2, see diagnostic.md] stint_avg_pace (the top feature) averages over the whole stint, including lap t+1, so these R2 values are
+probably inflated.
 [TODO #13, P2, see diagnostic.md] Re-run the comparison after the P1 data fixes and confirm (or change) the saved model.
 
 This choice also aligns with how real-world motorsport predictive pipelines are structured:
@@ -328,7 +337,7 @@ This gives a single scalar number for each strategy, allowing direct comparison.
 4. Strategy optimisation
 All 18,318 strategies are evaluated and the one with the lowest predicted race time is selected.
 Results: scripts/results/strategy_simulator/ (all_strategy_results.csv, best_strategy.json, final_summary.txt).
-Current output: SOFT, no pit stop, total 70.60 (not seconds, see diagnostic.md).
+Current output: HARD, no pit stop, total 84.89 (not seconds, see diagnostic.md).
 [TODO #8, P1, see diagnostic.md] This recommendation breaks the two-compound rule.
 [TODO #7, P1, see diagnostic.md] The mixed units make a stop cost about 13 laps, so 0 stops always wins.
 
@@ -338,7 +347,8 @@ EVALUATION AND VALIDATION (validate_strategy.py)
 1. Model Validation
 Implemented:
 5-fold shuffled cross-validation (random_state 42) of the XGBoost configuration on next-lap fuel-corrected pace.
-Current result: CV MAE 0.698, CV RMSE 0.943 (standardised units).
+Current result: CV MAE 0.409, CV RMSE 0.578 (standardised units).
+[TODO #18, P2, see diagnostic.md] The folds shuffle single laps, so a stint's laps land in both train and test folds. Use GroupKFold by stint.
 Residual plot (predicted vs residual) to check for systematic bias.
 [TODO #6, P2, see diagnostic.md] The plot uses the last fold's model on all rows, including its training rows. Use out-of-fold predictions.
 Feature importance from Random Forest and XGBoost, saved by train_model.py.

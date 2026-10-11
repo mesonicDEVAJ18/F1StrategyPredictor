@@ -106,8 +106,7 @@ def encode_samples(df, fname):
 def load_lap_windows():
     """Lap time windows [date_start, date_start + lap_duration) from the raw lap files.
 
-    The cleaned laps hand-off drops session_key and scales lap_duration, so the
-    raw files are used here.
+    The cleaned laps hand-off scales lap_duration, so the raw files are used here.
     """
     laps = pd.concat(
         pd.read_csv(f, usecols=["session_key", "driver_number", "lap_number", "date_start", "lap_duration"])
@@ -180,7 +179,7 @@ def apply_coverage_filter(per_lap, sample_rate, fname):
 def keep_clean_laps(per_lap, fname):
     """Keep only laps that survived process_laps.py (drops pit-out, invalid and outlier laps).
 
-    The cleaned laps have no session_key, but (driver_number, date_start) is unique.
+    (driver_number, date_start) is unique, so it identifies a lap across sessions.
     """
     clean = pd.read_csv(clean_laps_file, usecols=["driver_number", "date_start"])
     clean["date_start"] = pd.to_datetime(clean["date_start"], format="ISO8601", utc=True)

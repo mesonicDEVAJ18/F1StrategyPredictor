@@ -63,8 +63,8 @@ python process_laps.py      # or run any single stage on its own
 - Car data is cleaned, encoded, aggregated per lap and scaled, but it is **not** merged into
   the engineered dataset or used as a model feature (diagnostic.md #16). It only covers the two
   Ferrari cars, while the model trains on the whole field.
-- Known modelling bugs (stint merge, cross-driver targets, mixed units in the simulator, the
-  wrong weather event, etc.) are listed in [diagnostic.md](diagnostic.md). Fixing them changes
+- Known modelling bugs (cross-driver targets, mixed units in the simulator, illegal strategies,
+  etc.) are listed in [diagnostic.md](diagnostic.md). Fixing them changes
   results, so confirm before fixing, and update diagnostic.md when one is resolved.
 
 ## Data flow / hand-offs
@@ -80,12 +80,15 @@ hand-off file to `data/` in addition to its own `results/<name>/` copy:
   `data/laps_combined_clean.csv` are kept, so it must run after `process_laps.py`; not read
   downstream yet)
 - `feature_engineer.py` reads the three above → `data/final_engineered_dataset.csv`
-  (and a copy under `results/feature_engineer/`)
+  (and a copy under `results/feature_engineer/`). It keeps `session_key` and `driver_number` as
+  identifiers only; they are not in `MODEL_FEATURE_COLUMNS`.
 - `train_model.py` reads the engineered dataset → `results/train_model/train_model_xgb_model.pkl`
   (a joblib bundle: `{"model": ..., "features": [...]}`)
 - `strategy_simulator.py` and `validate_strategy.py` load that `.pkl` bundle.
 
-The **model target** is next-lap `fuel_corrected_pace`. `lap_duration` and `laps_remaining` are
+The **model target** is next-lap `fuel_corrected_pace`: the same driver's lap `lap_number + 1` in the
+same stint, built by `build_next_lap_target()` in `feature_config.py` (shared by `train_model.py` and
+`validate_strategy.py`, so the target can't diverge between them). `lap_duration` and `laps_remaining` are
 dependent variables and are deliberately excluded from model inputs to avoid leakage.
 
 ## Conventions to follow

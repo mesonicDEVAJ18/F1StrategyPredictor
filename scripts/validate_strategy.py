@@ -9,6 +9,8 @@ import os
 import warnings
 from datetime import datetime
 
+from feature_config import build_next_lap_target
+
 warnings.filterwarnings("ignore")
 
 # ============================================================
@@ -45,26 +47,13 @@ log("Loaded model and feature metadata.")
 # ============================================================
 df = pd.read_csv("../data/final_engineered_dataset.csv")
 
-sort_cols = []
-if "driver_number" in df.columns:
-    sort_cols.append("driver_number")
-
-sort_cols += ["stint_number", "lap_number"]
-df = df.sort_values(sort_cols).reset_index(drop=True)
-
 log(f"Loaded dataset with {len(df)} rows.")
-log(f"Sorting columns used: {sort_cols}")
 
 
 # ============================================================
-# TARGET (one-step-ahead)
+# TARGET (one-step-ahead, same driver and stint, lap + 1)
 # ============================================================
-if "driver_number" in df.columns:
-    df["target_next_fcp"] = df.groupby(["driver_number", "stint_number"])["fuel_corrected_pace"].shift(-1)
-else:
-    df["target_next_fcp"] = df.groupby(["stint_number"])["fuel_corrected_pace"].shift(-1)
-
-df = df.dropna(subset=["target_next_fcp"]).reset_index(drop=True)
+df = build_next_lap_target(df)
 
 X = df[FEATURES].values
 y = df["target_next_fcp"].values

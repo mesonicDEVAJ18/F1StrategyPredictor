@@ -129,7 +129,7 @@ Environmental conditions:
 - Z-score filtering (|z| > 3) on all continuous variables
 
 **3. Encoding**
-- `driver_number`: Kept numerical (tree-friendly, later removed for generalized model)
+- `driver_number`: Kept numerical as an identifier (with `session_key`) to build the per-driver next-lap target; not a model input (generalized model)
 - `compound`: One-hot encoded → `compound_SOFT`, `compound_MEDIUM`, `compound_HARD`
 - `segments_sector_1/2/3`: List of mini-sector codes replaced by its length
 
@@ -169,11 +169,11 @@ Predict **fuel-corrected pace on the next lap** rather than explicitly computing
 
 | Model | Reasoning | Test MAE | Test RMSE | Test R² |
 |-------|-----------|----------|-----------|---------|
-| Linear Regression | Underfits non-linear tyre behavior | 0.676 | 0.907 | 0.425 |
-| Random Forest | Noisy, stepwise predictions | 0.642 | 0.868 | 0.474 |
-| **XGBoost** | Chosen for non-linear learning and smooth predictions | 0.674 | 0.912 | 0.419 |
+| Linear Regression | Underfits non-linear tyre behavior | 0.504 | 0.687 | 0.534 |
+| Random Forest | Noisy, stepwise predictions | 0.435 | 0.616 | 0.625 |
+| **XGBoost** | Chosen for non-linear learning and smooth predictions | 0.419 | 0.594 | 0.652 |
 
-*Metrics are in standardised (z-score) units, from the current run. On this data Random Forest scores best on the test split and XGBoost is level with Linear Regression; see [diagnostic.md](diagnostic.md).*
+*Metrics are in standardised (z-score) units, from the current run. They are probably inflated, because `stint_avg_pace` (the top feature) includes the target lap (diagnostic.md #17); see [diagnostic.md](diagnostic.md).*
 
 **XGBoost Advantages:**
 - Captures non-linear tyre physics (warm-up, thermal degradation, cliff effects)
@@ -187,6 +187,7 @@ Predict **fuel-corrected pace on the next lap** rather than explicitly computing
 ```python
 y = fuel_corrected_pace_next_lap
 ```
+Built by `build_next_lap_target()` in `scripts/feature_config.py`: the same driver's lap `lap_number + 1` in the same stint. The last lap of each stint and laps followed by a cleaning gap are dropped (839 → 514 rows).
 
 **2. Removed Dependent Variables**
 - `lap_duration` (sum of sector times)

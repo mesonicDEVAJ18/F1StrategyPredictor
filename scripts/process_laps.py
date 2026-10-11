@@ -135,8 +135,9 @@ for file in laps_files:
         removed_rows_summary.append([file, "pit_out", removed])
         df = df.drop(columns=["is_pit_out_lap"])
 
-    # Drop metadata columns
-    df = df.drop(columns=[c for c in ["meeting_key", "session_key"] if c in df.columns], errors="ignore")
+    # Drop metadata columns (session_key is kept: lap numbers restart every session,
+    # so feature_engineer.py needs it to assign laps to the right session's stints)
+    df = df.drop(columns=[c for c in ["meeting_key"] if c in df.columns], errors="ignore")
 
     # Apply cleaning pipeline
     df = apply_domain_filters(df, file)

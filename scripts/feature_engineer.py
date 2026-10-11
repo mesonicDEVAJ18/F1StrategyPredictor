@@ -66,22 +66,25 @@ def assign_stint_numbers(laps, stints):
     if "driver_number" in stints.columns:
         stints["driver_number"] = stints["driver_number"].astype(int)
 
-    stints = stints.sort_values(["driver_number", "lap_start"]).copy()
+    # Session keys increase FP1 -> FP3, so this numbers stints chronologically
+    stints = stints.sort_values(["driver_number", "session_key", "stint_number"]).copy()
 
     # Create global per-driver stint numbering
     stints["global_stint_number"] = (
         stints.groupby("driver_number").cumcount() + 1
     )
 
-    # Assign to laps
+    # Assign to laps (lap numbers restart every session, so match the session too)
     laps["stint_number"] = np.nan
     for _, row in stints.iterrows():
+        session = row["session_key"]
         driver = row["driver_number"]
         global_stint_no = row["global_stint_number"]
         start = row["lap_start"]
         end = row["lap_end"]
 
         mask = (
+            (laps["session_key"] == session) &
             (laps["driver_number"] == driver) &
             (laps["lap_number"] >= start) &
             (laps["lap_number"] <= end)
@@ -108,22 +111,28 @@ log("\nMerging stints into laps...")
 
 stints_merge_cols = [
     "driver_number",
-    "stint_number",
+    "global_stint_number",
     "lap_start",
     "lap_end",
     "tyre_age_at_start"
 ] + [col for col in stints.columns if col.startswith("compound_")]
 
+# Laps carry the global number, which is unique per driver, so merge on that
+# (the stints' own stint_number restarts every session)
+rows_before = len(laps)
 laps = laps.merge(
-    stints[stints_merge_cols],
+    stints[stints_merge_cols].rename(columns={"global_stint_number": "stint_number"}),
     on=["driver_number", "stint_number"],
-    how="left"
+    how="left",
+    validate="many_to_one"
 )
 
 merge_stints_snapshot = f"{SCRIPT_NAME}_laps_after_stint_merge.csv"
 laps.to_csv(f"{RESULTS_DIR}/{merge_stints_snapshot}", index=False)
 generated_files.append(merge_stints_snapshot)
 
+log(f"  → Rows before/after merge: {rows_before} / {len(laps)}")
+log(f"  → Laps without stint metadata: {laps['lap_start'].isna().sum()}")
 log("  → Stints merged successfully")
 
 
@@ -188,8 +197,9 @@ generated_files.append(feat_snapshot)
 # ============================================================
 log("\nFinal cleanup...")
 
-drops = ["driver_number", "date", "date_start", "lap_duration",
-         "laps_remaining"]
+# session_key and driver_number are kept as identifiers (next-lap target grouping,
+# car-data merge), not model inputs: the models only read MODEL_FEATURE_COLUMNS
+drops = ["date", "date_start", "lap_duration", "laps_remaining"]
 
 laps = laps.drop(columns=[c for c in drops if c in laps.columns], errors="ignore")
 

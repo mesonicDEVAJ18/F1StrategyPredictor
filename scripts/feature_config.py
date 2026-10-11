@@ -26,3 +26,23 @@ MODEL_FEATURE_COLUMNS = [
 
 # FULL dataset row structure (used by simulator)
 SIM_FEATURE_COLUMNS = MODEL_FEATURE_COLUMNS + ["fuel_corrected_pace"]
+
+# One stint of one driver (stint_number is the global per-driver number,
+# so it also pins the session)
+TARGET_GROUP_COLUMNS = ["driver_number", "stint_number"]
+
+
+def build_next_lap_target(df):
+    """Add target_next_fcp = the same driver's fuel_corrected_pace on lap t+1 of the same stint.
+
+    Rows without a next lap (end of stint, or a gap left by lap cleaning) are dropped.
+    Shared by train_model.py and validate_strategy.py so the target stays identical.
+    """
+    df = df.sort_values(TARGET_GROUP_COLUMNS + ["lap_number"]).reset_index(drop=True)
+    grp = df.groupby(TARGET_GROUP_COLUMNS)
+    next_lap = grp["lap_number"].shift(-1)
+    df["target_next_fcp"] = grp["fuel_corrected_pace"].shift(-1)
+
+    consecutive = next_lap == df["lap_number"] + 1
+    df = df[consecutive & df["target_next_fcp"].notna()].reset_index(drop=True)
+    return df

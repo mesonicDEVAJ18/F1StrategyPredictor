@@ -1,6 +1,8 @@
 Loading engineered dataset...
-Dataset rows: 1126
-Rows after target shift drop: 613
+Dataset rows: 839
+Rows after target shift drop: 514
+  → Dropped as last lap of a stint: 260
+  → Dropped for a gap to the next lap: 65
 Saved feature snapshot.
 Completed train/test split.
 

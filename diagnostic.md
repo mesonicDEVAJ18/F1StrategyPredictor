@@ -21,7 +21,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **readme.txt:** Data Collection step 4; Feature Engineering, pseudo time alignment.
   - **Fixed:** `data/weather.csv` re-downloaded for `meeting_key=1257`. `process_weather.py` keeps only the practice sessions (the `session_key`s in `laps_p*.csv`), dropping qualifying and race. `feature_engineer.py` replaces pseudo time with `merge_asof` on `date_start` ~ `date` (nearest, 5 min tolerance); all 839 laps match, within 30 s. Held-out R² went from 0.306/0.232/0.102 to 0.425/0.474/0.419 (LR/RF/XGB).
 
-- [ ] **#2 Stint merge joins on the wrong stint number**
+- [x] **#2 Stint merge joins on the wrong stint number**
   - **Where:** `scripts/feature_engineer.py`: `assign_stint_numbers()` and the `laps.merge(stints[...], on=["driver_number", "stint_number"])` that follows it.
   - **Problem:** laps get a `global_stint_number`, which runs 1–18 per driver across all three sessions. The merge then matches it against the stints table's own `stint_number`, which runs 1–9 and restarts in every session.
   - **Effect:**
@@ -30,30 +30,36 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **Fix:** merge on `global_stint_number`, or keep `session_key` and merge on `(session_key, driver_number, stint_number)`.
   - **Depends on:** shares a fix with #3 (keep `session_key`).
   - **readme.txt:** Feature Engineering, stint number and merge; ML Modelling, training (1126 → 613 rows).
+  - **Fixed** (together with #3): the merge now uses the stints' `global_stint_number`, renamed to `stint_number`, on `(driver_number, stint_number)`. The global number is unique per driver, so the merge is one-to-one (`validate="many_to_one"`). All 839 cleaned laps keep exactly one row, all of them get a stint, and none is missing `fuel_corrected_pace`. Every lap's compound and lap range were checked against the raw `stints_p*.csv` of its own session, with 0 mismatches. 821 rows remain after the target shift (was 613).
+    - **Effect on metrics:** held-out R² fell from 0.425/0.474/0.419 to 0.043/0.060/−0.039 (LR/RF/XGB). The old figures were inflated by the duplicated rows. The target is still mostly cross-driver (#4): only 5.5% of target pairs are the same driver's next lap (was 2.0%). As a diagnostic only, building the target per `(session_key, driver_number, stint_number)` with lap + 1 gives 514 rows and RF R² 0.617.
 
-- [ ] **#3 Laps are assigned to stints without checking the session**
+- [x] **#3 Laps are assigned to stints without checking the session**
   - **Where:** `scripts/feature_engineer.py`: the mask in `assign_stint_numbers()`.
   - **Problem:** `session_key` is dropped during cleaning, so a lap is matched on driver and lap-number range only. Lap numbers restart every session, so FP1 lap 5 can be given an FP2 stint that also covers lap 5. Whichever matching stint is processed last wins.
   - **Fix:** keep `session_key` through cleaning and include it in the mask.
   - **Depends on:** shares a fix with #2.
   - **readme.txt:** Data Preparation step 1 (session keys removed); Feature Engineering, stint number.
+  - **Fixed:** `process_laps.py` and `process_stints.py` now drop only `meeting_key`, so `session_key` reaches `data/laps_combined_clean.csv` and `data/stints_combined_clean.csv`. `assign_stint_numbers()` adds `session_key` to the mask. It also numbers the global stints in order of `(driver_number, session_key, stint_number)` rather than `lap_start`, which interleaved the sessions. `feature_engineer.py` drops `session_key` from the final dataset along with `driver_number`, so the engineered dataset's schema is unchanged. #4 decides which id to keep there.
 
-- [ ] **#4 The "next lap" target can come from another driver**
+- [x] **#4 The "next lap" target can come from another driver**
   - **Where:** `df.groupby("stint_number")["fuel_corrected_pace"].shift(-1)` in both `scripts/train_model.py` and `scripts/validate_strategy.py`.
   - **Problem:** `driver_number` is dropped in `feature_engineer.py`, so the target is shifted within `stint_number` only. Every driver's stint 1 is one group, sorted by lap number, so a row's "next lap" is often another driver's lap.
   - **Fix:** keep a driver/session identifier in the engineered dataset (not as a model input). Group by it plus the stint, and check that the next lap number is exactly the current one plus 1.
   - **readme.txt:** Data Preparation step 3, encoding (driver number removed); Feature Engineering, final drop list; ML Modelling, training.
+  - **Fixed:** `feature_engineer.py` keeps `session_key` and `driver_number` in the engineered dataset as identifiers. They are not in `MODEL_FEATURE_COLUMNS`, so the model still has the same 22 inputs. `feature_config.py` has a shared `build_next_lap_target()`, used by both `train_model.py` and `validate_strategy.py`. It groups by `(driver_number, stint_number)` (the global stint number, so one stint in one session) and keeps a row only if the next row is `lap_number + 1`.
+    - **Rows:** 839 → 514. 260 are the last lap of a stint and 65 have a gap to the next lap (laps removed in cleaning). All 514 pairs were checked: same driver, stint and session, and lap + 1.
+    - **Effect on metrics:** held-out R² rose from 0.043/0.060/−0.039 to 0.534/0.625/0.652 (LR/RF/XGB), and MAE to 0.504/0.435/0.419 (z-score units). XGBoost 5-fold CV MAE is 0.409 and RMSE 0.578. Part of this may be leakage through `stint_avg_pace` (#17).
 
 - [ ] **#7 The simulator mixes units**
   - **Where:** `scripts/strategy_simulator.py`, with the scaling done in `scripts/process_laps.py`.
   - **Problem:** `lap_duration` is standardised in `process_laps.py` (z-scores, one scaler per session), so the model predicts in z-score units. The fuel correction (`0.035`/lap), `FUEL_PENALTY_PER_LAP` and `PIT_LOSS = 22.0` are in seconds.
-  - **Effect:** the best strategy totals 70.60 over 57 laps (about 1.2 per lap), so one pit stop costs as much as roughly 18 laps of racing. The optimiser therefore always picks 0 stops. The reported total is not a race time in seconds.
+  - **Effect:** the best strategy totals 84.89 over 57 laps (about 1.49 per lap), so one pit stop costs as much as roughly 15 laps of racing. The optimiser therefore always picks 0 stops. The reported total is not a race time in seconds.
   - **Fix:** either model in seconds (don't scale `lap_duration`), or convert predictions back to seconds with the per-session scaler before simulating.
   - **readme.txt:** Data Preparation step 4, normalization; Race Simulation steps 3 and 4.
 
 - [ ] **#8 Illegal strategies are allowed**
   - **Where:** `generate_strategies()` in `scripts/strategy_simulator.py`.
-  - **Problem:** it includes 0-stop strategies and sequences that use a single compound, which the two-compound rule forbids. The current recommendation (SOFT, no stop) is one of these.
+  - **Problem:** it includes 0-stop strategies and sequences that use a single compound, which the two-compound rule forbids. The current recommendation (HARD, no stop) is one of these.
   - **Fix:** keep only sequences with `len(set(seq)) >= 2`.
   - **readme.txt:** Race Simulation steps 1 and 4.
 
@@ -71,6 +77,20 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **readme.txt:** Race Simulation step 3.
 
 ## P2: method or validation is misleading
+
+- [ ] **#17 `stint_avg_pace` contains the target lap**
+  - **Where:** the leave-one-out `stint_avg_pace` in `scripts/feature_engineer.py`.
+  - **Problem:** it averages `lap_duration` over every other lap of the stint, and that includes lap *t+1*. The target is lap *t+1*'s `fuel_corrected_pace`, which is that same `lap_duration` plus a fuel term, so part of the target is fed in as an input.
+  - **Effect:** it is the top feature by far (importance 0.25 XGB, 0.46 RF), so the R² of ~0.65 after #4 is probably inflated. The simulator sets it to 0, so the model's main signal is missing when it predicts.
+  - **Fix:** use only laps before *t* (an expanding mean of the stint so far, NaN or median on the first lap), or drop the feature.
+  - **readme.txt:** Feature Engineering, stint_avg_pace.
+
+- [ ] **#18 Train/test splits mix laps from the same stint**
+  - **Where:** `train_test_split(..., shuffle=True)` in `scripts/train_model.py` and `KFold(n_splits=5, shuffle=True)` in `scripts/validate_strategy.py`.
+  - **Problem:** rows are shuffled one lap at a time, so most stints have laps in both the training and the test set. Consecutive laps of one stint are highly correlated (same driver, car, tyre, fuel and conditions), and with #17 the test laps' own lap times are spread through the training rows.
+  - **Effect:** the test and CV scores measure interpolation within stints the model has already seen, not prediction on a new stint (which is what the simulator does). They overstate the model.
+  - **Fix:** split by stint with `GroupShuffleSplit` / `GroupKFold`, grouped on `(driver_number, stint_number)` (or by session, or by driver, for a stricter test). Both id columns are in the engineered dataset since #4.
+  - **readme.txt:** ML Modelling, training (80/20 split); Evaluation step 1, cross-validation.
 
 - [ ] **#9 The simulation does not roll predictions forward**
   - **Where:** `precompute_lap_predictions()` in `scripts/strategy_simulator.py`.
@@ -96,9 +116,9 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
 
 - [ ] **#13 The saved model is the weakest of the three on the test split**
   - **Where:** `scripts/train_model.py` always saves XGBoost.
-  - **Problem:** on the current data (after #1), held-out R² is 0.425 for Linear Regression, 0.474 for Random Forest and 0.419 for XGBoost. `readme.txt` justifies XGBoost on qualitative grounds, but the metrics don't currently back that up.
-  - **Fix:** re-run the comparison after the P1 data fixes. Then either keep XGBoost with metrics that support it, or save the best model and update the reasoning.
-  - **Depends on:** partly downstream of #2, #3 and #4.
+  - **Problem:** `readme.txt` justifies XGBoost on qualitative grounds. Before #4 was fixed, the held-out R² was 0.043 for Linear Regression, 0.060 for Random Forest and −0.039 for XGBoost. After #4, XGBoost is now the best of the three: 0.534 for LR, 0.625 for RF and 0.652 for XGB. The gap to Random Forest is small, comes from one shuffled split, and may be inflated by #17.
+  - **Fix:** re-run the comparison once #17 and #18 are fixed. Then either keep XGBoost with metrics that support it, or save the best model and update the reasoning.
+  - **Depends on:** #17 and #18 (#2, #3 and #4 are fixed).
   - **readme.txt:** ML Modelling step 3, results table.
 
 ## P3: completeness and cleanup
@@ -140,7 +160,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - Merge on `(session_key, driver_number, lap_number)`, using only lap *t*'s car data to predict lap *t+1* (no leakage).
     - Add the chosen columns to `MODEL_FEATURE_COLUMNS` / `SIM_FEATURE_COLUMNS` in `feature_config.py`, and decide what the simulator feeds for them.
   - **Depends on:**
-    - #2, #3 and #4: the engineered dataset needs to keep `session_key` and `driver_number` before this merge is possible.
+    - #4 (fixed): the engineered dataset now keeps `session_key` and `driver_number`, so the merge keys are available.
     - #7: the car-data aggregates are scaled per session, like the laps.
     - #9: the simulator needs a lap-*t* feature vector to roll forward.
   - **readme.txt:** Data Collection step 5; Data Preparation, CarData.
