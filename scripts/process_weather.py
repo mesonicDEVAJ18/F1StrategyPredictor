@@ -37,6 +37,20 @@ log(f"Loaded weather.csv with {len(weather)} rows")
 
 
 # ============================================================
+# KEEP PRACTICE SESSIONS ONLY
+# ============================================================
+# weather.csv covers the whole meeting (practice, qualifying, race); keep only
+# the sessions the lap data comes from so filtering/scaling reflect practice.
+practice_sessions = pd.concat(
+    pd.read_csv(f, usecols=["session_key"]) for f in sorted(data_dir.glob("laps_p*.csv"))
+)["session_key"].dropna().astype(int).unique()
+
+before = len(weather)
+weather = weather[weather["session_key"].isin(practice_sessions)].reset_index(drop=True)
+log(f"Kept practice sessions {sorted(practice_sessions.tolist())}: {before} -> {len(weather)} rows")
+
+
+# ============================================================
 # DROP UNUSED COLUMNS
 # ============================================================
 weather = weather.drop(columns=[c for c in ["meeting_key", "session_key"] if c in weather.columns], errors="ignore")

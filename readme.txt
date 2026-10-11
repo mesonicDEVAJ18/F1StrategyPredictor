@@ -28,11 +28,8 @@ https://api.openf1.org/v1/stints?session_key=10008&csv=true
 https://api.openf1.org/v1/stints?session_key=10009&csv=true
 
 4. Download the weekend's weather related data
-https://api.openf1.org/v1/weather?meeting_key=1253&csv=true
-KNOWN ISSUE: meeting_key 1253 is Bahrain pre-season testing (sessions 9683-9685, 26-28 Feb 2025), not the Grand Prix weekend.
-The laps, stints and car data are from meeting_key 1257 (11-12 Apr 2025). The weather for the race weekend would be
 https://api.openf1.org/v1/weather?meeting_key=1257&csv=true
-[TODO #1, P1, see diagnostic.md] Re-download weather for meeting_key 1257 and merge it on timestamps per session.
+This covers the whole meeting (practice, qualifying and race); process_weather.py keeps only the practice sessions.
 
 5. Download the car data for the sessions
 https://api.openf1.org/v1/car_data?session_key=10007&driver_number=7&csv=true
@@ -156,6 +153,7 @@ Stints
 No continuous telemetry available, prompting use of logical checks only, removed rows where lap_start > lap_end, negative tyre_age_at_start, and missing compound.
 
 Weather
+Kept only the practice sessions (the session_keys found in laps_p1-3.csv); qualifying and race weather are dropped.
 Applied Z-score filtering (|z| > 3) on continuous atmospheric readings: Air temperature, Track temperature, Humidity, Pressure, Wind speed and Rainfall.
 Columns with zero variance are skipped.
 
@@ -201,10 +199,9 @@ Each lap is assigned the global number of the stint whose [lap_start, lap_end] c
 Stint metadata (lap_start, lap_end, tyre_age_at_start, compound) is then merged onto the laps on driver_number + stint_number.
 [TODO #2, P1, see diagnostic.md] The merge matches the global stint number against the per-session one: 839 laps -> 1126 rows, 507 without pace.
 
-Pseudo time alignment: the laps do carry a date_start timestamp, but the weather file comes from a different event (see diagnostic.md), so
-timestamps cannot be matched. Instead a pseudo_time axis is constructed: pseudo_time = lap_number for laps, and the weather rows (in file order)
-are spread evenly across the same lap_number range. A nearest-neighbour merge_asof then assigns each lap the closest weather observation.
-[TODO #1, P1, see diagnostic.md] Each lap's weather is effectively arbitrary. Replace with a timestamp merge once the right weather is downloaded.
+Weather alignment: each lap is joined to the weather sample nearest its date_start (merge_asof on date_start ~ date, 5 minute tolerance).
+Weather is sampled about once a minute and the sessions are hours apart, so the match always comes from the lap's own session
+(on the current data every lap matches, within 30 s).
 
 laps_since_stint_start = lap_number - lap_start + 1 (clipped to at least 1)
 
@@ -213,7 +210,7 @@ stint_avg_pace = mean(lap_duration of all other laps for that driver & stint, ex
 fuel_corrected_pace: laps_remaining = lap_end - lap_number (laps left in the stint) and fuel_corrected_pace = lap_duration + k*laps_remaining (k = 0.035 per lap)
 The current lap's fuel_corrected_pace is not a model input; the NEXT lap's value is the model's target.
 
-Finally driver_number, date_start, date, lap_duration, pseudo_time and laps_remaining are dropped, and the result is saved as data/final_engineered_dataset.csv.
+Finally driver_number, date_start, date, lap_duration and laps_remaining are dropped, and the result is saved as data/final_engineered_dataset.csv.
 [TODO #4, P1, see diagnostic.md] Dropping driver_number (and session) here is what lets the training target cross drivers.
 
 track evolution was not chosen as an engineered parameter, as it would've been a derived dependant value that would not have contributed to the model.
@@ -269,10 +266,10 @@ non-linear learning, stable rollouts, fast inference, and direct interpretabilit
 
 Held-out test results on the current data (standardised units):
 | Model             | MAE   | RMSE  | R2    |
-| LinearRegression  | 0.784 | 0.961 | 0.306 |
-| RandomForest      | 0.779 | 1.011 | 0.232 |
-| XGBoost           | 0.817 | 1.094 | 0.102 |
-On this data XGBoost scores lowest of the three on the test split; it is kept for the reasons above.
+| LinearRegression  | 0.676 | 0.907 | 0.425 |
+| RandomForest      | 0.642 | 0.868 | 0.474 |
+| XGBoost           | 0.674 | 0.912 | 0.419 |
+On this data Random Forest scores best on the test split and XGBoost is level with Linear Regression; XGBoost is kept for the reasons above.
 [TODO #13, P2, see diagnostic.md] Re-run the comparison after the P1 data fixes and confirm (or change) the saved model.
 
 This choice also aligns with how real-world motorsport predictive pipelines are structured:
@@ -306,7 +303,7 @@ This gives a single scalar number for each strategy, allowing direct comparison.
 4. Strategy optimisation
 All 18,318 strategies are evaluated and the one with the lowest predicted race time is selected.
 Results: scripts/results/strategy_simulator/ (all_strategy_results.csv, best_strategy.json, final_summary.txt).
-Current output: HARD, no pit stop, total 95.97 (not seconds, see diagnostic.md).
+Current output: SOFT, no pit stop, total 70.60 (not seconds, see diagnostic.md).
 [TODO #8, P1, see diagnostic.md] This recommendation breaks the two-compound rule.
 [TODO #7, P1, see diagnostic.md] The mixed units make a stop cost about 13 laps, so 0 stops always wins.
 
@@ -316,7 +313,7 @@ EVALUATION AND VALIDATION (validate_strategy.py)
 1. Model Validation
 Implemented:
 5-fold shuffled cross-validation (random_state 42) of the XGBoost configuration on next-lap fuel-corrected pace.
-Current result: CV MAE 0.827, CV RMSE 1.093 (standardised units).
+Current result: CV MAE 0.698, CV RMSE 0.943 (standardised units).
 Residual plot (predicted vs residual) to check for systematic bias.
 [TODO #6, P2, see diagnostic.md] The plot uses the last fold's model on all rows, including its training rows. Use out-of-fold predictions.
 Feature importance from Random Forest and XGBoost, saved by train_model.py.
@@ -345,7 +342,7 @@ The solution is stable and not sensitive to minor model noise
 KNOWN ISSUES
 Known bugs and their effect on the results are documented in diagnostic.md.
 Open TODOs by priority (IDs as in diagnostic.md; each is tagged [TODO #N, ...] where it applies above):
-P1, results are invalid until fixed:  #1 weather event, #2 stint merge key, #3 stint/session mask, #4 cross-driver target, #7 mixed units,
+P1, results are invalid until fixed:  #2 stint merge key, #3 stint/session mask, #4 cross-driver target, #7 mixed units,
                                       #8 illegal strategies, #10 tyre age reset, #11 pit lap missing from sum
 P2, method or validation misleading:  #9 no autoregressive rollout, #6 residual plot leakage, #5 placeholder t-test, #13 model choice
 P3, completeness and cleanup:         #12 dead starting-compound setting, #14 car-data stage, #15 results documentation

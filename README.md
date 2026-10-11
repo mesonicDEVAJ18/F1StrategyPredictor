@@ -57,8 +57,8 @@ curl "https://api.openf1.org/v1/stints?session_key=10007&csv=true" -o data/stint
 curl "https://api.openf1.org/v1/stints?session_key=10008&csv=true" -o data/stints_p2.csv
 curl "https://api.openf1.org/v1/stints?session_key=10009&csv=true" -o data/stints_p3.csv
 
-# Weather data (meeting 1253 is Bahrain pre-season testing, see diagnostic.md)
-curl "https://api.openf1.org/v1/weather?meeting_key=1253&csv=true" -o data/weather.csv
+# Weather data for the whole meeting (process_weather.py keeps the practice sessions)
+curl "https://api.openf1.org/v1/weather?meeting_key=1257&csv=true" -o data/weather.csv
 
 # Car data for the Ferrari cars (not used by the pipeline yet)
 curl "https://api.openf1.org/v1/car_data?session_key=10007&driver_number=7&csv=true" -o data/car_data_p1_1.csv
@@ -142,7 +142,7 @@ Environmental conditions:
 | Feature | Formula | Purpose |
 |---------|---------|---------|
 | `stint_number` | Stints numbered 1, 2, 3… per driver across all sessions | Track tyre degradation per stint |
-| `pseudo_time` | `lap_number` for laps; weather rows spread evenly over the same range | Align weather to laps (nearest `merge_asof`) |
+| weather join | nearest weather sample to each lap's `date_start` (`merge_asof`, 5 min tolerance) | Give each lap the conditions it was driven in |
 | `laps_since_stint_start` | `lap_number - lap_start + 1` | Measure tyre age in current stint |
 | `stint_avg_pace` | Leave-one-out mean of lap times | Capture stint-level performance |
 | `fuel_corrected_pace` | `lap_duration + 0.035 × laps_remaining` (`laps_remaining = lap_end - lap_number`) | Account for fuel load reduction |
@@ -168,11 +168,11 @@ Predict **fuel-corrected pace on the next lap** rather than explicitly computing
 
 | Model | Reasoning | Test MAE | Test RMSE | Test R² |
 |-------|-----------|----------|-----------|---------|
-| Linear Regression | Underfits non-linear tyre behavior | 0.784 | 0.961 | 0.306 |
-| Random Forest | Noisy, stepwise predictions | 0.779 | 1.011 | 0.232 |
-| **XGBoost** | Chosen for non-linear learning and smooth predictions | 0.817 | 1.094 | 0.102 |
+| Linear Regression | Underfits non-linear tyre behavior | 0.676 | 0.907 | 0.425 |
+| Random Forest | Noisy, stepwise predictions | 0.642 | 0.868 | 0.474 |
+| **XGBoost** | Chosen for non-linear learning and smooth predictions | 0.674 | 0.912 | 0.419 |
 
-*Metrics are in standardised (z-score) units, from the current run. On this data XGBoost scores lowest on the test split; see [diagnostic.md](diagnostic.md).*
+*Metrics are in standardised (z-score) units, from the current run. On this data Random Forest scores best on the test split and XGBoost is level with Linear Regression; see [diagnostic.md](diagnostic.md).*
 
 **XGBoost Advantages:**
 - Captures non-linear tyre physics (warm-up, thermal degradation, cliff effects)
@@ -235,7 +235,7 @@ Minimize: Total Race Time = Σ(stint lap times) + 22 × number of pit stops
 ## ✅ Evaluation & Validation
 
 ### Model Validation (`validate_strategy.py`)
-- **Cross-validation**: 5-fold CV on next-lap predictions (current: MAE 0.827, RMSE 1.093, z-score units)
+- **Cross-validation**: 5-fold CV on next-lap predictions (current: MAE 0.698, RMSE 0.943, z-score units)
 - **Residual analysis**: Check for systematic bias
 - **Feature importance**: Verify alignment with tyre physics
   - Expected top features: tyre age, compound, track temperature

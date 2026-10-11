@@ -1,6 +1,7 @@
-Loaded weather.csv with 1739 rows
+Loaded weather.csv with 484 rows
+Kept practice sessions [10007, 10008, 10009]: 484 -> 239 rows
 Dropped meeting/session keys if present.
-[weather.csv] Removed 165 weather outliers (Z-score)
+[weather.csv] Removed 0 weather outliers (Z-score)
 [weather.csv] Scaled continuous weather features: ['air_temperature', 'track_temperature', 'humidity', 'pressure', 'wind_speed', 'rainfall']
  → wind_direction kept unscaled (cyclical variable)
 Saved cleaned weather file: process_weather_cleaned_weather.csv

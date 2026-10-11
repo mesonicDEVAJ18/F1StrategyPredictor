@@ -128,32 +128,26 @@ log("  → Stints merged successfully")
 
 
 # ============================================================
-# MERGE WEATHER WITH PSEUDO-TIME ALIGNMENT
+# MERGE WEATHER ON TIMESTAMPS
 # ============================================================
-log("\nMerging weather using pseudo-time...")
+log("\nMerging weather on timestamps (lap date_start ~ weather date)...")
 
-laps = laps.sort_values("lap_number").reset_index(drop=True)
-laps["pseudo_time"] = laps["lap_number"]
+laps["date_start"] = pd.to_datetime(laps["date_start"], utc=True, format="ISO8601")
+weather["date"] = pd.to_datetime(weather["date"], utc=True, format="ISO8601")
 
-weather = weather.reset_index(drop=True)
-weather["pseudo_time"] = np.linspace(
-    laps["pseudo_time"].min(),
-    laps["pseudo_time"].max(),
-    len(weather)
-)
-
-laps["pseudo_time"] = laps["pseudo_time"].astype(float)
-weather["pseudo_time"] = weather["pseudo_time"].astype(float)
-
-laps = laps.sort_values("pseudo_time").reset_index(drop=True)
-weather = weather.sort_values("pseudo_time").reset_index(drop=True)
-
+# Sessions are hours apart and weather is sampled ~1/min, so the nearest
+# sample within the tolerance always comes from the lap's own session.
 laps = pd.merge_asof(
-    laps.sort_values("pseudo_time"),
-    weather.sort_values("pseudo_time"),
-    on="pseudo_time",
-    direction="nearest"
+    laps.sort_values("date_start"),
+    weather.sort_values("date"),
+    left_on="date_start",
+    right_on="date",
+    direction="nearest",
+    tolerance=pd.Timedelta("5min")
 )
+
+unmatched = laps["date"].isna().sum()
+log(f"  → Laps without weather within 5 min: {unmatched}")
 
 merge_weather_snapshot = f"{SCRIPT_NAME}_laps_after_weather_merge.csv"
 laps.to_csv(f"{RESULTS_DIR}/{merge_weather_snapshot}", index=False)
@@ -195,7 +189,7 @@ generated_files.append(feat_snapshot)
 log("\nFinal cleanup...")
 
 drops = ["driver_number", "date", "date_start", "lap_duration",
-         "pseudo_time", "laps_remaining"]
+         "laps_remaining"]
 
 laps = laps.drop(columns=[c for c in drops if c in laps.columns], errors="ignore")
 

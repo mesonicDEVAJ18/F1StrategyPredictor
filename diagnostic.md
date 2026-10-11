@@ -1,6 +1,6 @@
 # Diagnostic: TODO list
 
-The pipeline runs end to end (`python master.py` from `scripts/`), but the open items below affect how far the current output can be trusted. None of them are fixed yet.
+The pipeline runs end to end (`python master.py` from `scripts/`), but the open items below affect how far the current output can be trusted. Fixed items are ticked and say what changed.
 
 Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies with a `[TODO #N, P?, see diagnostic.md]` line. When an item is fixed, tick it here, say what changed, and remove or update its tags in `readme.txt`.
 
@@ -13,12 +13,13 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
 
 ## P1: results are invalid until fixed
 
-- [ ] **#1 Weather comes from a different event**
+- [x] **#1 Weather comes from a different event**
   - **Where:** `data/weather.csv`, and the download URL in `readme.txt` / `README.md`.
   - **Problem:** the weather was downloaded with `meeting_key=1253`, which is Bahrain pre-season testing (sessions 9683–9685, 26–28 Feb 2025). The laps, stints and car data are from `meeting_key=1257`, the Grand Prix weekend (11–12 Apr 2025).
   - **Effect:** the weather features describe a different week. The timestamps can't line up, so `feature_engineer.py` spreads the weather rows evenly over the lap numbers ("pseudo time"). Each lap's weather is therefore effectively arbitrary.
   - **Fix:** download `https://api.openf1.org/v1/weather?meeting_key=1257&csv=true`, then merge per session on timestamps (`date_start` against `date`).
   - **readme.txt:** Data Collection step 4; Feature Engineering, pseudo time alignment.
+  - **Fixed:** `data/weather.csv` re-downloaded for `meeting_key=1257`. `process_weather.py` keeps only the practice sessions (the `session_key`s in `laps_p*.csv`), dropping qualifying and race. `feature_engineer.py` replaces pseudo time with `merge_asof` on `date_start` ~ `date` (nearest, 5 min tolerance); all 839 laps match, within 30 s. Held-out R² went from 0.306/0.232/0.102 to 0.425/0.474/0.419 (LR/RF/XGB).
 
 - [ ] **#2 Stint merge joins on the wrong stint number**
   - **Where:** `scripts/feature_engineer.py`: `assign_stint_numbers()` and the `laps.merge(stints[...], on=["driver_number", "stint_number"])` that follows it.
@@ -46,13 +47,13 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
 - [ ] **#7 The simulator mixes units**
   - **Where:** `scripts/strategy_simulator.py`, with the scaling done in `scripts/process_laps.py`.
   - **Problem:** `lap_duration` is standardised in `process_laps.py` (z-scores, one scaler per session), so the model predicts in z-score units. The fuel correction (`0.035`/lap), `FUEL_PENALTY_PER_LAP` and `PIT_LOSS = 22.0` are in seconds.
-  - **Effect:** the best strategy totals 95.97 over 57 laps (about 1.7 per lap), so one pit stop costs as much as roughly 13 laps of racing. The optimiser therefore always picks 0 stops. The reported total is not a race time in seconds.
+  - **Effect:** the best strategy totals 70.60 over 57 laps (about 1.2 per lap), so one pit stop costs as much as roughly 18 laps of racing. The optimiser therefore always picks 0 stops. The reported total is not a race time in seconds.
   - **Fix:** either model in seconds (don't scale `lap_duration`), or convert predictions back to seconds with the per-session scaler before simulating.
   - **readme.txt:** Data Preparation step 4, normalization; Race Simulation steps 3 and 4.
 
 - [ ] **#8 Illegal strategies are allowed**
   - **Where:** `generate_strategies()` in `scripts/strategy_simulator.py`.
-  - **Problem:** it includes 0-stop strategies and sequences that use a single compound, which the two-compound rule forbids. The current recommendation (HARD, no stop) is one of these.
+  - **Problem:** it includes 0-stop strategies and sequences that use a single compound, which the two-compound rule forbids. The current recommendation (SOFT, no stop) is one of these.
   - **Fix:** keep only sequences with `len(set(seq)) >= 2`.
   - **readme.txt:** Race Simulation steps 1 and 4.
 
@@ -95,7 +96,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
 
 - [ ] **#13 The saved model is the weakest of the three on the test split**
   - **Where:** `scripts/train_model.py` always saves XGBoost.
-  - **Problem:** on the current data, held-out R² is 0.306 for Linear Regression, 0.232 for Random Forest and 0.102 for XGBoost. `readme.txt` justifies XGBoost on qualitative grounds, but the metrics don't currently back that up.
+  - **Problem:** on the current data (after #1), held-out R² is 0.425 for Linear Regression, 0.474 for Random Forest and 0.419 for XGBoost. `readme.txt` justifies XGBoost on qualitative grounds, but the metrics don't currently back that up.
   - **Fix:** re-run the comparison after the P1 data fixes. Then either keep XGBoost with metrics that support it, or save the best model and update the reasoning.
   - **Depends on:** partly downstream of #2, #3 and #4.
   - **readme.txt:** ML Modelling step 3, results table.

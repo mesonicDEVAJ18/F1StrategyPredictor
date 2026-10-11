@@ -4,20 +4,20 @@ Sorting columns used: ['stint_number', 'lap_number']
 Rows after target shift drop: 613
 
 Running 5-fold cross-validation...
- Fold 1 → MAE=0.8000, RMSE=1.0832
- Fold 2 → MAE=0.8610, RMSE=1.1500
- Fold 3 → MAE=0.8566, RMSE=1.0871
- Fold 4 → MAE=0.7228, RMSE=0.9610
- Fold 5 → MAE=0.8930, RMSE=1.1860
+ Fold 1 → MAE=0.6511, RMSE=0.8929
+ Fold 2 → MAE=0.8587, RMSE=1.1211
+ Fold 3 → MAE=0.6943, RMSE=0.9476
+ Fold 4 → MAE=0.5700, RMSE=0.7534
+ Fold 5 → MAE=0.7141, RMSE=1.0016
 
-CV MAE = 0.8266721594127422
-CV RMSE = 1.093469833529579
+CV MAE = 0.6976510252348256
+CV RMSE = 0.9433268195465416
 
 Generating residual plot...
 Residual plot saved.
 
 Running example t-test...
-T-test p-value: 1.178879204060895e-146
+T-test p-value: 2.0355295410590502e-163
 
 Validation summary saved.
 

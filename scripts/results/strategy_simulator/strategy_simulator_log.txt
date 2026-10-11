@@ -5,11 +5,11 @@ Loaded trained XGBoost model.
 Saved precomputed predictions and prefix sums.
 Total strategies to evaluate: 18318
 Best strategy:
-{'best_compound_sequence': ('HARD',), 'best_pit_laps': [], 'best_total_time': 95.97219848632812}
+{'best_compound_sequence': ('SOFT',), 'best_pit_laps': [], 'best_total_time': 70.6026840209961}
 
 OPTIMIZATION COMPLETE
-Best strategy: (('HARD',), [])
-Total time: 95.97219848632812
+Best strategy: (('SOFT',), [])
+Total time: 70.6026840209961
 
 FILES GENERATED:
   - strategy_simulator_precomputed_predictions.csv
