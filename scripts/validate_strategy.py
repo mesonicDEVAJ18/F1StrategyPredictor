@@ -89,13 +89,13 @@ for fold, (train_idx, test_idx) in enumerate(kf.split(X), 1):
         "RMSE": rmse
     })
 
-    log(f" Fold {fold} → MAE={mae:.4f}, RMSE={rmse:.4f}")
+    log(f" Fold {fold} → MAE={mae:.4f} s, RMSE={rmse:.4f} s")
 
 mean_mae = np.mean(cv_mae)
 mean_rmse = np.mean(cv_rmse)
 
-log(f"\nCV MAE = {mean_mae}")
-log(f"CV RMSE = {mean_rmse}")
+log(f"\nCV MAE = {mean_mae} s")
+log(f"CV RMSE = {mean_rmse} s")
 
 
 # Save fold-by-fold results
@@ -119,8 +119,8 @@ plt.figure(figsize=(9,4))
 plt.scatter(pred_full[:N], residuals[:N], s=4, alpha=0.4)
 plt.axhline(0, color="red", linewidth=1)
 plt.title("Residual Plot")
-plt.xlabel("Predicted Fuel-Corrected Pace")
-plt.ylabel("Residual")
+plt.xlabel("Predicted Fuel-Corrected Pace (s)")
+plt.ylabel("Residual (s)")
 
 residual_file = f"{SCRIPT_NAME}_residual_plot.png"
 plt.savefig(f"{RESULTS_DIR}/{residual_file}", dpi=300)

@@ -3,20 +3,20 @@ Loaded dataset with 839 rows.
 Rows after target shift drop: 514
 
 Running 5-fold cross-validation...
- Fold 1 → MAE=0.4116, RMSE=0.5701
- Fold 2 → MAE=0.4684, RMSE=0.6798
- Fold 3 → MAE=0.3644, RMSE=0.5242
- Fold 4 → MAE=0.3841, RMSE=0.5089
- Fold 5 → MAE=0.4178, RMSE=0.6051
+ Fold 1 → MAE=10.2720 s, RMSE=14.9069 s
+ Fold 2 → MAE=10.5699 s, RMSE=15.2898 s
+ Fold 3 → MAE=8.5222 s, RMSE=12.1357 s
+ Fold 4 → MAE=8.8000 s, RMSE=12.2758 s
+ Fold 5 → MAE=10.9096 s, RMSE=15.6373 s
 
-CV MAE = 0.40925449249713397
-CV RMSE = 0.5776247128277467
+CV MAE = 9.814745435640432 s
+CV RMSE = 14.049094270178426 s
 
 Generating residual plot...
 Residual plot saved.
 
 Running example t-test...
-T-test p-value: 4.7055231867359895e-150
+T-test p-value: 1.7207842784271407e-155
 
 Validation summary saved.
 

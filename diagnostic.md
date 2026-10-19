@@ -50,12 +50,22 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - **Rows:** 839 → 514. 260 are the last lap of a stint and 65 have a gap to the next lap (laps removed in cleaning). All 514 pairs were checked: same driver, stint and session, and lap + 1.
     - **Effect on metrics:** held-out R² rose from 0.043/0.060/−0.039 to 0.534/0.625/0.652 (LR/RF/XGB), and MAE to 0.504/0.435/0.419 (z-score units). XGBoost 5-fold CV MAE is 0.409 and RMSE 0.578. Part of this may be leakage through `stint_avg_pace` (#17).
 
-- [ ] **#7 The simulator mixes units**
+- [x] **#7 The simulator mixes units**
   - **Where:** `scripts/strategy_simulator.py`, with the scaling done in `scripts/process_laps.py`.
   - **Problem:** `lap_duration` is standardised in `process_laps.py` (z-scores, one scaler per session), so the model predicts in z-score units. The fuel correction (`0.035`/lap), `FUEL_PENALTY_PER_LAP` and `PIT_LOSS = 22.0` are in seconds.
   - **Effect:** the best strategy totals 84.89 over 57 laps (about 1.49 per lap), so one pit stop costs as much as roughly 15 laps of racing. The optimiser therefore always picks 0 stops. The reported total is not a race time in seconds.
   - **Fix:** either model in seconds (don't scale `lap_duration`), or convert predictions back to seconds with the per-session scaler before simulating.
   - **readme.txt:** Data Preparation step 4, normalization; Race Simulation steps 3 and 4.
+  - **Fixed:** the model now works in seconds, so the target, the fuel term, the pit loss and the metrics share one unit.
+    - **No lap scaling:** `process_laps.py` no longer scales `lap_duration`, the sector times or the speeds. Linear Regression, Random Forest and XGBoost don't change under a global rescale. The scaler's only real effect was the per-session part, which removed each session's pace level and left no race session to convert back to. Converting back with pooled session statistics was considered and rejected: the race pace level would have been a fixed convention, not something the model learns.
+    - **Session one-hot:** `process_laps.py` tags each lap with `session_name` (FP1/FP2/FP3, from the `laps_p*` file name). `feature_engineer.py` one-hot encodes it to `session_FP1/FP2/FP3` (`SESSION_COLUMNS` in `feature_config.py`), a model input, so session-level pace offsets are separated from conditions and tyres. `session_key` stays an identifier. 25 model inputs (was 22).
+    - **Simulator:**
+      - The base feature vector is the training medians (saved in the bundle as `medians`). All-zero inputs only meant "average" while everything was a z-score.
+      - The race is not a practice session, so each lap is predicted under each session one-hot and averaged, weighted by each session's share of training rows (bundle `session_weights`: FP1 0.407, FP2 0.385, FP3 0.208).
+      - Totals are labelled in seconds (`"time_units": "seconds"` in `best_strategy.json`).
+    - **Checks:** the sector times sum to `lap_duration` exactly. `fuel_corrected_pace − 0.035 × (lap_end − lap_number)` equals the raw `lap_duration` of `laps_p*.csv` for all 839 laps. Every row has exactly one session one-hot, matching its `session_key`.
+    - **Effect on metrics** (now in seconds): held-out MAE 12.12 / 10.65 / 10.51 s, RMSE 16.61 / 15.50 / 15.13 s and R² 0.586 / 0.640 / 0.656 (LR/RF/XGB; R² was 0.534 / 0.625 / 0.652). XGBoost 5-fold CV MAE 9.81 s, RMSE 14.05 s. The errors are large in seconds because the target still includes slow non-push laps (#20). The session one-hots have XGB importance 0.020 / 0.009 / 0.045. `stint_avg_pace` is still top at 0.260 (#17).
+    - **Effect on strategy:** predicted laps are 103–112 s and the best total is 6055.98 s (SOFT–SOFT–SOFT, pits on laps 10 and 11). This is still **not** a valid recommendation. Pitting on consecutive laps leaves an empty middle stint, and the two laps never summed are worth more than the 44 s of pit loss (#11). The middle compound doesn't matter, so SOFT–MEDIUM–SOFT and SOFT–HARD–SOFT tie (#8).
 
 - [ ] **#8 Illegal strategies are allowed**
   - **Where:** `generate_strategies()` in `scripts/strategy_simulator.py`.
@@ -72,9 +82,18 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
 - [ ] **#11 The pit lap is missing from the race-time sum**
   - **Where:** `simulate_strategy_fast()` in `scripts/strategy_simulator.py`.
   - **Problem:** stints are summed over `(last, p - 1)`, then `last = p + 1`, so lap `p` is never counted. The pit loss replaces a whole lap instead of being added to it.
-  - **Effect:** once #7 is fixed, a dropped lap (~90 s) outweighs the 22 s pit loss, so every extra stop would make a strategy look faster.
+  - **Effect:** now that #7 is fixed, a dropped lap (~110 s) outweighs the 22 s pit loss, so every extra stop makes a strategy look faster. The optimiser picks 2 stops on consecutive laps (10 and 11). The middle "stint" is empty and two laps go missing from the total.
   - **Fix:** sum every race lap exactly once and add the pit loss on top.
   - **readme.txt:** Race Simulation step 3.
+
+- [ ] **#19 The fuel correction has the wrong sign and horizon**
+  - **Where:** `fuel_corrected_pace` in `scripts/feature_engineer.py`.
+  - **Problem:**
+    - `fuel_corrected_pace = lap_duration + 0.035 × laps_remaining` adds the fuel effect. Laps with more fuel on board are already slower, so the correction should subtract it.
+    - `laps_remaining = lap_end - lap_number` counts the laps left in the *stint*, not the fuel on board. In practice, the fuel load depends on the run plan, which the data doesn't record.
+  - **Effect:** the target is not fuel-free pace. The simulator still adds race fuel (`0.035 ×` laps of fuel remaining) on top of it, so early-stint fuel is counted twice in training and differently in simulation.
+  - **Fix:** subtract the term, and decide on a fuel proxy (e.g. laps left in the stint as an approximation of the run's fuel, stated as an assumption), or drop the correction and let the model learn it from `laps_since_stint_start`.
+  - **readme.txt:** Feature Engineering, fuel_corrected_pace.
 
 ## P2: method or validation is misleading
 
@@ -92,10 +111,17 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **Fix:** split by stint with `GroupShuffleSplit` / `GroupKFold`, grouped on `(driver_number, stint_number)` (or by session, or by driver, for a stricter test). Both id columns are in the engineered dataset since #4.
   - **readme.txt:** ML Modelling, training (80/20 split); Evaluation step 1, cross-validation.
 
+- [ ] **#20 The cleaned laps still include slow non-push laps**
+  - **Where:** the filters in `scripts/process_laps.py`.
+  - **Problem:** the filters drop pit-out laps, invalid sectors, laps over 2× the median and IQR residual outliers. Cool-down, in- and traffic laps under 2× the median remain. Cleaned laps have a median of about 100–117 s per session, but a mean of 111–121 s and a 90th percentile of about 147–159 s.
+  - **Effect:** the target mixes push laps with slow laps, so the errors in seconds are large (XGB MAE about 10.5 s). The simulator's median-feature lap (103–112 s) is slower than race pace.
+  - **Fix:** flag or drop non-push laps, e.g. laps more than a set margin slower than the driver's best on that compound in the session, or train only on long-run stints.
+  - **readme.txt:** Data Preparation, laps cleaning.
+
 - [ ] **#9 The simulation does not roll predictions forward**
   - **Where:** `precompute_lap_predictions()` in `scripts/strategy_simulator.py`.
   - **Problem:**
-    - Each lap is predicted on its own, with every feature other than the compound and `laps_since_stint_start` fixed at 0.
+    - Each lap is predicted on its own, with every feature other than the compound, the session one-hot and `laps_since_stint_start` fixed at its training median (fixed at 0 before #7).
     - `fuel_corrected_pace` is set to 0.0 as a placeholder. It isn't a model input anyway, because the vector is cut down to `FEATURES`.
     - `readme.txt` says each prediction is fed into the next lap, which doesn't happen.
   - **Effect:** "degradation" comes only from the model's response to `laps_since_stint_start`.
@@ -116,7 +142,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
 
 - [ ] **#13 The saved model is the weakest of the three on the test split**
   - **Where:** `scripts/train_model.py` always saves XGBoost.
-  - **Problem:** `readme.txt` justifies XGBoost on qualitative grounds. Before #4 was fixed, the held-out R² was 0.043 for Linear Regression, 0.060 for Random Forest and −0.039 for XGBoost. After #4, XGBoost is now the best of the three: 0.534 for LR, 0.625 for RF and 0.652 for XGB. The gap to Random Forest is small, comes from one shuffled split, and may be inflated by #17.
+  - **Problem:** `readme.txt` justifies XGBoost on qualitative grounds. Before #4 was fixed, the held-out R² was 0.043 for Linear Regression, 0.060 for Random Forest and −0.039 for XGBoost. After #4, XGBoost is now the best of the three: 0.534 for LR, 0.625 for RF and 0.652 for XGB. After #7 (seconds, 25 inputs with the session one-hot), it is 0.586 / 0.640 / 0.656, with MAE 12.12 / 10.65 / 10.51 s. The gap to Random Forest is small, comes from one shuffled split, and may be inflated by #17.
   - **Fix:** re-run the comparison once #17 and #18 are fixed. Then either keep XGBoost with metrics that support it, or save the best model and update the reasoning.
   - **Depends on:** #17 and #18 (#2, #3 and #4 are fixed).
   - **readme.txt:** ML Modelling step 3, results table.
@@ -125,7 +151,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
 
 - [ ] **#12 The starting compound setting has no effect**
   - **Where:** `start_features` in `__main__` of `scripts/strategy_simulator.py`.
-  - **Problem:** `compound_HARD = 1` is set, but `precompute_lap_predictions()` overwrites the compound one-hots for every compound anyway.
+  - **Problem:** `compound_HARD = 1` is set, but `precompute_lap_predictions()` overwrites the compound one-hots for every compound anyway. Since #7, `start_features` starts from the training medians, not zeros, but the compound override is still dead.
   - **Fix:** remove the setting, or use it as the base feature vector once #9 is done.
   - **readme.txt:** Race Simulation step 2.
 
@@ -161,7 +187,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - Add the chosen columns to `MODEL_FEATURE_COLUMNS` / `SIM_FEATURE_COLUMNS` in `feature_config.py`, and decide what the simulator feeds for them.
   - **Depends on:**
     - #4 (fixed): the engineered dataset now keeps `session_key` and `driver_number`, so the merge keys are available.
-    - #7: the car-data aggregates are scaled per session, like the laps.
+    - #7 (fixed): the laps are no longer scaled, but the car-data aggregates still are (per session). Leave them unscaled too before merging, so the inputs are physical units throughout and the simulator's median baseline stays meaningful.
     - #9: the simulator needs a lap-*t* feature vector to roll forward.
   - **readme.txt:** Data Collection step 5; Data Preparation, CarData.
 

@@ -8,7 +8,8 @@ Loaded laps_p1.csv with 426 rows
 [laps_p1.csv] Removed 0 extreme lap-time outliers
 [laps_p1.csv] Removed 25 unrealistic-speed laps
 [laps_p1.csv] Removed 2 IQR-residual outliers
-[laps_p1.csv] Scaled continuous features: ['lap_duration', 'duration_sector_1', 'duration_sector_2', 'duration_sector_3', 'i1_speed', 'i2_speed', 'st_speed']
+[laps_p1.csv] Kept lap_duration, sector times and speeds unscaled (s, km/h)
+[laps_p1.csv] Tagged session_name = FP1
   → Saved cleaned file: process_laps_cleaned_laps_p1.csv
 
 Loaded laps_p2.csv with 522 rows
@@ -20,7 +21,8 @@ Loaded laps_p2.csv with 522 rows
 [laps_p2.csv] Removed 1 extreme lap-time outliers
 [laps_p2.csv] Removed 70 unrealistic-speed laps
 [laps_p2.csv] Removed 31 IQR-residual outliers
-[laps_p2.csv] Scaled continuous features: ['lap_duration', 'duration_sector_1', 'duration_sector_2', 'duration_sector_3', 'i1_speed', 'i2_speed', 'st_speed']
+[laps_p2.csv] Kept lap_duration, sector times and speeds unscaled (s, km/h)
+[laps_p2.csv] Tagged session_name = FP2
   → Saved cleaned file: process_laps_cleaned_laps_p2.csv
 
 Loaded laps_p3.csv with 309 rows
@@ -32,7 +34,8 @@ Loaded laps_p3.csv with 309 rows
 [laps_p3.csv] Removed 0 extreme lap-time outliers
 [laps_p3.csv] Removed 7 unrealistic-speed laps
 [laps_p3.csv] Removed 1 IQR-residual outliers
-[laps_p3.csv] Scaled continuous features: ['lap_duration', 'duration_sector_1', 'duration_sector_2', 'duration_sector_3', 'i1_speed', 'i2_speed', 'st_speed']
+[laps_p3.csv] Kept lap_duration, sector times and speeds unscaled (s, km/h)
+[laps_p3.csv] Tagged session_name = FP3
   → Saved cleaned file: process_laps_cleaned_laps_p3.csv
 
 Saved combined dataset: process_laps_combined_cleaned.csv

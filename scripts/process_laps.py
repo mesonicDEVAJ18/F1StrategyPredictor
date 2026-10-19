@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import os
-from sklearn.preprocessing import StandardScaler
+import re
 import ast
 
 
@@ -94,18 +94,12 @@ def apply_iqr_residual_filter(df, fname):
     return df.drop(columns=["rolling_median", "residual"], errors="ignore")
 
 
-def scale_continuous_features(df, fname):
-    """Standard-scale numeric telemetry metrics."""
-    scale_cols = [
-        "lap_duration",
-        "duration_sector_1", "duration_sector_2", "duration_sector_3",
-        "i1_speed", "i2_speed", "st_speed"
-    ]
-
-    scaler = StandardScaler()
-    df[scale_cols] = scaler.fit_transform(df[scale_cols])
-    log(f"[{fname}] Scaled continuous features: {scale_cols}")
-    return df
+def session_name_from_file(file):
+    """laps_p1.csv -> FP1 (practice order, stable across weekends unlike session_key)."""
+    match = re.search(r"_p(\d+)", file)
+    if match is None:
+        raise ValueError(f"Cannot read the practice session number from {file}")
+    return f"FP{match.group(1)}"
 
 
 # ============================================================
@@ -142,7 +136,14 @@ for file in laps_files:
     # Apply cleaning pipeline
     df = apply_domain_filters(df, file)
     df = apply_iqr_residual_filter(df, file)
-    df = scale_continuous_features(df, file)
+
+    # Lap times and speeds stay in physical units (s, km/h): the models are scale-invariant,
+    # and per-session scaling erased each session's pace level (diagnostic.md #7)
+    log(f"[{file}] Kept lap_duration, sector times and speeds unscaled (s, km/h)")
+
+    # Practice session label, one-hot encoded as a model input in feature_engineer.py
+    df["session_name"] = session_name_from_file(file)
+    log(f"[{file}] Tagged session_name = {df['session_name'].iloc[0]}")
 
     # Save cleaned file
     cleaned_name = f"{SCRIPT_NAME}_cleaned_{fname}.csv"

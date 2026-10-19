@@ -4,6 +4,8 @@ from pathlib import Path
 import os
 from datetime import datetime
 
+from feature_config import SESSION_COLUMNS
+
 # ============================================================
 # SETUP SCRIPT-SPECIFIC RESULTS DIRECTORY
 # ============================================================
@@ -170,11 +172,19 @@ log("  → Weather merged successfully")
 # ============================================================
 log("\nEngineering features...")
 
+# Practice session one-hot (model input; session_key stays an identifier)
+session_dummies = (
+    pd.get_dummies(laps["session_name"], prefix="session", dtype=int)
+    .reindex(columns=SESSION_COLUMNS, fill_value=0)
+)
+laps = pd.concat([laps.drop(columns=["session_name"]), session_dummies], axis=1)
+log(f"  → Session one-hot rows: {session_dummies.sum().to_dict()}")
+
 # laps_since_stint_start
 laps["laps_since_stint_start"] = laps["lap_number"] - laps["lap_start"] + 1
 laps["laps_since_stint_start"] = laps["laps_since_stint_start"].clip(lower=1)
 
-# Leave-one-out stint average pace
+# Leave-one-out stint average pace (seconds)
 grp = laps.groupby(["driver_number", "stint_number"])
 stint_sum = grp["lap_duration"].transform("sum")
 stint_count = grp["lap_duration"].transform("count")
@@ -182,7 +192,7 @@ stint_count = grp["lap_duration"].transform("count")
 laps["stint_avg_pace"] = (stint_sum - laps["lap_duration"]) / (stint_count - 1)
 laps.loc[stint_count <= 1, "stint_avg_pace"] = np.nan
 
-# fuel_corrected_pace
+# fuel_corrected_pace (seconds; lap_duration is unscaled, k is s/lap)
 fuel_effect_k = 0.035
 laps["laps_remaining"] = laps["lap_end"] - laps["lap_number"]
 laps["fuel_corrected_pace"] = laps["lap_duration"] + fuel_effect_k * laps["laps_remaining"]

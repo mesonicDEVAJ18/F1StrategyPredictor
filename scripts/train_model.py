@@ -12,7 +12,7 @@ import warnings
 from datetime import datetime
 
 from feature_config import MODEL_FEATURE_COLUMNS as FEATURES
-from feature_config import TARGET_GROUP_COLUMNS, build_next_lap_target
+from feature_config import SESSION_COLUMNS, TARGET_GROUP_COLUMNS, build_next_lap_target
 
 warnings.filterwarnings("ignore")
 
@@ -63,7 +63,13 @@ y = df["target_next_fcp"]
 
 # Clean
 X.replace([np.inf, -np.inf], np.nan, inplace=True)
-X = X.fillna(X.median(numeric_only=True))
+medians = X.median(numeric_only=True)
+X = X.fillna(medians)
+
+# Share of training rows per practice session; the simulator averages its
+# predictions over the session one-hots with these weights (the race is no session)
+session_weights = df[SESSION_COLUMNS].mean()
+log(f"Session weights: {session_weights.round(3).to_dict()}")
 
 # Save snapshot
 snapshot_name = f"{SCRIPT_NAME}_feature_matrix_snapshot.csv"
@@ -132,7 +138,9 @@ metrics_file = f"{SCRIPT_NAME}_model_metrics.csv"
 metrics_df.to_csv(f"{RESULTS_DIR}/{metrics_file}")
 generated_files.append(metrics_file)
 
-log("\nSaved model metrics table.")
+log("\nTest metrics (MAE/RMSE in seconds):")
+log(metrics_df.round(4).to_string())
+log("Saved model metrics table.")
 
 
 # ======================================================
@@ -166,7 +174,12 @@ log("Saved feature importance CSVs.")
 # ======================================================
 model_file = f"{SCRIPT_NAME}_xgb_model.pkl"
 joblib.dump(
-    {"model": fitted_models["XGBoost"], "features": FEATURES},
+    {
+        "model": fitted_models["XGBoost"],
+        "features": FEATURES,
+        "medians": medians.to_dict(),
+        "session_weights": session_weights.to_dict(),
+    },
     f"{RESULTS_DIR}/{model_file}"
 )
 generated_files.append(model_file)
@@ -185,7 +198,7 @@ for name in models:
 plt.legend()
 plt.title("Model Predictions (First 300 Samples)")
 plt.xlabel("Index")
-plt.ylabel("Fuel Corrected Pace")
+plt.ylabel("Fuel Corrected Pace (s)")
 
 overlay_file = f"{SCRIPT_NAME}_prediction_overlay.png"
 plt.savefig(f"{RESULTS_DIR}/{overlay_file}", dpi=300)
@@ -204,7 +217,7 @@ plt.bar(idx + 2 * bar_width, metrics_df["R2"], bar_width, label="R²")
 
 plt.xticks(idx + bar_width, metrics_df.index)
 plt.title("Model Metrics")
-plt.ylabel("Value")
+plt.ylabel("Value (MAE/RMSE in s)")
 plt.legend()
 
 metric_plot = f"{SCRIPT_NAME}_metric_bars.png"
@@ -219,6 +232,7 @@ plt.plot(y_test.values[:300], label="True", linewidth=2)
 plt.plot(preds["XGBoost"][:300], label="XGBoost")
 plt.legend()
 plt.title("XGB vs True (First 300 Samples)")
+plt.ylabel("Fuel Corrected Pace (s)")
 
 xgb_plot = f"{SCRIPT_NAME}_xgb_vs_true.png"
 plt.savefig(f"{RESULTS_DIR}/{xgb_plot}", dpi=300)

@@ -1,3 +1,6 @@
+# Practice session one-hot (named by order, so stable across weekends; session_key is an identifier only)
+SESSION_COLUMNS = ["session_FP1", "session_FP2", "session_FP3"]
+
 # Model input order (WHAT THE MODEL EXPECTS)
 MODEL_FEATURE_COLUMNS = [
     "duration_sector_1",
@@ -13,6 +16,7 @@ MODEL_FEATURE_COLUMNS = [
     "compound_HARD",
     "compound_MEDIUM",
     "compound_SOFT",
+    *SESSION_COLUMNS,
     "air_temperature",
     "humidity",
     "pressure",

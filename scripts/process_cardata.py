@@ -106,7 +106,8 @@ def encode_samples(df, fname):
 def load_lap_windows():
     """Lap time windows [date_start, date_start + lap_duration) from the raw lap files.
 
-    The cleaned laps hand-off scales lap_duration, so the raw files are used here.
+    The raw files are used so every lap has a window, including the laps process_laps.py
+    drops (pit-out, invalid, outliers); samples are then matched to the lap they were driven in.
     """
     laps = pd.concat(
         pd.read_csv(f, usecols=["session_key", "driver_number", "lap_number", "date_start", "lap_duration"])

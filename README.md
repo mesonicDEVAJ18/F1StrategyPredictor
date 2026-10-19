@@ -131,10 +131,11 @@ Environmental conditions:
 **3. Encoding**
 - `driver_number`: Kept numerical as an identifier (with `session_key`) to build the per-driver next-lap target; not a model input (generalized model)
 - `compound`: One-hot encoded → `compound_SOFT`, `compound_MEDIUM`, `compound_HARD`
+- `session_name` (FP1/FP2/FP3, from the `laps_p1/p2/p3` file): One-hot encoded → `session_FP1`, `session_FP2`, `session_FP3`, a model input that separates session-level pace offsets; `session_key` stays an identifier
 - `segments_sector_1/2/3`: List of mini-sector codes replaced by its length
 
 **4. Normalization**
-- **Laps**: StandardScaler (fitted per session) on lap times, sector times, and speeds, so pace values are z-scores, not seconds
+- **Laps**: Not scaled. Lap times, sector times and speeds stay in seconds and km/h. The models are unaffected by a global rescale, and per-session scaling erased each session's pace level and left predictions in z-scores (diagnostic.md #7, fixed)
 - **Weather**: StandardScaler on temperature, humidity, pressure, wind speed, rainfall
 - **Wind direction**: Kept raw (circular variable)
 
@@ -145,8 +146,9 @@ Environmental conditions:
 | `stint_number` | Stints numbered 1, 2, 3… per driver across all sessions | Track tyre degradation per stint |
 | weather join | nearest weather sample to each lap's `date_start` (`merge_asof`, 5 min tolerance) | Give each lap the conditions it was driven in |
 | `laps_since_stint_start` | `lap_number - lap_start + 1` | Measure tyre age in current stint |
-| `stint_avg_pace` | Leave-one-out mean of lap times | Capture stint-level performance |
-| `fuel_corrected_pace` | `lap_duration + 0.035 × laps_remaining` (`laps_remaining = lap_end - lap_number`) | Account for fuel load reduction |
+| `session_FP1/2/3` | One-hot of the practice session | Separate session-level pace offsets |
+| `stint_avg_pace` | Leave-one-out mean of lap times (s) | Capture stint-level performance |
+| `fuel_corrected_pace` | `lap_duration + 0.035 × laps_remaining` in seconds (`laps_remaining = lap_end - lap_number`) | Account for fuel load reduction (sign and horizon are open, diagnostic.md #19) |
 
 > **Note**: Track evolution was excluded to avoid deriving dependent variables.
 
@@ -169,11 +171,11 @@ Predict **fuel-corrected pace on the next lap** rather than explicitly computing
 
 | Model | Reasoning | Test MAE | Test RMSE | Test R² |
 |-------|-----------|----------|-----------|---------|
-| Linear Regression | Underfits non-linear tyre behavior | 0.504 | 0.687 | 0.534 |
-| Random Forest | Noisy, stepwise predictions | 0.435 | 0.616 | 0.625 |
-| **XGBoost** | Chosen for non-linear learning and smooth predictions | 0.419 | 0.594 | 0.652 |
+| Linear Regression | Underfits non-linear tyre behavior | 12.12 s | 16.61 s | 0.586 |
+| Random Forest | Noisy, stepwise predictions | 10.65 s | 15.50 s | 0.640 |
+| **XGBoost** | Chosen for non-linear learning and smooth predictions | 10.51 s | 15.13 s | 0.656 |
 
-*Metrics are in standardised (z-score) units, from the current run. They are probably inflated, because `stint_avg_pace` (the top feature) includes the target lap (diagnostic.md #17); see [diagnostic.md](diagnostic.md).*
+*MAE and RMSE are in seconds, from the current run. R² is probably inflated, because `stint_avg_pace` (the top feature) includes the target lap (diagnostic.md #17). The errors are large because the target still includes slow non-push laps (#20); see [diagnostic.md](diagnostic.md).*
 
 **XGBoost Advantages:**
 - Captures non-linear tyre physics (warm-up, thermal degradation, cliff effects)
@@ -194,8 +196,9 @@ Built by `build_next_lap_target()` in `scripts/feature_config.py`: the same driv
 - `laps_remaining` (used in fuel correction formula)
 
 **3. Features and Split**
-- 22 inputs defined in `scripts/feature_config.py` (`MODEL_FEATURE_COLUMNS`)
+- 25 inputs defined in `scripts/feature_config.py` (`MODEL_FEATURE_COLUMNS`), including the `session_FP1/2/3` one-hots
 - Missing values filled with column medians; 80/20 shuffled train/test split (`random_state=42`)
+- The saved bundle holds the model, the feature list, the training medians and each session's share of training rows (`{"model", "features", "medians", "session_weights"}`)
 
 **4. Validation**
 - 5-fold cross-validation
@@ -216,15 +219,18 @@ Enumerate strategies for a 57-lap race (18,318 in total):
 ### 2. Lap Time Prediction
 
 For each compound, once:
-1. Predict a lap time with XGBoost for every race lap 1–57 (compound one-hot set, `laps_since_stint_start` = race lap, all other features at 0)
-2. Add a fuel penalty of `0.035 × laps of fuel remaining`
+1. Predict a lap time in seconds with XGBoost for every race lap 1–57 (compound one-hot set, `laps_since_stint_start` = race lap, all other features at their training median)
+   - The race is not a practice session, so each lap is predicted under `session_FP1`, `session_FP2` and `session_FP3` and averaged, weighted by each session's share of training rows
+2. Add a fuel penalty of `0.035 s × laps of fuel remaining`
 3. Store cumulative sums so any stint's time is a single subtraction
 
 ### 3. Objective Function
 
 ```
-Minimize: Total Race Time = Σ(stint lap times) + 22 × number of pit stops
+Minimize: Total Race Time (s) = Σ(stint lap times) + 22 s × number of pit stops
 ```
+
+Current output: SOFT–SOFT–SOFT with stops on laps 10 and 11, 6055.98 s. This is not a valid recommendation yet: the pit lap is never summed (diagnostic.md #11), so back-to-back stops drop two laps from the total, and the two-compound rule is not enforced (#8).
 
 ### 4. Optimization Engine
 
@@ -237,7 +243,7 @@ Minimize: Total Race Time = Σ(stint lap times) + 22 × number of pit stops
 ## ✅ Evaluation & Validation
 
 ### Model Validation (`validate_strategy.py`)
-- **Cross-validation**: 5-fold CV on next-lap predictions (current: MAE 0.698, RMSE 0.943, z-score units)
+- **Cross-validation**: 5-fold CV on next-lap predictions (current: MAE 9.81 s, RMSE 14.05 s)
 - **Residual analysis**: Check for systematic bias
 - **Feature importance**: Verify alignment with tyre physics
   - Expected top features: tyre age, compound, track temperature

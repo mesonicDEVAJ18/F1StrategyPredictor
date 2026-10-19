@@ -24,8 +24,8 @@ code and this file disagree, trust the code; when the *reasoning* is unclear, tr
 ```
 scripts/            # ALL pipeline code lives here; run scripts FROM this directory
   master.py             # orchestrator — runs the whole pipeline in order
-  feature_config.py     # shared column lists (MODEL_FEATURE_COLUMNS, SIM_FEATURE_COLUMNS)
-  process_laps.py       # clean + scale lap data
+  feature_config.py     # shared column lists (MODEL_FEATURE_COLUMNS, SIM_FEATURE_COLUMNS, SESSION_COLUMNS)
+  process_laps.py       # clean lap data (kept in s / km/h, not scaled), tag session_name FP1-3
   process_stints.py     # clean stints, one-hot encode compound
   process_weather.py    # clean + scale weather
   process_cardata.py    # clean car telemetry, aggregate per lap (not a model input yet)
@@ -81,15 +81,22 @@ hand-off file to `data/` in addition to its own `results/<name>/` copy:
   downstream yet)
 - `feature_engineer.py` reads the three above → `data/final_engineered_dataset.csv`
   (and a copy under `results/feature_engineer/`). It keeps `session_key` and `driver_number` as
-  identifiers only; they are not in `MODEL_FEATURE_COLUMNS`.
+  identifiers only; they are not in `MODEL_FEATURE_COLUMNS`. The session reaches the model only as the
+  `session_FP1/FP2/FP3` one-hot, built from `process_laps.py`'s `session_name`.
 - `train_model.py` reads the engineered dataset → `results/train_model/train_model_xgb_model.pkl`
-  (a joblib bundle: `{"model": ..., "features": [...]}`)
-- `strategy_simulator.py` and `validate_strategy.py` load that `.pkl` bundle.
+  (a joblib bundle: `{"model": ..., "features": [...], "medians": {...}, "session_weights": {...}}`;
+  `medians` are the training medians used for `fillna`, and `session_weights` is each session's share of
+  training rows)
+- `strategy_simulator.py` and `validate_strategy.py` load that `.pkl` bundle. The simulator starts from
+  `medians` (inputs are in physical units, so 0 is not "average") and averages each lap's prediction over
+  the session one-hots with `session_weights`, because the race is not a practice session.
 
 The **model target** is next-lap `fuel_corrected_pace`: the same driver's lap `lap_number + 1` in the
 same stint, built by `build_next_lap_target()` in `feature_config.py` (shared by `train_model.py` and
 `validate_strategy.py`, so the target can't diverge between them). `lap_duration` and `laps_remaining` are
 dependent variables and are deliberately excluded from model inputs to avoid leakage.
+The target, every prediction, the simulator's totals and the error metrics are in **seconds**: lap times
+are not scaled (diagnostic.md #7). Don't reintroduce a per-session scaler on lap columns.
 
 ## Conventions to follow
 
@@ -108,6 +115,8 @@ Every pipeline script follows the same house style — match it when adding or e
   `SIM_FEATURE_COLUMNS`). If you change the feature set, change it there so training,
   simulation, and validation stay consistent.
 - **Compound one-hot columns** are `compound_HARD`, `compound_MEDIUM`, `compound_SOFT`.
+- **Session one-hot columns** are `session_FP1`, `session_FP2`, `session_FP3` (`SESSION_COLUMNS` in
+  feature_config.py), named by practice order so they stay the same on any weekend.
 
 ## Environment notes
 

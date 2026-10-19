@@ -7,7 +7,7 @@ import os
 import warnings
 from datetime import datetime
 
-from feature_config import MODEL_FEATURE_COLUMNS, SIM_FEATURE_COLUMNS
+from feature_config import MODEL_FEATURE_COLUMNS, SIM_FEATURE_COLUMNS, SESSION_COLUMNS
 
 warnings.filterwarnings("ignore")
 
@@ -39,16 +39,19 @@ log("\n--- STRATEGY SIMULATOR START ---\n")
 bundle = joblib.load("./results/train_model/train_model_xgb_model.pkl")
 model = bundle["model"]
 FEATURES = bundle["features"]
+MEDIANS = bundle["medians"]
+SESSION_WEIGHTS = bundle["session_weights"]
 
 log("Loaded trained XGBoost model.")
+log(f"Session weights for averaging predictions: {SESSION_WEIGHTS}")
 
 
 # ============================================================
 # CONSTANTS
 # ============================================================
 COMPOUNDS = ["SOFT", "MEDIUM", "HARD"]
-PIT_LOSS = 22.0
-FUEL_PENALTY_PER_LAP = 0.035
+PIT_LOSS = 22.0               # seconds
+FUEL_PENALTY_PER_LAP = 0.035  # seconds per lap of fuel
 NUM_LAPS = 57
 
 
@@ -57,9 +60,12 @@ NUM_LAPS = 57
 # ============================================================
 def precompute_lap_predictions(total_laps, base_features):
     """
-    Creates predicted lap times for each compound:
+    Creates predicted lap times (seconds) for each compound:
         preds[c][lap] = predicted lap time
         prefix[c] = cumulative lap times
+
+    The race is not a practice session, so each lap is predicted once per
+    session one-hot and averaged with SESSION_WEIGHTS (share of training rows).
 
     Saves:
       - predictions CSV
@@ -79,11 +85,20 @@ def precompute_lap_predictions(total_laps, base_features):
             feats["laps_since_stint_start"] = lap
             feats["fuel_corrected_pace"] = 0.0   # dummy placeholder
 
+            # One row per practice session (that session's one-hot = 1)
+            rows = []
+            weights = []
+            for s in SESSION_COLUMNS:
+                for ss in SESSION_COLUMNS:
+                    feats[ss] = 1 if ss == s else 0
+                rows.append([feats[f] for f in SIM_FEATURE_COLUMNS])
+                weights.append(SESSION_WEIGHTS[s])
+
             # Align vector
-            vec = np.array([feats[f] for f in SIM_FEATURE_COLUMNS], dtype=float).reshape(1, -1)
+            vec = np.array(rows, dtype=float)
 
             model_vec = vec[:, :len(FEATURES)]
-            fcp = model.predict(model_vec)[0]
+            fcp = float(np.average(model.predict(model_vec), weights=weights))
 
             fuel_load = total_laps - lap + 1
             lap_time = fcp + fuel_load * FUEL_PENALTY_PER_LAP
@@ -199,7 +214,8 @@ def optimize_strategy(total_laps, base_features):
     best_summary = {
         "best_compound_sequence": best_strategy[0],
         "best_pit_laps": best_strategy[1],
-        "best_total_time": float(best_time)
+        "best_total_time": float(best_time),
+        "time_units": "seconds"
     }
 
     best_json_file = f"{SCRIPT_NAME}_best_strategy.json"
@@ -217,7 +233,9 @@ def optimize_strategy(total_laps, base_features):
 # MAIN EXECUTION
 # ============================================================
 if __name__ == "__main__":
+    # Baseline = training medians (features are in physical units, so 0 is not "average")
     start_features = {f: 0.0 for f in SIM_FEATURE_COLUMNS}
+    start_features.update({f: v for f, v in MEDIANS.items() if f in start_features})
 
     # default initial tyres
     start_features.update({
@@ -232,12 +250,12 @@ if __name__ == "__main__":
 
     log("\nOPTIMIZATION COMPLETE")
     log(f"Best strategy: {best}")
-    log(f"Total time: {best_time}")
+    log(f"Total time: {best_time:.2f} s")
 
     # Save final summary
     final_txt = f"{SCRIPT_NAME}_final_summary.txt"
     with open(f"{RESULTS_DIR}/{final_txt}", "w") as f:
-        f.write(f"Best: {best}\nTime: {best_time}\n")
+        f.write(f"Best: {best}\nTime: {best_time:.2f} s\n")
 
     generated_files.append(final_txt)
 

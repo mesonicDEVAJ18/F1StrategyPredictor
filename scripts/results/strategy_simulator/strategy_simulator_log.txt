@@ -2,14 +2,15 @@
 --- STRATEGY SIMULATOR START ---
 
 Loaded trained XGBoost model.
+Session weights for averaging predictions: {'session_FP1': 0.4066147859922179, 'session_FP2': 0.3852140077821012, 'session_FP3': 0.20817120622568094}
 Saved precomputed predictions and prefix sums.
 Total strategies to evaluate: 18318
 Best strategy:
-{'best_compound_sequence': ('HARD',), 'best_pit_laps': [], 'best_total_time': 84.89167785644531}
+{'best_compound_sequence': ('SOFT', 'SOFT', 'SOFT'), 'best_pit_laps': [10, 11], 'best_total_time': 6055.979960018411, 'time_units': 'seconds'}
 
 OPTIMIZATION COMPLETE
-Best strategy: (('HARD',), [])
-Total time: 84.89167785644531
+Best strategy: (('SOFT', 'SOFT', 'SOFT'), [10, 11])
+Total time: 6055.98 s
 
 FILES GENERATED:
   - strategy_simulator_precomputed_predictions.csv
