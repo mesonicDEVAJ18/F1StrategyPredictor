@@ -7,7 +7,7 @@ import os
 import warnings
 from datetime import datetime
 
-from feature_config import MODEL_FEATURE_COLUMNS, SIM_FEATURE_COLUMNS, SESSION_COLUMNS
+from feature_config import MODEL_FEATURE_COLUMNS, SIM_FEATURE_COLUMNS, SESSION_COLUMNS, FUEL_EFFECT_K
 
 warnings.filterwarnings("ignore")
 
@@ -53,90 +53,155 @@ COMPOUNDS = ["SOFT", "MEDIUM", "HARD"]
 PIT_LOSS = 22.0               # seconds
 FUEL_PENALTY_PER_LAP = 0.035  # seconds per lap of fuel
 NUM_LAPS = 57
+RACE_TYRE_AGE_AT_START = 0    # every race stint starts on a new set (no set tracking yet, diagnostic.md #21)
+SECTOR_COLUMNS = ["duration_sector_1", "duration_sector_2", "duration_sector_3"]
+SMOOTHNESS_AGES = [1, 18, NUM_LAPS]  # 18 = longest stint age seen in training
 
 
 # ============================================================
-# PRECOMPUTE LAP PREDICTIONS
+# ONE-LAP PREDICTION
 # ============================================================
-def precompute_lap_predictions(total_laps, base_features):
+def predict_fcp(state):
     """
-    Creates predicted lap times (seconds) for each compound:
-        preds[c][lap] = predicted lap time
-        prefix[c] = cumulative lap times
+    Predicts the next lap's fuel_corrected_pace (seconds) from lap-t state.
 
-    The race is not a practice session, so each lap is predicted once per
+    The race is not a practice session, so the lap is predicted once per
     session one-hot and averaged with SESSION_WEIGHTS (share of training rows).
+    """
+    feats = state.copy()
+    rows = []
+    weights = []
+    for s in SESSION_COLUMNS:
+        for ss in SESSION_COLUMNS:
+            feats[ss] = 1 if ss == s else 0
+        rows.append([feats[f] for f in SIM_FEATURE_COLUMNS])
+        weights.append(SESSION_WEIGHTS[s])
+
+    model_vec = np.array(rows, dtype=float)[:, :len(FEATURES)]
+    return float(np.average(model.predict(model_vec), weights=weights))
+
+
+# ============================================================
+# STINT ROLLOUT
+# ============================================================
+def rollout_stint(base_features, compound, stint_length):
+    """
+    Rolls one stint forward from tyre age 1 to stint_length.
+
+    Lap 1 is the seed lap (training medians). Each later lap's fcp is predicted
+    from the previous lap's state, then converted back to a raw lap time by
+    undoing training's fuel term (fcp = lap_duration + k * laps left in stint)
+    and fed in as the next state's sector times and running stint_avg_pace.
+    """
+    state = base_features.copy()
+    for cc in COMPOUNDS:
+        state[f"compound_{cc}"] = 1 if cc == compound else 0
+    state["tyre_age_at_start"] = RACE_TYRE_AGE_AT_START
+    state["laps_since_stint_start"] = 1
+
+    seed_sectors = np.array([base_features[s] for s in SECTOR_COLUMNS], dtype=float)
+    sector_share = seed_sectors / seed_sectors.sum()
+
+    raw = float(seed_sectors.sum())
+    fcp = raw + FUEL_EFFECT_K * (stint_length - 1)
+    state["fuel_corrected_pace"] = fcp
+
+    records = []
+    raw_laps = []
+    for age in range(1, stint_length + 1):
+        if age > 1:
+            fcp = predict_fcp(state)
+            raw = fcp - FUEL_EFFECT_K * (stint_length - age)
+
+            # Previous lap's raw times are the laps before this one
+            state["stint_avg_pace"] = float(np.mean(raw_laps))
+            for s, share in zip(SECTOR_COLUMNS, sector_share):
+                state[s] = raw * share
+            state["laps_since_stint_start"] = age
+            state["fuel_corrected_pace"] = fcp
+
+        raw_laps.append(raw)
+        records.append({
+            "compound": compound,
+            "stint_length": stint_length,
+            "tyre_age": age,
+            "fuel_corrected_pace": fcp,
+            "raw_lap_time": raw,
+            **{s: state[s] for s in SECTOR_COLUMNS},
+            "stint_avg_pace": state["stint_avg_pace"],
+        })
+
+    return records
+
+
+# ============================================================
+# PRECOMPUTE STINT ROLLOUTS
+# ============================================================
+def precompute_stint_rollouts(total_laps, base_features):
+    """
+    Rolls out every compound for every stint length 1..total_laps:
+        stint_totals[c][L] = sum of predicted fcp over a stint of L laps (seconds)
+        fuel_prefix[lap]   = cumulative race fuel penalty up to race lap `lap`
+
+    A stint is priced from tyre age 1 wherever it starts in the race; only the
+    race fuel term depends on the race laps it covers.
 
     Saves:
-      - predictions CSV
-      - prefix sums CSV
+      - stint rollouts CSV (one row per compound, stint length, tyre age)
+      - stint totals CSV (compound x stint length)
     """
-    preds = {c: [] for c in COMPOUNDS}
+    records = []
+    stint_totals = {c: np.zeros(total_laps + 1) for c in COMPOUNDS}
 
     for c in COMPOUNDS:
-        feats = base_features.copy()
+        for L in range(1, total_laps + 1):
+            stint = rollout_stint(base_features, c, L)
+            records.extend(stint)
+            stint_totals[c][L] = sum(r["fuel_corrected_pace"] for r in stint)
 
-        # Set one-hot compound
-        for cc in COMPOUNDS:
-            feats[f"compound_{cc}"] = 1 if cc == c else 0
+    fuel_per_lap = [FUEL_PENALTY_PER_LAP * (total_laps - lap + 1) for lap in range(1, total_laps + 1)]
+    fuel_prefix = np.concatenate([[0.0], np.cumsum(fuel_per_lap)])
 
-        for lap in range(1, total_laps + 1):
+    rollout_df = pd.DataFrame(records)
+    rollout_file = f"{SCRIPT_NAME}_stint_rollouts.csv"
+    rollout_df.to_csv(f"{RESULTS_DIR}/{rollout_file}", index=False)
+    generated_files.append(rollout_file)
 
-            feats["laps_since_stint_start"] = lap
-            feats["fuel_corrected_pace"] = 0.0   # dummy placeholder
+    totals_df = pd.DataFrame({"stint_length": range(1, total_laps + 1),
+                              **{c: stint_totals[c][1:] for c in COMPOUNDS}})
+    totals_file = f"{SCRIPT_NAME}_stint_totals.csv"
+    totals_df.to_csv(f"{RESULTS_DIR}/{totals_file}", index=False)
+    generated_files.append(totals_file)
 
-            # One row per practice session (that session's one-hot = 1)
-            rows = []
-            weights = []
-            for s in SESSION_COLUMNS:
-                for ss in SESSION_COLUMNS:
-                    feats[ss] = 1 if ss == s else 0
-                rows.append([feats[f] for f in SIM_FEATURE_COLUMNS])
-                weights.append(SESSION_WEIGHTS[s])
+    log("Saved stint rollouts and stint totals.")
 
-            # Align vector
-            vec = np.array(rows, dtype=float)
+    # Smoothness / drift check on the full-length rollout of each compound
+    log(f"\nRollout check (stint of {total_laps} laps, fcp in s):")
+    for c in COMPOUNDS:
+        full = rollout_df[(rollout_df["compound"] == c) & (rollout_df["stint_length"] == total_laps)]
+        fcp = full["fuel_corrected_pace"].to_numpy()
+        at_ages = ", ".join(f"age {a}: {fcp[a - 1]:.2f}" for a in SMOOTHNESS_AGES if a <= len(fcp))
+        max_step = np.abs(np.diff(fcp)).max() if len(fcp) > 1 else 0.0
+        log(f"  {c}: {at_ages}, max |lap-to-lap step|: {max_step:.2f}")
 
-            model_vec = vec[:, :len(FEATURES)]
-            fcp = float(np.average(model.predict(model_vec), weights=weights))
-
-            fuel_load = total_laps - lap + 1
-            lap_time = fcp + fuel_load * FUEL_PENALTY_PER_LAP
-            preds[c].append(lap_time)
-
-    prefix = {c: np.cumsum(preds[c]) for c in COMPOUNDS}
-
-    # Save predictions
-    pred_df = pd.DataFrame(preds)
-    pred_file = f"{SCRIPT_NAME}_precomputed_predictions.csv"
-    pred_df.to_csv(f"{RESULTS_DIR}/{pred_file}", index=False)
-    generated_files.append(pred_file)
-
-    # Save prefix sums
-    prefix_df = pd.DataFrame(prefix)
-    prefix_file = f"{SCRIPT_NAME}_prefix_sums.csv"
-    prefix_df.to_csv(f"{RESULTS_DIR}/{prefix_file}", index=False)
-    generated_files.append(prefix_file)
-
-    log("Saved precomputed predictions and prefix sums.")
-
-    return preds, prefix
+    return stint_totals, fuel_prefix
 
 
 # ============================================================
 # COMPUTE STINT TIME
 # ============================================================
-def stint_time(prefix, compound, start_lap, end_lap):
-    arr = prefix[compound]
-    if start_lap == 1:
-        return arr[end_lap - 1]
-    return arr[end_lap - 1] - arr[start_lap - 2]
+def stint_time(stint_totals, fuel_prefix, compound, start_lap, end_lap):
+    length = end_lap - start_lap + 1
+    if length <= 0:
+        return 0.0
+    fuel = fuel_prefix[end_lap] - fuel_prefix[start_lap - 1]
+    return stint_totals[compound][length] + fuel
 
 
 # ============================================================
 # FAST STRATEGY SIMULATION
 # ============================================================
-def simulate_strategy_fast(prefix, total_laps, compounds, pit_laps):
+def simulate_strategy_fast(stint_totals, fuel_prefix, total_laps, compounds, pit_laps):
     pit_laps = sorted(pit_laps)
     segments = []
 
@@ -149,7 +214,7 @@ def simulate_strategy_fast(prefix, total_laps, compounds, pit_laps):
     total = 0
     for idx, (s, e) in enumerate(segments):
         comp = compounds[idx]
-        total += stint_time(prefix, comp, s, e)
+        total += stint_time(stint_totals, fuel_prefix, comp, s, e)
         if idx < len(segments) - 1:
             total += PIT_LOSS
 
@@ -178,7 +243,7 @@ def generate_strategies(total_laps):
 # OPTIMIZER
 # ============================================================
 def optimize_strategy(total_laps, base_features):
-    preds, prefix = precompute_lap_predictions(total_laps, base_features)
+    stint_totals, fuel_prefix = precompute_stint_rollouts(total_laps, base_features)
     strategies = generate_strategies(total_laps)
 
     log(f"Total strategies to evaluate: {len(strategies)}")
@@ -188,7 +253,7 @@ def optimize_strategy(total_laps, base_features):
     best_strategy = None
 
     for compounds, pit_laps in strategies:
-        t = simulate_strategy_fast(prefix, total_laps, compounds, pit_laps)
+        t = simulate_strategy_fast(stint_totals, fuel_prefix, total_laps, compounds, pit_laps)
 
         results.append((compounds, pit_laps, t))
 
@@ -237,13 +302,11 @@ if __name__ == "__main__":
     start_features = {f: 0.0 for f in SIM_FEATURE_COLUMNS}
     start_features.update({f: v for f, v in MEDIANS.items() if f in start_features})
 
-    # default initial tyres
+    # default initial tyres (tyre age, sector times and stint_avg_pace are set by the rollout)
     start_features.update({
         "compound_HARD": 1,
         "compound_MEDIUM": 0,
         "compound_SOFT": 0,
-        "laps_since_stint_start": 1,
-        "fuel_corrected_pace": 0.0
     })
 
     best, best_time = optimize_strategy(NUM_LAPS, start_features)

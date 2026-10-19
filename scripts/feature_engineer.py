@@ -4,7 +4,7 @@ from pathlib import Path
 import os
 from datetime import datetime
 
-from feature_config import SESSION_COLUMNS
+from feature_config import SESSION_COLUMNS, FUEL_EFFECT_K
 
 # ============================================================
 # SETUP SCRIPT-SPECIFIC RESULTS DIRECTORY
@@ -193,9 +193,8 @@ laps["stint_avg_pace"] = (stint_sum - laps["lap_duration"]) / (stint_count - 1)
 laps.loc[stint_count <= 1, "stint_avg_pace"] = np.nan
 
 # fuel_corrected_pace (seconds; lap_duration is unscaled, k is s/lap)
-fuel_effect_k = 0.035
 laps["laps_remaining"] = laps["lap_end"] - laps["lap_number"]
-laps["fuel_corrected_pace"] = laps["lap_duration"] + fuel_effect_k * laps["laps_remaining"]
+laps["fuel_corrected_pace"] = laps["lap_duration"] + FUEL_EFFECT_K * laps["laps_remaining"]
 
 feat_snapshot = f"{SCRIPT_NAME}_feature_engineered_snapshot.csv"
 laps.to_csv(f"{RESULTS_DIR}/{feat_snapshot}", index=False)

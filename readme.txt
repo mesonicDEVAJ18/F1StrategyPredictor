@@ -290,7 +290,8 @@ As XGBoost repeatedly predicts future fcp values, the falling trend in predicted
 No slope assumptions.
 No fixed compound multipliers.
 Just learned tyre physics from FP laps.
-[TODO #9, P2, see diagnostic.md] The simulator does not roll predictions forward yet. Each lap is predicted on its own.
+The simulator does this: each stint is rolled forward lap by lap, with every predicted lap fed back as the next lap's inputs
+(see Race Simulation step 2).
 
 Training: the target is built by build_next_lap_target() in feature_config.py (shared by train_model.py and validate_strategy.py).
 fuel_corrected_pace is shifted back one lap within each driver_number + stint_number group (stint_number is the global per-driver number,
@@ -336,18 +337,29 @@ Every combination of pit laps between lap 10 and lap 46
 This gives 18,318 candidate strategies. The rule that at least two compounds must be used is not enforced yet.
 [TODO #8, P1, see diagnostic.md] Drop 0-stop and single-compound sequences (keep len(set(seq)) >= 2).
 
-2. Lap time prediction
-For each compound, the XGBoost model predicts a lap time in seconds for every race lap 1-57:
-the compound one-hot is set, laps_since_stint_start is set to the race lap number, and all other features are held at their training
-median (saved in the model bundle, because the inputs are in physical units, so 0 is not "average").
-The race is not one of the practice sessions, so each lap is predicted once per session one-hot (session_FP1, FP2, FP3) and the three
-predictions are averaged, weighted by each session's share of the training rows (FP1 0.407, FP2 0.385, FP3 0.208).
-Current predictions are 103-112 s per lap.
-[TODO #10, P1, see diagnostic.md] Tyre age is the race lap, so it never resets after a pit stop. Index each stint from tyre age 1.
-[TODO #9, P2, see diagnostic.md] Laps are predicted independently with fixed features, not rolled forward.
+2. Lap time prediction (autoregressive stint rollout)
+Every stint is priced from fresh: for each compound and every stint length L = 1..57, the stint is rolled forward from tyre age 1, so tyre
+age resets at each pit stop and a stint costs the same wherever it starts in the race.
+Lap 1 of a stint is the seed: the training medians (saved in the model bundle, because the inputs are in physical units, so 0 is not
+"average") with the compound one-hot set and tyre_age_at_start = 0 (a new set). Its lap time is the sum of the median sector times (98.98 s).
+From then on the model predicts lap a+1's fuel_corrected_pace from lap a's inputs, exactly the relationship it was trained on. The race is
+not one of the practice sessions, so each lap is predicted once per session one-hot (session_FP1, FP2, FP3) and the three predictions are
+averaged, weighted by each session's share of the training rows (FP1 0.407, FP2 0.385, FP3 0.208).
+Each prediction is fed back as the next lap's inputs:
+- it is turned into a raw lap time by undoing the training fuel term: raw = fcp - 0.035 x (L - age), the laps left in the stint
+  (k is FUEL_EFFECT_K in feature_config.py, shared with feature_engineer.py)
+- the sector times are the median sector shares scaled to sum to that raw lap time
+- stint_avg_pace is the mean of the stint's earlier raw laps (causal; training still uses a leave-one-out mean, see #17)
+- laps_since_stint_start goes up by one
+Speeds, segment counts and weather stay at their medians.
+In training, laps_since_stint_start runs from 2 to 18 (pit-out laps are cleaned out). Beyond 18, the model's response to tyre age is flat, so
+changes later in a long stint come from the fed-back inputs only.
+Predictions stay within 96-120 s. Per-lap rollouts are saved to scripts/results/strategy_simulator/strategy_simulator_stint_rollouts.csv,
+and the summed fcp per compound and stint length to strategy_simulator_stint_totals.csv.
+[TODO #21, P3, see diagnostic.md] Every stint starts on a new set; used sets from practice and qualifying are not tracked.
 [TODO #12, P3, see diagnostic.md] The starting-compound setting in start_features is overwritten and has no effect.
-A fuel penalty of 0.035 x (laps of fuel remaining) is added to each lap.
-These per-lap predictions are stored as cumulative sums, so any stint's time is a single subtraction.
+A fuel penalty of 0.035 x (laps of fuel remaining in the race) is added to each race lap a stint covers, so a stint's time is its summed
+rollout fcp plus the fuel of its race laps.
 
 3. Objective function: minimize total race time
 For each candidate strategy, total race time (seconds) = sum of predicted lap times of each stint + 22 s per pit stop.
@@ -358,7 +370,7 @@ the 22 s pit loss.
 4. Strategy optimisation
 All 18,318 strategies are evaluated and the one with the lowest predicted race time is selected.
 Results: scripts/results/strategy_simulator/ (all_strategy_results.csv, best_strategy.json, final_summary.txt).
-Current output: SOFT-SOFT-SOFT, pit stops on laps 10 and 11, total 6055.98 s (SOFT-MEDIUM-SOFT and SOFT-HARD-SOFT tie with it).
+Current output: SOFT-SOFT-SOFT, pit stops on laps 12 and 13, total 5695.12 s (SOFT-MEDIUM-SOFT and SOFT-HARD-SOFT tie with it).
 [TODO #11, P1, see diagnostic.md] Pitting on consecutive laps leaves an empty middle stint and drops two laps from the total, which is why
 this strategy wins. It is not a valid recommendation.
 [TODO #8, P1, see diagnostic.md] The winning sequence uses a single compound, which breaks the two-compound rule.
@@ -378,10 +390,16 @@ An example two-sample t-test on randomly generated data. This is a placeholder: 
 strategy, and its p-value changes from run to run.
 [TODO #5, P2, see diagnostic.md] Replace with a meaningful test or remove it.
 
+Rollout check (logged by strategy_simulator.py on every run): for a 57-lap stint of each compound, fcp at ages 1, 18 and 57 and the
+largest lap-to-lap step.
+Current result: SOFT 100.94 -> 99.34 -> 114.05, MEDIUM 100.94 -> 114.82 -> 118.40, HARD 100.94 -> 115.06 -> 119.42 s.
+The largest step is 5.7-6.4 s.
+No runaway drift: every rollout stays within 96-120 s.
+Not fully smooth: the first ~8 laps zig-zag by about +-3 s (a slow fed-back lap is followed by a fast prediction).
+MEDIUM and HARD step up by about 12 s around ages 11-15, while SOFT stays near 99 s until about age 48.
+SOFT degrading least is not tyre physics; see #17 and #20.
+
 Planned critical checks:
-Predictions remain smooth when rolled forward for multiple laps
-[TODO #9, P2, see diagnostic.md] Not checkable until the simulator actually rolls predictions forward.
-No drift or instability during stint simulation
 Feature influence aligns with expected tyre-degradation behaviour (e.g. tyre age, compound, track temperature matter most)
 
 2. Strategy Validation (planned, not implemented yet)
@@ -399,11 +417,13 @@ The solution is stable and not sensitive to minor model noise
 KNOWN ISSUES
 Known bugs and their effect on the results are documented in diagnostic.md.
 Open TODOs by priority (IDs as in diagnostic.md; each is tagged [TODO #N, ...] where it applies above):
-P1, results are invalid until fixed:  #8 illegal strategies, #10 tyre age reset, #11 pit lap missing from sum, #19 fuel correction sign
-P2, method or validation misleading:  #17 stint_avg_pace leaks the target, #18 splits mix laps of one stint, #9 no autoregressive rollout,
+P1, results are invalid until fixed:  #8 illegal strategies, #11 pit lap missing from sum, #19 fuel correction sign
+P2, method or validation misleading:  #17 stint_avg_pace leaks the target, #18 splits mix laps of one stint,
                                       #6 residual plot leakage, #5 placeholder t-test, #13 model choice, #20 slow non-push laps
-(Fixed: #1 weather event, #2 stint merge key, #3 stint/session mask, #4 cross-driver target, #7 mixed units, #14 car-data stage.)
-P3, completeness and cleanup:         #12 dead starting-compound setting, #16 car data not a model input, #15 results documentation
+(Fixed: #1 weather event, #2 stint merge key, #3 stint/session mask, #4 cross-driver target, #7 mixed units, #9 autoregressive rollout,
+ #10 tyre age reset, #14 car-data stage.)
+P3, completeness and cleanup:         #12 dead starting-compound setting, #16 car data not a model input, #21 tyre-set tracking,
+                                      #15 results documentation
 [TODO #15, P3, see diagnostic.md] Results are not written up yet. Do this after the P1 fixes, since the numbers will change.
 
 THANK YOU

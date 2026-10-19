@@ -89,7 +89,10 @@ hand-off file to `data/` in addition to its own `results/<name>/` copy:
   training rows)
 - `strategy_simulator.py` and `validate_strategy.py` load that `.pkl` bundle. The simulator starts from
   `medians` (inputs are in physical units, so 0 is not "average") and averages each lap's prediction over
-  the session one-hots with `session_weights`, because the race is not a practice session.
+  the session one-hots with `session_weights`, because the race is not a practice session. Each stint is
+  rolled out autoregressively from tyre age 1, once per (compound, stint length): every predicted fcp is
+  turned back into a raw lap time with `FUEL_EFFECT_K` (feature_config.py) and fed into the next lap's sector
+  times and running `stint_avg_pace`.
 
 The **model target** is next-lap `fuel_corrected_pace`: the same driver's lap `lap_number + 1` in the
 same stint, built by `build_next_lap_target()` in `feature_config.py` (shared by `train_model.py` and

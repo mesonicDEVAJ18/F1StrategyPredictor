@@ -3,18 +3,23 @@
 
 Loaded trained XGBoost model.
 Session weights for averaging predictions: {'session_FP1': 0.4066147859922179, 'session_FP2': 0.3852140077821012, 'session_FP3': 0.20817120622568094}
-Saved precomputed predictions and prefix sums.
+Saved stint rollouts and stint totals.
+
+Rollout check (stint of 57 laps, fcp in s):
+  SOFT: age 1: 100.94, age 18: 99.34, age 57: 114.05, max |lap-to-lap step|: 5.99
+  MEDIUM: age 1: 100.94, age 18: 114.82, age 57: 118.40, max |lap-to-lap step|: 5.68
+  HARD: age 1: 100.94, age 18: 115.06, age 57: 119.42, max |lap-to-lap step|: 6.39
 Total strategies to evaluate: 18318
 Best strategy:
-{'best_compound_sequence': ('SOFT', 'SOFT', 'SOFT'), 'best_pit_laps': [10, 11], 'best_total_time': 6055.979960018411, 'time_units': 'seconds'}
+{'best_compound_sequence': ('SOFT', 'SOFT', 'SOFT'), 'best_pit_laps': [12, 13], 'best_total_time': 5695.115109615459, 'time_units': 'seconds'}
 
 OPTIMIZATION COMPLETE
-Best strategy: (('SOFT', 'SOFT', 'SOFT'), [10, 11])
-Total time: 6055.98 s
+Best strategy: (('SOFT', 'SOFT', 'SOFT'), [12, 13])
+Total time: 5695.12 s
 
 FILES GENERATED:
-  - strategy_simulator_precomputed_predictions.csv
-  - strategy_simulator_prefix_sums.csv
+  - strategy_simulator_stint_rollouts.csv
+  - strategy_simulator_stint_totals.csv
   - strategy_simulator_all_strategy_results.csv
   - strategy_simulator_best_strategy.json
   - strategy_simulator_final_summary.txt

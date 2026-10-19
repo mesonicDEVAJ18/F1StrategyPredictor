@@ -218,11 +218,16 @@ Enumerate strategies for a 57-lap race (18,318 in total):
 
 ### 2. Lap Time Prediction
 
-For each compound, once:
-1. Predict a lap time in seconds with XGBoost for every race lap 1–57 (compound one-hot set, `laps_since_stint_start` = race lap, all other features at their training median)
-   - The race is not a practice session, so each lap is predicted under `session_FP1`, `session_FP2` and `session_FP3` and averaged, weighted by each session's share of training rows
-2. Add a fuel penalty of `0.035 s × laps of fuel remaining`
-3. Store cumulative sums so any stint's time is a single subtraction
+For each compound and every stint length L = 1–57, roll the stint forward from tyre age 1. Tyre age resets at every stop.
+1. **Seed:** lap 1 is a median lap: the training medians, the compound one-hot set, and a new set (`tyre_age_at_start` = 0).
+2. **Predict:** XGBoost predicts the next lap's fuel-corrected pace from the current lap's inputs.
+   - The race is not a practice session, so each lap is predicted under `session_FP1`, `session_FP2` and `session_FP3` and averaged, weighted by each session's share of training rows.
+3. **Feed back:** each prediction becomes the next lap's inputs.
+   - The training fuel term is undone first: `raw = fcp − 0.035 × (L − age)`.
+   - The sector times are rescaled to sum to `raw`.
+   - `stint_avg_pace` is the mean of the earlier laps.
+   - `laps_since_stint_start` goes up by one.
+4. **Price:** a stint's time is the summed rollout fcp for its length, plus a race fuel penalty of `0.035 s × laps of fuel remaining` for each race lap it covers.
 
 ### 3. Objective Function
 
@@ -230,7 +235,7 @@ For each compound, once:
 Minimize: Total Race Time (s) = Σ(stint lap times) + 22 s × number of pit stops
 ```
 
-Current output: SOFT–SOFT–SOFT with stops on laps 10 and 11, 6055.98 s. This is not a valid recommendation yet: the pit lap is never summed (diagnostic.md #11), so back-to-back stops drop two laps from the total, and the two-compound rule is not enforced (#8).
+Current output: SOFT–SOFT–SOFT with stops on laps 12 and 13, 5695.12 s. This is not a valid recommendation yet: the pit lap is never summed (diagnostic.md #11), so back-to-back stops drop two laps from the total, and the two-compound rule is not enforced (#8).
 
 ### 4. Optimization Engine
 
@@ -248,7 +253,10 @@ Current output: SOFT–SOFT–SOFT with stops on laps 10 and 11, 6055.98 s. This
 - **Feature importance**: Verify alignment with tyre physics
   - Expected top features: tyre age, compound, track temperature
 - **t-test**: Placeholder on random sample data
-- **Simulation stability** *(planned)*: Predictions remain smooth over multi-lap rollouts
+- **Simulation stability** (logged by `strategy_simulator.py`): fcp at tyre ages 1, 18 and 57 of a full-length rollout, plus the largest lap-to-lap step.
+  - No runaway drift: every rollout stays within 96–120 s.
+  - Not fully smooth: steps of up to about 6 s, and a ±3 s zig-zag over the first laps.
+  - See diagnostic.md #9.
 
 ### Strategy Validation *(planned, not implemented yet)*
 - Simulate multiple race conditions with variations

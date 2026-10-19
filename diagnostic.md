@@ -73,16 +73,18 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **Fix:** keep only sequences with `len(set(seq)) >= 2`.
   - **readme.txt:** Race Simulation steps 1 and 4.
 
-- [ ] **#10 Tyre age does not reset after a pit stop**
+- [x] **#10 Tyre age does not reset after a pit stop**
   - **Where:** `precompute_lap_predictions()` / `stint_time()` in `scripts/strategy_simulator.py`.
   - **Problem:** predictions are indexed by race lap, and `laps_since_stint_start` is set to the race lap number. A stint that starts on lap 30 is priced as if its tyres were already 30 laps old.
   - **Fix:** predict each stint from tyre age 1, i.e. index by stint length rather than by race lap.
   - **readme.txt:** Race Simulation step 2.
+  - **Fixed** (together with #9): `precompute_stint_rollouts()` rolls every compound out for every stint length L = 1..57, always from tyre age 1 (`laps_since_stint_start` = 1 on the stint's first lap). `stint_time()` prices a stint as the summed predicted fcp of the L-lap rollout plus the race fuel term (`FUEL_PENALTY_PER_LAP` × fuel on board) of the race laps it covers. So a stint costs the same wherever it starts, apart from the fuel. Race stints start on a new set (`RACE_TYRE_AGE_AT_START = 0`, see #21); the training median was 3.
+    - **Training range:** `laps_since_stint_start` is 2–18 in training (pit-out laps are cleaned out). Age 1 is treated like 2. Beyond 18, XGBoost's response to tyre age is flat, so any later change comes from the fed-back inputs (#9).
 
 - [ ] **#11 The pit lap is missing from the race-time sum**
   - **Where:** `simulate_strategy_fast()` in `scripts/strategy_simulator.py`.
   - **Problem:** stints are summed over `(last, p - 1)`, then `last = p + 1`, so lap `p` is never counted. The pit loss replaces a whole lap instead of being added to it.
-  - **Effect:** now that #7 is fixed, a dropped lap (~110 s) outweighs the 22 s pit loss, so every extra stop makes a strategy look faster. The optimiser picks 2 stops on consecutive laps (10 and 11). The middle "stint" is empty and two laps go missing from the total.
+  - **Effect:** now that #7 is fixed, a dropped lap (~100–110 s) outweighs the 22 s pit loss, so every extra stop makes a strategy look faster. The optimiser picks 2 stops on consecutive laps (12 and 13 since #9/#10; 10 and 11 before). The middle "stint" is empty and two laps go missing from the total.
   - **Fix:** sum every race lap exactly once and add the pit loss on top.
   - **readme.txt:** Race Simulation step 3.
 
@@ -118,7 +120,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **Fix:** flag or drop non-push laps, e.g. laps more than a set margin slower than the driver's best on that compound in the session, or train only on long-run stints.
   - **readme.txt:** Data Preparation, laps cleaning.
 
-- [ ] **#9 The simulation does not roll predictions forward**
+- [x] **#9 The simulation does not roll predictions forward**
   - **Where:** `precompute_lap_predictions()` in `scripts/strategy_simulator.py`.
   - **Problem:**
     - Each lap is predicted on its own, with every feature other than the compound, the session one-hot and `laps_since_stint_start` fixed at its training median (fixed at 0 before #7).
@@ -127,6 +129,31 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **Effect:** "degradation" comes only from the model's response to `laps_since_stint_start`.
   - **Fix:** roll the lap-*t* feature vector forward from each prediction, or change `readme.txt` to describe the per-lap approach that is actually used.
   - **readme.txt:** ML Modelling step 2 (autoregressive, emergent degradation); Race Simulation step 2; Evaluation, planned critical checks.
+  - **Fixed** (together with #10): `rollout_stint()` in `scripts/strategy_simulator.py` rolls each stint forward lap by lap.
+    - **Seed:** lap 1 of a stint is a median lap. Its state is the training medians (bundle `medians`) with the compound set, and its lap time is the sum of the median sector times (98.98 s).
+    - **Step:** the model predicts lap *a+1*'s fcp from lap *a*'s state (the training relationship), still averaged over the session one-hots (`predict_fcp()`).
+    - **Feedback:** the prediction is turned back into a raw lap time by undoing training's fuel term, `raw = fcp − FUEL_EFFECT_K × (L − age)` for a stint of L laps. This needs one rollout per (compound, L): 4959 laps in total, about 6 s. It then becomes the next state:
+      - the sector times are the median sector shares scaled to sum to `raw`
+      - `stint_avg_pace` is the mean of the stint's earlier raw laps (the causal form #17 proposes; training still uses the leave-one-out mean)
+      - `laps_since_stint_start` goes up by one
+      - `fuel_corrected_pace` holds the lap's fcp instead of a 0.0 dummy
+    - **Held fixed:** speeds, segment counts and weather stay at the medians. The k = 0.035 used to build fcp is now `FUEL_EFFECT_K` in `feature_config.py`, shared by `feature_engineer.py` and the simulator.
+    - **Outputs:** `strategy_simulator_stint_rollouts.csv` has one row per compound, stint length and tyre age, with fcp, raw lap time, sectors and `stint_avg_pace`. `strategy_simulator_stint_totals.csv` is compound × stint length. They replace `_precomputed_predictions.csv` and `_prefix_sums.csv`.
+    - **Checks:**
+      - sectors sum to the raw lap
+      - `fcp − raw = 0.035 × (L − age)` on every row
+      - every age-1 lap is the seed
+      - `stint_avg_pace` is the mean of the earlier raw laps
+      - stint totals equal the rollout sums
+    - **Rollout behaviour** (57-lap stint, fcp in s; logged on every run):
+      - SOFT: 100.94 at age 1, 99.34 at 18, 114.05 at 57
+      - MEDIUM: 100.94 → 114.82 → 118.40
+      - HARD: 100.94 → 115.06 → 119.42
+      - The largest lap-to-lap step is 5.7–6.4 s. For the first ~8 laps the predictions zig-zag by ±3 s: a slow fed-back lap is followed by a fast prediction.
+      - MEDIUM and HARD step up by about 12 s around ages 11–15. SOFT stays near 99 s until about age 48.
+      - SOFT degrading least is not tyre physics. It is what the model has learnt from FP data that still has #17 and #20 open.
+      - Predictions stay within 96.1–120.1 s over all rollouts, so there's no runaway drift.
+    - **Effect on strategy:** the best total went from 6055.98 s to 5695.12 s, now SOFT–SOFT–SOFT with pits on laps 12 and 13. SOFT–MEDIUM–SOFT and SOFT–HARD–SOFT tie with it, and SOFT–SOFT–SOFT with pits on 45 and 46 is 2.3 s behind. The best 1-stop is SOFT–SOFT, pit on lap 13, 5775.17 s. The best 0-stop is SOFT at 5847.05 s. It is still **not** a valid recommendation, because of #8 and #11.
 
 - [ ] **#6 The residual plot mixes training and test data**
   - **Where:** `pred_full = model.predict(X)` in `scripts/validate_strategy.py`.
@@ -151,8 +178,8 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
 
 - [ ] **#12 The starting compound setting has no effect**
   - **Where:** `start_features` in `__main__` of `scripts/strategy_simulator.py`.
-  - **Problem:** `compound_HARD = 1` is set, but `precompute_lap_predictions()` overwrites the compound one-hots for every compound anyway. Since #7, `start_features` starts from the training medians, not zeros, but the compound override is still dead.
-  - **Fix:** remove the setting, or use it as the base feature vector once #9 is done.
+  - **Problem:** `compound_HARD = 1` is set, but `precompute_lap_predictions()` (now `rollout_stint()`) overwrites the compound one-hots for every compound anyway. Since #7, `start_features` starts from the training medians, not zeros, but the compound override is still dead.
+  - **Fix:** remove the setting. #9 is done and seeds every stint from the medians with the stint's own compound, so the setting has no remaining use.
   - **readme.txt:** Race Simulation step 2.
 
 - [x] **#14 The car-data stage is not functional**
@@ -188,12 +215,26 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **Depends on:**
     - #4 (fixed): the engineered dataset now keeps `session_key` and `driver_number`, so the merge keys are available.
     - #7 (fixed): the laps are no longer scaled, but the car-data aggregates still are (per session). Leave them unscaled too before merging, so the inputs are physical units throughout and the simulator's median baseline stays meaningful.
-    - #9: the simulator needs a lap-*t* feature vector to roll forward.
+    - #9 (fixed): the simulator rolls a lap-*t* feature vector forward. Car-data features would need a seed value and a rule for how they evolve, or they stay at their medians like the speeds.
   - **readme.txt:** Data Collection step 5; Data Preparation, CarData.
+
+- [ ] **#21 Race stints always start on a new tyre set**
+  - **Where:** `RACE_TYRE_AGE_AT_START` in `scripts/strategy_simulator.py`.
+  - **Problem:** every simulated stint has `tyre_age_at_start = 0`. In a real race, some stints start on sets already used in practice or qualifying, and the sets available depend on what is left of the weekend allocation.
+  - **What the data allows:**
+    - OpenF1 `stints` gives each stint's compound, lap range and `tyre_age_at_start`, but no set ID.
+    - Sets can be inferred by chaining: a stint that starts used, at the age an earlier stint of the same compound ended at, is probably the same set. For example, #44 in FP1 ran HARD for laps 1–9, then started stint 2 on HARD at age 8.
+    - This is a heuristic, and it is ambiguous when two sets share a compound and age.
+  - **Fix:**
+    - Infer Ferrari's sets and their ages from the stints.
+    - Add the qualifying stints. This broadens scope beyond FP1–FP3, so confirm first.
+    - Hard-code the allocation and return rules (typically 2 HARD / 3 MEDIUM / 8 SOFT per weekend, with sets returned after sessions), which OpenF1 doesn't provide.
+    - Let `generate_strategies()` choose from the sets left, and start each stint at its set's age.
+  - **readme.txt:** Race Simulation step 2.
 
 - [ ] **#15 Results documentation**
   - **Problem:** results currently exist only as raw files in `scripts/results/<script>/` and a few numbers in the readmes.
-  - **Depends on:** all P1 items, plus #9 and #13. The numbers will change once those are fixed, so write this up afterwards.
+  - **Depends on:** all P1 items, plus #13 (#9 is fixed). The numbers will change once those are fixed, so write this up afterwards.
   - **readme.txt:** Known Issues.
   - Cover:
     - [ ] **Data cleaning:** rows removed per session and per filter (from the `*_removed_rows_summary.csv` files and the weather z-score summary), and the final row counts. This includes car data: samples and laps removed per stage, and the laps kept per driver and session.
