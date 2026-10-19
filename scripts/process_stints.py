@@ -2,11 +2,13 @@ import pandas as pd
 import os
 from datetime import datetime
 
+from env_config import env_str, env_list
+
 # ============================================================
 # SETUP SCRIPT-SPECIFIC RESULTS DIRECTORY
 # ============================================================
 SCRIPT_NAME = "process_stints"
-RESULTS_DIR = f"./results/{SCRIPT_NAME}"
+RESULTS_DIR = f"{env_str('RESULTS_ROOT')}/{SCRIPT_NAME}"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 log_path = f"{RESULTS_DIR}/{SCRIPT_NAME}_log.txt"
@@ -23,8 +25,8 @@ def log(msg: str):
 # ============================================================
 # INPUT FILES
 # ============================================================
-data_dir = "../data"
-stints_files = ["stints_p1.csv", "stints_p2.csv", "stints_p3.csv"]
+data_dir = env_str("DATA_DIR")
+stints_files = env_list("STINTS_FILES")
 
 cleaned_dfs = []
 removed_rows_summary = []
@@ -104,7 +106,7 @@ generated_files.append(combined_name)
 log(f"\nSaved combined stints dataset: {combined_name}")
 
 # Hand-off for feature_engineer.py
-handoff_path = os.path.join(data_dir, "stints_combined_clean.csv")
+handoff_path = os.path.join(data_dir, env_str("STINTS_CLEAN_FILE"))
 combined.to_csv(handoff_path, index=False)
 log(f"Saved hand-off dataset: {handoff_path}")
 

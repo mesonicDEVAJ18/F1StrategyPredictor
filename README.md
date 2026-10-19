@@ -299,6 +299,8 @@ python master.py
 
 Each script can also be run on its own, and writes its log and outputs to `scripts/results/<script_name>/`.
 
+**Settings** (paths, file names, cleaning thresholds, model hyperparameters, seeds, race length, pit loss, pit window, stop counts) are in [.env](.env) at the repo root, which `scripts/env_config.py` reads. An environment variable with the same name overrides the file for one run, e.g. `$env:PIT_LOSS_S="25"; python strategy_simulator.py` (PowerShell).
+
 Detailed methodology: [readme.txt](readme.txt). Known bugs: [diagnostic.md](diagnostic.md).
 
 ---

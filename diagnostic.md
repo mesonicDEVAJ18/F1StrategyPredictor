@@ -232,6 +232,15 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - Let `generate_strategies()` choose from the sets left, and start each stint at its set's age.
   - **readme.txt:** Race Simulation step 2.
 
+- [x] **#22 Settings are hardcoded across scripts**
+  - **Where:** all 8 stage scripts and `scripts/feature_config.py`.
+  - **Problem:** the race constants (`PIT_LOSS = 22.0`, `NUM_LAPS = 57`, `FUEL_PENALTY_PER_LAP`, the pit window `range(10, total_laps - 10)`, stops `[0, 1, 2]`) and `FUEL_EFFECT_K` were literals. So were the cleaning thresholds (30 s, 2× median, 50 km/h, IQR × 3, weather and car-data |z| > 3, car-data limits), the 5 min weather-merge tolerance, the model hyperparameters, the split and CV settings, `random_state=42`, and every data/results path and file name. Trying a different pit loss or another weekend's files meant editing code, and the same value (e.g. the model bundle path, the seed) was repeated across scripts.
+  - **Fix:** move them to one settings file that every script reads.
+  - **Fixed:** settings live in `.env` at the repo root, which is committed: there are no secrets, and a fresh clone runs as-is. The new `scripts/env_config.py` parses it, with no new dependency. Variables already set in the environment win, so `$env:PIT_LOSS_S="25"; python strategy_simulator.py` overrides one run. The getters (`env_str` / `env_int` / `env_float` / `env_list`) raise `KeyError` on a missing key instead of falling back to a hidden default. Each script reads its keys once at module level. `FUEL_EFFECT_K` stays exported from `feature_config.py`, so its importers are unchanged.
+    - **Kept in code** (schema or format, not settings): the column lists and `COMPOUNDS`, the throttle 0–100 / brake {0, 100} encodings, the XGBoost objective, `n_jobs`, plot cosmetics, the t-test placeholder (#5) and the dead `compound_HARD = 1` start setting (#12).
+    - **Checks:** the full pipeline was run before and after. All 69 output CSV/JSON/TXT files are identical (CSVs to rtol 1e-9; the RandomForest RMSE differs only in the last digit between runs anyway). The exceptions are the unseeded t-test samples and p-value (#5) and one log line now reading "within 5min". The best strategy is unchanged (SOFT–SOFT–SOFT, pits 12 and 13, 5695.12 s). With `PIT_LOSS_S=30` it becomes 5711.12 s, which is 2 stops × 8 s more, as expected.
+  - **readme.txt:** Running the Pipeline.
+
 - [ ] **#15 Results documentation**
   - **Problem:** results currently exist only as raw files in `scripts/results/<script>/` and a few numbers in the readmes.
   - **Depends on:** all P1 items, plus #13 (#9 is fixed). The numbers will change once those are fixed, so write this up afterwards.

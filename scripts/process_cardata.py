@@ -3,12 +3,14 @@ import os
 from pathlib import Path
 from sklearn.preprocessing import StandardScaler
 
+from env_config import env_str, env_int, env_float, env_list
+
 
 # ============================================================
 # SETUP SCRIPT-SPECIFIC RESULTS DIRECTORY
 # ============================================================
 SCRIPT_NAME = "process_cardata"
-RESULTS_DIR = f"./results/{SCRIPT_NAME}"
+RESULTS_DIR = f"{env_str('RESULTS_ROOT')}/{SCRIPT_NAME}"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 log_path = f"{RESULTS_DIR}/{SCRIPT_NAME}_log.txt"
@@ -25,24 +27,33 @@ def log(msg: str):
 # ============================================================
 # INPUT FILE CONFIG
 # ============================================================
-data_dir = Path("../data")
-cardata_files = sorted(data_dir.glob("car_data_p*_*.csv"))
-laps_files = sorted(data_dir.glob("laps_p*.csv"))
-clean_laps_file = data_dir / "laps_combined_clean.csv"
+data_dir = Path(env_str("DATA_DIR"))
+cardata_glob = env_str("CARDATA_GLOB")
+cardata_files = sorted(data_dir.glob(cardata_glob))
+laps_files = sorted(data_dir.glob(env_str("LAPS_GLOB")))
+clean_laps_file = data_dir / env_str("LAPS_CLEAN_FILE")
 
 if not cardata_files:
-    raise FileNotFoundError("No car_data_p*_*.csv files found at ../data")
+    raise FileNotFoundError(f"No {cardata_glob} files found at {data_dir}")
 if not clean_laps_file.exists():
-    raise FileNotFoundError("laps_combined_clean.csv not found at ../data, run process_laps.py first")
+    raise FileNotFoundError(f"{clean_laps_file.name} not found at {data_dir}, run process_laps.py first")
 
 removed_rows_summary = []
 
-# brake/throttle read 104 when there is no valid input (car stationary / in the garage)
-NO_INPUT_VALUE = 104
-# drs codes 10, 12, 14 mean the flap is open
-DRS_OPEN_CODES = [10, 12, 14]
+# brake/throttle read this when there is no valid input (car stationary / in the garage)
+NO_INPUT_VALUE = env_int("CARDATA_NO_INPUT_VALUE")
+# drs codes that mean the flap is open
+DRS_OPEN_CODES = env_list("CARDATA_DRS_OPEN_CODES", cast=int)
 # laps whose sample count is below this fraction of the expected count are dropped
-MIN_COVERAGE = 0.5
+MIN_COVERAGE = env_float("CARDATA_MIN_COVERAGE")
+# throttle (%) at or above this counts as full throttle
+FULL_THROTTLE_MIN = env_float("CARDATA_FULL_THROTTLE_MIN")
+# per-session |z| above this on any aggregate drops the lap
+ZSCORE_THRESHOLD = env_float("CARDATA_ZSCORE_THRESHOLD")
+# readings above these are physically impossible
+MAX_SPEED_KMH = env_float("CARDATA_MAX_SPEED_KMH")
+MAX_RPM = env_float("CARDATA_MAX_RPM")
+MAX_GEAR = env_int("CARDATA_MAX_GEAR")
 
 LAP_KEYS = ["session_key", "driver_number", "lap_number"]
 
@@ -70,7 +81,7 @@ def apply_domain_filters(df, fname):
     log(f"[{fname}] Removed {removed} duplicate-timestamp samples")
     removed_rows_summary.append([fname, "duplicate_timestamp", removed])
 
-    # No-input samples (brake/throttle = 104)
+    # No-input samples (brake/throttle = NO_INPUT_VALUE)
     before = len(df)
     df = df[(df["brake"] != NO_INPUT_VALUE) & (df["throttle"] != NO_INPUT_VALUE)]
     removed = before - len(df)
@@ -80,9 +91,9 @@ def apply_domain_filters(df, fname):
     # Physically impossible readings
     before = len(df)
     df = df[
-        df["speed"].between(0, 400)
-        & df["rpm"].between(0, 16000)
-        & df["n_gear"].between(0, 8)
+        df["speed"].between(0, MAX_SPEED_KMH)
+        & df["rpm"].between(0, MAX_RPM)
+        & df["n_gear"].between(0, MAX_GEAR)
         & df["throttle"].between(0, 100)
         & df["brake"].isin([0, 100])
     ]
@@ -144,7 +155,7 @@ def assign_samples_to_laps(df, laps, fname):
 def aggregate_per_lap(df):
     """Summarise the ~4 Hz samples of each lap."""
     df = df.copy()
-    df["full_throttle"] = df["throttle"] >= 99
+    df["full_throttle"] = df["throttle"] >= FULL_THROTTLE_MIN
     df["gear_change"] = df.groupby(LAP_KEYS)["n_gear"].diff().fillna(0).ne(0)
 
     return df.groupby(LAP_KEYS).agg(
@@ -195,19 +206,19 @@ def keep_clean_laps(per_lap, fname):
 
 
 def zscore_outlier_filter(per_lap, cols, fname):
-    """Drop laps with |z| > 3 in any aggregate, z computed per session."""
+    """Drop laps with |z| > ZSCORE_THRESHOLD in any aggregate, z computed per session."""
     keep = pd.Series(True, index=per_lap.index)
     for col in cols:
         grouped = per_lap.groupby("session_key")[col]
         std = grouped.transform("std")
         z = (per_lap[col] - grouped.transform("mean")) / std
         # Zero-variance columns are skipped
-        keep &= ~((std > 0) & (z.abs() > 3))
+        keep &= ~((std > 0) & (z.abs() > ZSCORE_THRESHOLD))
 
     before = len(per_lap)
     per_lap = per_lap[keep]
     removed = before - len(per_lap)
-    log(f"[{fname}] Removed {removed} laps with |z| > 3 (per session)")
+    log(f"[{fname}] Removed {removed} laps with |z| > {ZSCORE_THRESHOLD:g} (per session)")
     removed_rows_summary.append([fname, "zscore_outlier", removed])
 
     return per_lap
@@ -306,7 +317,7 @@ generated_files.append(combined_name)
 log(f"Saved per-lap dataset: {combined_name} ({len(combined)} laps)")
 
 # Hand-off (not consumed by feature_engineer.py yet, see diagnostic.md #16)
-handoff_path = data_dir / "cardata_per_lap_clean.csv"
+handoff_path = data_dir / env_str("CARDATA_CLEAN_FILE")
 combined.to_csv(handoff_path, index=False)
 log(f"Saved hand-off dataset: {handoff_path}")
 

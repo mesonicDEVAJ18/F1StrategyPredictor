@@ -5,12 +5,13 @@ import os
 from datetime import datetime
 
 from feature_config import SESSION_COLUMNS, FUEL_EFFECT_K
+from env_config import env_str
 
 # ============================================================
 # SETUP SCRIPT-SPECIFIC RESULTS DIRECTORY
 # ============================================================
 SCRIPT_NAME = "feature_engineer"
-RESULTS_DIR = f"./results/{SCRIPT_NAME}"
+RESULTS_DIR = f"{env_str('RESULTS_ROOT')}/{SCRIPT_NAME}"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 log_path = f"{RESULTS_DIR}/{SCRIPT_NAME}_log.txt"
@@ -28,11 +29,14 @@ def log(msg: str):
 # CONFIG
 # ============================================================
 BASE_DIR = Path(__file__).resolve().parent
-data_dir = BASE_DIR.parent / "data"
+data_dir = (BASE_DIR / env_str("DATA_DIR")).resolve()
 
-laps_file = data_dir / "laps_combined_clean.csv"
-stints_file = data_dir / "stints_combined_clean.csv"
-weather_file = data_dir / "cleaned_weather.csv"
+laps_file = data_dir / env_str("LAPS_CLEAN_FILE")
+stints_file = data_dir / env_str("STINTS_CLEAN_FILE")
+weather_file = data_dir / env_str("WEATHER_CLEAN_FILE")
+
+# Max gap between a lap's start and its nearest weather sample
+WEATHER_MERGE_TOLERANCE = env_str("WEATHER_MERGE_TOLERANCE")
 
 final_output_file = f"{RESULTS_DIR}/{SCRIPT_NAME}_final_engineered_dataset.csv"
 
@@ -154,11 +158,11 @@ laps = pd.merge_asof(
     left_on="date_start",
     right_on="date",
     direction="nearest",
-    tolerance=pd.Timedelta("5min")
+    tolerance=pd.Timedelta(WEATHER_MERGE_TOLERANCE)
 )
 
 unmatched = laps["date"].isna().sum()
-log(f"  → Laps without weather within 5 min: {unmatched}")
+log(f"  → Laps without weather within {WEATHER_MERGE_TOLERANCE}: {unmatched}")
 
 merge_weather_snapshot = f"{SCRIPT_NAME}_laps_after_weather_merge.csv"
 laps.to_csv(f"{RESULTS_DIR}/{merge_weather_snapshot}", index=False)
@@ -218,7 +222,7 @@ generated_files.append(final_output_file.split("/")[-1])
 log(f"\n✅ Final engineered dataset saved as {final_output_file}")
 
 # Hand-off for train_model.py / validate_strategy.py
-handoff_path = data_dir / "final_engineered_dataset.csv"
+handoff_path = data_dir / env_str("ENGINEERED_FILE")
 laps.to_csv(handoff_path, index=False)
 log(f"Saved hand-off dataset: {handoff_path}")
 

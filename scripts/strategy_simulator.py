@@ -8,6 +8,7 @@ import warnings
 from datetime import datetime
 
 from feature_config import MODEL_FEATURE_COLUMNS, SIM_FEATURE_COLUMNS, SESSION_COLUMNS, FUEL_EFFECT_K
+from env_config import env_str, env_int, env_float, env_list
 
 warnings.filterwarnings("ignore")
 
@@ -15,7 +16,7 @@ warnings.filterwarnings("ignore")
 # SETUP RESULTS DIRECTORY
 # ============================================================
 SCRIPT_NAME = "strategy_simulator"
-RESULTS_DIR = f"./results/{SCRIPT_NAME}"
+RESULTS_DIR = f"{env_str('RESULTS_ROOT')}/{SCRIPT_NAME}"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 log_path = f"{RESULTS_DIR}/{SCRIPT_NAME}_log.txt"
@@ -36,7 +37,7 @@ log("\n--- STRATEGY SIMULATOR START ---\n")
 # ============================================================
 # LOAD MODEL
 # ============================================================
-bundle = joblib.load("./results/train_model/train_model_xgb_model.pkl")
+bundle = joblib.load(env_str("MODEL_BUNDLE_PATH"))
 model = bundle["model"]
 FEATURES = bundle["features"]
 MEDIANS = bundle["medians"]
@@ -49,13 +50,17 @@ log(f"Session weights for averaging predictions: {SESSION_WEIGHTS}")
 # ============================================================
 # CONSTANTS
 # ============================================================
+# Race settings come from .env; COMPOUNDS and SECTOR_COLUMNS must match the model's columns
 COMPOUNDS = ["SOFT", "MEDIUM", "HARD"]
-PIT_LOSS = 22.0               # seconds
-FUEL_PENALTY_PER_LAP = 0.035  # seconds per lap of fuel
-NUM_LAPS = 57
-RACE_TYRE_AGE_AT_START = 0    # every race stint starts on a new set (no set tracking yet, diagnostic.md #21)
+PIT_LOSS = env_float("PIT_LOSS_S")                         # seconds
+FUEL_PENALTY_PER_LAP = env_float("FUEL_PENALTY_PER_LAP")   # seconds per lap of fuel
+NUM_LAPS = env_int("NUM_LAPS")
+RACE_TYRE_AGE_AT_START = env_int("RACE_TYRE_AGE_AT_START") # new set unless set (no set tracking yet, diagnostic.md #21)
+PIT_WINDOW_START_LAP = env_int("PIT_WINDOW_START_LAP")     # earliest pit lap
+PIT_WINDOW_END_BUFFER = env_int("PIT_WINDOW_END_BUFFER")   # no pit in the last laps
+STOP_COUNTS = env_list("STOP_COUNTS", cast=int)
 SECTOR_COLUMNS = ["duration_sector_1", "duration_sector_2", "duration_sector_3"]
-SMOOTHNESS_AGES = [1, 18, NUM_LAPS]  # 18 = longest stint age seen in training
+SMOOTHNESS_AGES = env_list("SMOOTHNESS_CHECK_AGES", cast=int) + [NUM_LAPS]  # 18 = longest stint age seen in training
 
 
 # ============================================================
@@ -226,9 +231,9 @@ def simulate_strategy_fast(stint_totals, fuel_prefix, total_laps, compounds, pit
 # ============================================================
 def generate_strategies(total_laps):
     all_strats = []
-    pit_range = list(range(10, total_laps - 10))
+    pit_range = list(range(PIT_WINDOW_START_LAP, total_laps - PIT_WINDOW_END_BUFFER))
 
-    for stops in [0, 1, 2]:
+    for stops in STOP_COUNTS:
         for seq in itertools.product(COMPOUNDS, repeat=stops + 1):
             if stops == 0:
                 all_strats.append((seq, []))

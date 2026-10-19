@@ -128,6 +128,8 @@ All scripts live in scripts/ and use relative paths, so run them from inside scr
 master.py runs process_laps.py -> process_stints.py -> process_weather.py -> process_cardata.py -> feature_engineer.py -> train_model.py
 -> strategy_simulator.py -> validate_strategy.py, and stops at the first script that fails.
 Every script writes a log, a manifest and its intermediate outputs to scripts/results/<script_name>/.
+Settings (paths, file names, cleaning thresholds, model hyperparameters, seeds and race parameters such as NUM_LAPS and PIT_LOSS_S)
+live in .env at the repo root and are read through scripts/env_config.py. An environment variable of the same name overrides .env.
 Stages hand data to each other through CSVs in data/:
     process_laps.py      -> data/laps_combined_clean.csv
     process_stints.py    -> data/stints_combined_clean.csv

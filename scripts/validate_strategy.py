@@ -10,6 +10,7 @@ import warnings
 from datetime import datetime
 
 from feature_config import build_next_lap_target
+from env_config import env_str, env_int
 
 warnings.filterwarnings("ignore")
 
@@ -17,7 +18,7 @@ warnings.filterwarnings("ignore")
 # SETUP RESULTS DIRECTORY
 # ============================================================
 SCRIPT_NAME = "validate_strategy"
-RESULTS_DIR = f"./results/{SCRIPT_NAME}"
+RESULTS_DIR = f"{env_str('RESULTS_ROOT')}/{SCRIPT_NAME}"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 log_path = f"{RESULTS_DIR}/{SCRIPT_NAME}_log.txt"
@@ -33,9 +34,18 @@ def log(msg: str):
 
 
 # ============================================================
+# CONFIG
+# ============================================================
+DATASET_PATH = os.path.join(env_str("DATA_DIR"), env_str("ENGINEERED_FILE"))
+MODEL_BUNDLE_PATH = env_str("MODEL_BUNDLE_PATH")
+CV_FOLDS = env_int("CV_FOLDS")
+RANDOM_STATE = env_int("RANDOM_STATE")
+
+
+# ============================================================
 # LOAD MODEL + FEATURES
 # ============================================================
-bundle = joblib.load("./results/train_model/train_model_xgb_model.pkl")
+bundle = joblib.load(MODEL_BUNDLE_PATH)
 model = bundle["model"]
 FEATURES = bundle["features"]
 
@@ -45,7 +55,7 @@ log("Loaded model and feature metadata.")
 # ============================================================
 # LOAD DATA
 # ============================================================
-df = pd.read_csv("../data/final_engineered_dataset.csv")
+df = pd.read_csv(DATASET_PATH)
 
 log(f"Loaded dataset with {len(df)} rows.")
 
@@ -64,14 +74,14 @@ log(f"Rows after target shift drop: {len(df)}")
 # ============================================================
 # CROSS-VALIDATION
 # ============================================================
-kf = KFold(n_splits=5, shuffle=True, random_state=42)
+kf = KFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
 
 cv_mae = []
 cv_rmse = []
 
 fold_results = []
 
-log("\nRunning 5-fold cross-validation...")
+log(f"\nRunning {CV_FOLDS}-fold cross-validation...")
 
 for fold, (train_idx, test_idx) in enumerate(kf.split(X), 1):
     model.fit(X[train_idx], y[train_idx])

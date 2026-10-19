@@ -4,12 +4,14 @@ import os
 import re
 import ast
 
+from env_config import env_str, env_int, env_float, env_list
+
 
 # ============================================================
 # SETUP SCRIPT-SPECIFIC RESULTS DIRECTORY
 # ============================================================
 SCRIPT_NAME = "process_laps"
-RESULTS_DIR = f"./results/{SCRIPT_NAME}"
+RESULTS_DIR = f"{env_str('RESULTS_ROOT')}/{SCRIPT_NAME}"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 log_path = f"{RESULTS_DIR}/{SCRIPT_NAME}_log.txt"
@@ -26,9 +28,16 @@ def log(msg: str):
 # ============================================================
 # INPUT FILE CONFIG
 # ============================================================
-data_dir = "../data"
-laps_files = ["laps_p1.csv", "laps_p2.csv", "laps_p3.csv"]
+data_dir = env_str("DATA_DIR")
+laps_files = env_list("LAPS_FILES")
 cleaned_dfs = []
+
+# Cleaning thresholds (see .env)
+LAP_MIN_DURATION_S = env_float("LAP_MIN_DURATION_S")
+LAP_MAX_MEDIAN_MULTIPLE = env_float("LAP_MAX_MEDIAN_MULTIPLE")
+MIN_SPEED_KMH = env_float("MIN_SPEED_KMH")
+ROLLING_MEDIAN_WINDOW = env_int("ROLLING_MEDIAN_WINDOW")
+IQR_MULTIPLIER = env_float("IQR_MULTIPLIER")
 
 removed_rows_summary = []
 list_fix_summary = []
@@ -52,7 +61,7 @@ def apply_domain_filters(df, fname):
     # Unrealistic lap durations
     before = len(df)
     median_lap = df["lap_duration"].median()
-    df = df[(df["lap_duration"] > 30) & (df["lap_duration"] < 2 * median_lap)]
+    df = df[(df["lap_duration"] > LAP_MIN_DURATION_S) & (df["lap_duration"] < LAP_MAX_MEDIAN_MULTIPLE * median_lap)]
     removed = before - len(df)
     log(f"[{fname}] Removed {removed} extreme lap-time outliers")
     removed_rows_summary.append([fname, "unrealistic_laptime", removed])
@@ -61,7 +70,7 @@ def apply_domain_filters(df, fname):
     speed_cols = ["i1_speed", "i2_speed", "st_speed"]
     if all(col in df.columns for col in speed_cols):
         before = len(df)
-        df = df[(df[speed_cols] > 50).all(axis=1)]
+        df = df[(df[speed_cols] > MIN_SPEED_KMH).all(axis=1)]
         removed = before - len(df)
         log(f"[{fname}] Removed {removed} unrealistic-speed laps")
         removed_rows_summary.append([fname, "unrealistic_speed", removed])
@@ -75,15 +84,15 @@ def apply_iqr_residual_filter(df, fname):
         df["driver_number"] = 1  # fallback grouping
 
     df["rolling_median"] = df.groupby("driver_number")["lap_duration"].transform(
-        lambda x: x.rolling(5, center=True, min_periods=1).median()
+        lambda x: x.rolling(ROLLING_MEDIAN_WINDOW, center=True, min_periods=1).median()
     )
     df["residual"] = df["lap_duration"] - df["rolling_median"]
 
     Q1 = df["residual"].quantile(0.25)
     Q3 = df["residual"].quantile(0.75)
     IQR = Q3 - Q1
-    lower = Q1 - 3 * IQR
-    upper = Q3 + 3 * IQR
+    lower = Q1 - IQR_MULTIPLIER * IQR
+    upper = Q3 + IQR_MULTIPLIER * IQR
 
     before = len(df)
     df = df[(df["residual"] >= lower) & (df["residual"] <= upper)]
@@ -163,7 +172,7 @@ generated_files.append(combined_name)
 log(f"\nSaved combined dataset: {combined_name}")
 
 # Hand-off for feature_engineer.py
-handoff_path = os.path.join(data_dir, "laps_combined_clean.csv")
+handoff_path = os.path.join(data_dir, env_str("LAPS_CLEAN_FILE"))
 combined.to_csv(handoff_path, index=False)
 log(f"Saved hand-off dataset: {handoff_path}")
 

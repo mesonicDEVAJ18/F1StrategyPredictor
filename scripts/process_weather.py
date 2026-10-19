@@ -5,11 +5,13 @@ from sklearn.preprocessing import StandardScaler
 import os
 from datetime import datetime
 
+from env_config import env_str, env_float
+
 # ============================================================
 # SETUP SCRIPT-SPECIFIC RESULTS DIRECTORY
 # ============================================================
 SCRIPT_NAME = "process_weather"
-RESULTS_DIR = f"./results/{SCRIPT_NAME}"
+RESULTS_DIR = f"{env_str('RESULTS_ROOT')}/{SCRIPT_NAME}"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 log_path = f"{RESULTS_DIR}/{SCRIPT_NAME}_log.txt"
@@ -26,14 +28,17 @@ def log(msg: str):
 # ============================================================
 # INPUT FILES
 # ============================================================
-data_dir = Path("../data")
-input_file = data_dir / "weather.csv"
+data_dir = Path(env_str("DATA_DIR"))
+input_file = data_dir / env_str("WEATHER_FILE")
+
+# Weather rows with |z| above this are dropped
+ZSCORE_THRESHOLD = env_float("WEATHER_ZSCORE_THRESHOLD")
 
 if not input_file.exists():
-    raise FileNotFoundError("weather.csv not found at ../data")
+    raise FileNotFoundError(f"{input_file.name} not found at {data_dir}")
 
 weather = pd.read_csv(input_file)
-log(f"Loaded weather.csv with {len(weather)} rows")
+log(f"Loaded {input_file.name} with {len(weather)} rows")
 
 
 # ============================================================
@@ -42,7 +47,7 @@ log(f"Loaded weather.csv with {len(weather)} rows")
 # weather.csv covers the whole meeting (practice, qualifying, race); keep only
 # the sessions the lap data comes from so filtering/scaling reflect practice.
 practice_sessions = pd.concat(
-    pd.read_csv(f, usecols=["session_key"]) for f in sorted(data_dir.glob("laps_p*.csv"))
+    pd.read_csv(f, usecols=["session_key"]) for f in sorted(data_dir.glob(env_str("LAPS_GLOB")))
 )["session_key"].dropna().astype(int).unique()
 
 before = len(weather)
@@ -72,9 +77,9 @@ def zscore_outlier_filter(df, cols, fname):
             continue
 
         z = (df[col] - mean) / std
-        removed = (z.abs() > 3).sum()
+        removed = (z.abs() > ZSCORE_THRESHOLD).sum()
         removal_count += removed
-        df = df[z.abs() <= 3]
+        df = df[z.abs() <= ZSCORE_THRESHOLD]
 
     log(f"[{fname}] Removed {removal_count} weather outliers (Z-score)")
     return df, removal_count
@@ -136,7 +141,7 @@ generated_files.append(cleaned_name)
 log(f"Saved cleaned weather file: {cleaned_name}")
 
 # Hand-off for feature_engineer.py
-handoff_path = data_dir / "cleaned_weather.csv"
+handoff_path = data_dir / env_str("WEATHER_CLEAN_FILE")
 weather.to_csv(handoff_path, index=False)
 log(f"Saved hand-off dataset: {handoff_path}")
 

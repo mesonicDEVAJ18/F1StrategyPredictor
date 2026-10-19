@@ -1,6 +1,8 @@
+from env_config import env_float
+
 # Fuel effect (s per lap) used to build fuel_corrected_pace = lap_duration + k * laps_remaining.
 # Shared so the simulator can undo it exactly when it feeds predictions back.
-FUEL_EFFECT_K = 0.035
+FUEL_EFFECT_K = env_float("FUEL_EFFECT_K")
 
 # Practice session one-hot (named by order, so stable across weekends; session_key is an identifier only)
 SESSION_COLUMNS = ["session_FP1", "session_FP2", "session_FP3"]

@@ -13,6 +13,7 @@ from datetime import datetime
 
 from feature_config import MODEL_FEATURE_COLUMNS as FEATURES
 from feature_config import SESSION_COLUMNS, TARGET_GROUP_COLUMNS, build_next_lap_target
+from env_config import env_str, env_int, env_float
 
 warnings.filterwarnings("ignore")
 
@@ -20,7 +21,7 @@ warnings.filterwarnings("ignore")
 # SETUP RESULTS DIRECTORY
 # ======================================================
 SCRIPT_NAME = "train_model"
-RESULTS_DIR = f"./results/{SCRIPT_NAME}"
+RESULTS_DIR = f"{env_str('RESULTS_ROOT')}/{SCRIPT_NAME}"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 log_path = f"{RESULTS_DIR}/{SCRIPT_NAME}_log.txt"
@@ -35,11 +36,19 @@ def log(msg: str):
     log_file.write(safe_msg + "\n")
 
 # ======================================================
+# CONFIG
+# ======================================================
+DATASET_PATH = os.path.join(env_str("DATA_DIR"), env_str("ENGINEERED_FILE"))
+MODEL_BUNDLE_PATH = env_str("MODEL_BUNDLE_PATH")
+RANDOM_STATE = env_int("RANDOM_STATE")
+TEST_SIZE = env_float("TEST_SIZE")
+
+# ======================================================
 # LOAD DATA
 # ======================================================
 log("Loading engineered dataset...")
 
-df = pd.read_csv("../data/final_engineered_dataset.csv")
+df = pd.read_csv(DATASET_PATH)
 
 log(f"Dataset rows: {len(df)}")
 
@@ -83,7 +92,7 @@ log("Saved feature snapshot.")
 # TRAIN/TEST SPLIT
 # ======================================================
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.20, shuffle=True, random_state=42
+    X, y, test_size=TEST_SIZE, shuffle=True, random_state=RANDOM_STATE
 )
 log("Completed train/test split.")
 
@@ -93,14 +102,16 @@ log("Completed train/test split.")
 # ======================================================
 models = {
     "LinearRegression": LinearRegression(),
-    "RandomForest": RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1),
+    "RandomForest": RandomForestRegressor(
+        n_estimators=env_int("RF_N_ESTIMATORS"), random_state=RANDOM_STATE, n_jobs=-1
+    ),
     "XGBoost": XGBRegressor(
-        n_estimators=300,
-        learning_rate=0.05,
-        max_depth=7,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        random_state=42,
+        n_estimators=env_int("XGB_N_ESTIMATORS"),
+        learning_rate=env_float("XGB_LEARNING_RATE"),
+        max_depth=env_int("XGB_MAX_DEPTH"),
+        subsample=env_float("XGB_SUBSAMPLE"),
+        colsample_bytree=env_float("XGB_COLSAMPLE_BYTREE"),
+        random_state=RANDOM_STATE,
         objective="reg:squarederror",
     )
 }
@@ -172,7 +183,8 @@ log("Saved feature importance CSVs.")
 # ======================================================
 # SAVE MODEL + FEATURE METADATA
 # ======================================================
-model_file = f"{SCRIPT_NAME}_xgb_model.pkl"
+os.makedirs(os.path.dirname(MODEL_BUNDLE_PATH), exist_ok=True)
+model_file = os.path.basename(MODEL_BUNDLE_PATH)
 joblib.dump(
     {
         "model": fitted_models["XGBoost"],
@@ -180,7 +192,7 @@ joblib.dump(
         "medians": medians.to_dict(),
         "session_weights": session_weights.to_dict(),
     },
-    f"{RESULTS_DIR}/{model_file}"
+    MODEL_BUNDLE_PATH
 )
 generated_files.append(model_file)
 

@@ -24,6 +24,7 @@ code and this file disagree, trust the code; when the *reasoning* is unclear, tr
 ```
 scripts/            # ALL pipeline code lives here; run scripts FROM this directory
   master.py             # orchestrator — runs the whole pipeline in order
+  env_config.py         # loads ../.env into os.environ; env_str/env_int/env_float/env_list getters
   feature_config.py     # shared column lists (MODEL_FEATURE_COLUMNS, SIM_FEATURE_COLUMNS, SESSION_COLUMNS)
   process_laps.py       # clean lap data (kept in s / km/h, not scaled), tag session_name FP1-3
   process_stints.py     # clean stints, one-hot encode compound
@@ -36,6 +37,7 @@ scripts/            # ALL pipeline code lives here; run scripts FROM this direct
   results/<script>/     # per-script outputs (logs, intermediate CSVs, plots, model)
 data/               # raw + cleaned CSVs (OpenF1 downloads and pipeline hand-offs)
 results/            # stray: empty validate_strategy log from running a script outside scripts/
+.env                # pipeline settings (paths, thresholds, hyperparameters, race constants); committed, no secrets
 requirements.txt    # pinned deps (NOTE: UTF-16 encoded — see below)
 README.md           # higher-level project overview
 readme.txt          # detailed methodology write-up (source of truth for "why")
@@ -117,6 +119,11 @@ Every pipeline script follows the same house style — match it when adding or e
   [feature_config.py](scripts/feature_config.py) (`MODEL_FEATURE_COLUMNS` /
   `SIM_FEATURE_COLUMNS`). If you change the feature set, change it there so training,
   simulation, and validation stay consistent.
+- **Settings live in `.env`**: never hard-code a tunable value or a path/file name in a script. Add a
+  commented key to the repo-root `.env` and read it once at module level with the getters from
+  [env_config.py](scripts/env_config.py). A missing key raises (there are no silent defaults), and an
+  environment variable of the same name overrides `.env`. Schema definitions (column lists, `COMPOUNDS`)
+  stay in code (diagnostic.md #22).
 - **Compound one-hot columns** are `compound_HARD`, `compound_MEDIUM`, `compound_SOFT`.
 - **Session one-hot columns** are `session_FP1`, `session_FP2`, `session_FP3` (`SESSION_COLUMNS` in
   feature_config.py), named by practice order so they stay the same on any weekend.
