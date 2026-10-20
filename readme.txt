@@ -213,7 +213,7 @@ Not scaled. lap_duration, the sector times and the speed traps stay in physical 
 Linear Regression, Random Forest and XGBoost give the same fit whether or not a column is rescaled with one mean/std. Trees split on the order
 of values, and linear regression just rescales its coefficients. So a global scaler would change only the units. An earlier version fitted a
 scaler per session. That did change the data: it removed each session's pace level. But it put the target in z-scores, and the race has no
-session scaler to convert predictions back with. The simulator was adding second-based fuel and pit penalties to z-scores (diagnostic.md #7).
+session scaler to convert predictions back with. The simulator was adding second-based fuel and pit penalties to z-scores.
 Now fuel_corrected_pace, every prediction, the simulator and the error metrics are all in seconds. Session-level differences are handled by
 the session one-hot instead.
 
@@ -420,11 +420,9 @@ The solution is stable and not sensitive to minor model noise
 KNOWN ISSUES
 Known bugs and their effect on the results are documented in diagnostic.md.
 Open TODOs by priority (IDs as in diagnostic.md; each is tagged [TODO #N, ...] where it applies above):
-P1, results are invalid until fixed:  #8 illegal strategies, #11 pit lap missing from sum, #19 fuel correction sign
+P1, results are invalid until fixed:  #11 pit lap missing from sum, #19 fuel correction sign
 P2, method or validation misleading:  #18 splits mix laps of one stint, #6 residual plot leakage, #5 placeholder t-test,
                                       #13 model choice, #20 slow non-push laps
-(Fixed: #1 weather event, #2 stint merge key, #3 stint/session mask, #4 cross-driver target, #7 mixed units, #9 autoregressive rollout,
- #10 tyre age reset, #14 car-data stage, #17 stint_avg_pace target leak, #22 hardcoded settings.)
 P3, completeness and cleanup:         #12 dead starting-compound setting, #16 car data not a model input, #21 tyre-set tracking,
                                       #15 results documentation
 [TODO #15, P3, see diagnostic.md] Results are not written up yet. Do this after the P1 fixes, since the numbers will change.

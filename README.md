@@ -135,7 +135,7 @@ Environmental conditions:
 - `segments_sector_1/2/3`: List of mini-sector codes replaced by its length
 
 **4. Normalization**
-- **Laps**: Not scaled. Lap times, sector times and speeds stay in seconds and km/h. The models are unaffected by a global rescale, and per-session scaling erased each session's pace level and left predictions in z-scores (diagnostic.md #7, fixed)
+- **Laps**: Not scaled. Lap times, sector times and speeds stay in seconds and km/h. The models are unaffected by a global rescale, and per-session scaling erased each session's pace level and left predictions in z-scores
 - **Weather**: StandardScaler on temperature, humidity, pressure, wind speed, rainfall
 - **Wind direction**: Kept raw (circular variable)
 
@@ -256,7 +256,6 @@ Current output: HARD–HARD–SOFT with stops on laps 12 and 24, 6023.36 s. This
 - **Simulation stability** (logged by `strategy_simulator.py`): fcp at tyre ages 1, 18 and 57 of a full-length rollout, plus the largest lap-to-lap step.
   - No runaway drift: every rollout stays within 99–111 s.
   - Not fully smooth: each compound steps up by about 7–8 s within a few laps (HARD from tyre age ~5, SOFT ~11, MEDIUM ~16) and then plateaus near 109–110 s; the largest single step is about 5 s.
-  - See diagnostic.md #9.
 
 ### Strategy Validation *(planned, not implemented yet)*
 - Simulate multiple race conditions with variations
