@@ -211,9 +211,9 @@ Built by `build_next_lap_target()` in `scripts/feature_config.py`: the same driv
 
 ### 1. Strategy Space Generation
 
-Enumerate strategies for a 57-lap race (18,318 in total):
-- **Stop configurations**: 0-stop, 1-stop, 2-stop
-- **Compound sequences**: Every SOFT/MEDIUM/HARD sequence (the two-compound rule is not enforced yet)
+Enumerate strategies for a 57-lap race (16,206 in total):
+- **Stop configurations**: 1-stop, 2-stop (0 stops can't use two compounds)
+- **Compound sequences**: Every SOFT/MEDIUM/HARD sequence that uses at least two different compounds (the dry-race rule)
 - **Pit windows**: Pit laps between lap 10 and lap 46
 
 ### 2. Lap Time Prediction
@@ -235,7 +235,7 @@ For each compound and every stint length L = 1–57, roll the stint forward from
 Minimize: Total Race Time (s) = Σ(stint lap times) + 22 s × number of pit stops
 ```
 
-Current output: HARD–HARD–SOFT with stops on laps 12 and 24, 6023.36 s. This is not a valid recommendation yet: the pit lap is never summed (diagnostic.md #11), so each stop drops a ~100–110 s lap for 22 s of pit loss, which favours 2 stops, and the two-compound rule is not enforced (#8).
+Current output: HARD–HARD–SOFT with stops on laps 12 and 24, 6023.36 s. This is not a valid recommendation yet: the pit lap is never summed (diagnostic.md #11), so each stop drops a ~100–110 s lap for 22 s of pit loss, which favours 2 stops.
 
 ### 4. Optimization Engine
 

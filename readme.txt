@@ -333,11 +333,12 @@ This choice also aligns with how real-world motorsport predictive pipelines are 
 RACE SIMULATION AND OPTIMISATION (strategy_simulator.py)
 1. Generate the strategy space
 A 57-lap race is assumed. Strategies are enumerated by brute force over:
-0-stop, 1-stop and 2-stop structures
-Every compound sequence for that structure (any of SOFT/MEDIUM/HARD per stint, repeats allowed)
+1-stop and 2-stop structures
+Every compound sequence for that structure that uses at least two different compounds (the dry-race rule; repeats allowed, e.g.
+HARD-HARD-SOFT). Single-compound sequences are dropped, and so are 0-stop strategies, since one stint can only use one compound.
 Every combination of pit laps between lap 10 and lap 46
-This gives 18,318 candidate strategies. The rule that at least two compounds must be used is not enforced yet.
-[TODO #8, P1, see diagnostic.md] Drop 0-stop and single-compound sequences (keep len(set(seq)) >= 2).
+This gives 16,206 candidate strategies (222 one-stop, 15,984 two-stop). The stop counts and the minimum number of compounds are
+STOP_COUNTS and MIN_COMPOUNDS_USED in .env.
 
 2. Lap time prediction (autoregressive stint rollout)
 Every stint is priced from fresh: for each compound and every stint length L = 1..57, the stint is rolled forward from tyre age 1, so tyre
@@ -370,12 +371,11 @@ This gives a single scalar number for each strategy, allowing direct comparison.
 the 22 s pit loss.
 
 4. Strategy optimisation
-All 18,318 strategies are evaluated and the one with the lowest predicted race time is selected.
+All 16,206 strategies are evaluated and the one with the lowest predicted race time is selected.
 Results: scripts/results/strategy_simulator/ (all_strategy_results.csv, best_strategy.json, final_summary.txt).
 Current output: HARD-HARD-SOFT, pit stops on laps 12 and 24, total 6023.36 s. The best 1-stop (HARD-SOFT, pit on lap 11) is 121.58 s slower.
 [TODO #11, P1, see diagnostic.md] Each stop drops its pit lap (~100-110 s) from the total for 22 s of pit loss, which favours 2 stops.
 It is not a valid recommendation.
-[TODO #8, P1, see diagnostic.md] Single-compound and 0-stop sequences are still in the search space (the current winner happens to use two).
 
 Future work: Dynamic Programming to prune inferior strategies and an optional Genetic Algorithm for deeper search across larger sequences.
 

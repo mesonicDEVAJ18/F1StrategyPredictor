@@ -67,11 +67,14 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - **Effect on metrics** (now in seconds): held-out MAE 12.12 / 10.65 / 10.51 s, RMSE 16.61 / 15.50 / 15.13 s and R² 0.586 / 0.640 / 0.656 (LR/RF/XGB; R² was 0.534 / 0.625 / 0.652). XGBoost 5-fold CV MAE 9.81 s, RMSE 14.05 s. The errors are large in seconds because the target still includes slow non-push laps (#20). The session one-hots have XGB importance 0.020 / 0.009 / 0.045. `stint_avg_pace` is still top at 0.260 (#17).
     - **Effect on strategy:** predicted laps are 103–112 s and the best total is 6055.98 s (SOFT–SOFT–SOFT, pits on laps 10 and 11). This is still **not** a valid recommendation. Pitting on consecutive laps leaves an empty middle stint, and the two laps never summed are worth more than the 44 s of pit loss (#11). The middle compound doesn't matter, so SOFT–MEDIUM–SOFT and SOFT–HARD–SOFT tie (#8).
 
-- [ ] **#8 Illegal strategies are allowed**
+- [x] **#8 Illegal strategies are allowed**
   - **Where:** `generate_strategies()` in `scripts/strategy_simulator.py`.
   - **Problem:** it includes 0-stop strategies and sequences that use a single compound, which the two-compound rule forbids. The current recommendation (HARD, no stop) is one of these.
   - **Fix:** keep only sequences with `len(set(seq)) >= 2`.
   - **readme.txt:** Race Simulation steps 1 and 4.
+  - **Fixed:** `generate_strategies()` skips every compound sequence with fewer than `MIN_COMPOUNDS_USED` (`.env`, 2) distinct compounds and logs how many strategies it dropped. A 0-stop strategy has one compound, so the filter rules it out even if `STOP_COUNTS` includes 0. `STOP_COUNTS` in `.env` is now `1,2`.
+    - **Strategy space:** 18,318 → 16,206. 1-stop: 6 sequences × 37 pit laps = 222. 2-stop: 24 sequences × 666 pit pairs = 15,984. The 2,109 dropped (3 × 37 + 3 × 666) are SOFT–SOFT, HARD–HARD–HARD and the like. Checked on `strategy_simulator_all_strategy_results.csv`: every row uses ≥2 compounds, and none has 0 stops.
+    - **Effect on strategy:** none on the winner, which already used two compounds. It is still HARD–HARD–SOFT, pits on laps 12 and 24, 6023.36 s. The best 1-stop is still HARD–SOFT, pit on lap 11, 6144.94 s. The previous best 0-stop (MEDIUM, 6178.24 s) is no longer a candidate. It is still **not** a valid recommendation, because of #11.
 
 - [x] **#10 Tyre age does not reset after a pit stop**
   - **Where:** `precompute_lap_predictions()` / `stint_time()` in `scripts/strategy_simulator.py`.

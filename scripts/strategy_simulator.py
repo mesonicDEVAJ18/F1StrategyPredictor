@@ -59,6 +59,7 @@ RACE_TYRE_AGE_AT_START = env_int("RACE_TYRE_AGE_AT_START") # new set unless set 
 PIT_WINDOW_START_LAP = env_int("PIT_WINDOW_START_LAP")     # earliest pit lap
 PIT_WINDOW_END_BUFFER = env_int("PIT_WINDOW_END_BUFFER")   # no pit in the last laps
 STOP_COUNTS = env_list("STOP_COUNTS", cast=int)
+MIN_COMPOUNDS_USED = env_int("MIN_COMPOUNDS_USED")         # two-compound rule (diagnostic.md #8)
 SECTOR_COLUMNS = ["duration_sector_1", "duration_sector_2", "duration_sector_3"]
 SMOOTHNESS_AGES = env_list("SMOOTHNESS_CHECK_AGES", cast=int) + [NUM_LAPS]  # 18 = longest stint age seen in training
 
@@ -231,16 +232,22 @@ def simulate_strategy_fast(stint_totals, fuel_prefix, total_laps, compounds, pit
 # ============================================================
 def generate_strategies(total_laps):
     all_strats = []
+    dropped = 0
     pit_range = list(range(PIT_WINDOW_START_LAP, total_laps - PIT_WINDOW_END_BUFFER))
 
     for stops in STOP_COUNTS:
         for seq in itertools.product(COMPOUNDS, repeat=stops + 1):
+            # Illegal: fewer distinct compounds than the rule requires (this also rules out 0 stops)
+            if len(set(seq)) < MIN_COMPOUNDS_USED:
+                dropped += 1 if stops == 0 else len(list(itertools.combinations(pit_range, stops)))
+                continue
             if stops == 0:
                 all_strats.append((seq, []))
             else:
                 for pits in itertools.combinations(pit_range, stops):
                     all_strats.append((seq, list(pits)))
 
+    log(f"Dropped {dropped} strategies using fewer than {MIN_COMPOUNDS_USED} compounds.")
     return all_strats
 
 

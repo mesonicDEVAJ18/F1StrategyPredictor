@@ -9,7 +9,8 @@ Rollout check (stint of 57 laps, fcp in s):
   SOFT: age 1: 100.94, age 18: 109.30, age 57: 109.72, max |lap-to-lap step|: 5.23
   MEDIUM: age 1: 100.94, age 18: 106.62, age 57: 110.23, max |lap-to-lap step|: 3.89
   HARD: age 1: 100.94, age 18: 108.72, age 57: 109.84, max |lap-to-lap step|: 2.75
-Total strategies to evaluate: 18318
+Dropped 2109 strategies using fewer than 2 compounds.
+Total strategies to evaluate: 16206
 Best strategy:
 {'best_compound_sequence': ('HARD', 'HARD', 'SOFT'), 'best_pit_laps': [12, 24], 'best_total_time': 6023.361798905193, 'time_units': 'seconds'}
 
