@@ -391,8 +391,9 @@ rollout fcp plus the fuel of its race laps.
 3. Objective function: minimize total race time
 For each candidate strategy, total race time (seconds) = sum of predicted lap times of each stint + 22 s per pit stop.
 This gives a single scalar number for each strategy, allowing direct comparison.
-[TODO #11, P1, see diagnostic.md] The pit lap itself is never summed, so each stop removes a whole lap (~110 s) from the total, far more than
-the 22 s pit loss.
+Every race lap is summed exactly once. "Pit on lap p" means the car comes in at the end of lap p: lap p is the in-lap, the last lap of
+the old stint, and the next stint starts on lap p + 1. The 22 s pit loss (PIT_LOSS_S) covers the in- and out-lap time loss and is added on
+top of the laps.
 
 4. Strategy optimisation
 This is run separately for each car in RACE_CARS (16 and 44). Strategies that need more sets of a compound than the car has left are skipped
@@ -401,11 +402,16 @@ compound sequence and set of pit laps, the fastest choice of the car's sets is k
 Results: scripts/results/strategy_simulator/ (all_strategy_results.csv with car_number and set_ages, best_strategy.json per car,
 final_summary.txt).
 Current output (set ages at the start of each stint in brackets):
-car 16: SOFT(6)-SOFT(0)-HARD(0), pits on laps 18 and 38, 5890.48 s (tied with SOFT(6)-HARD(0)-SOFT(0): the last two stints are both 19 laps). The best 1-stop (HARD(0)-SOFT(6), pit on lap 20) is 211.16 s slower.
-car 44: MEDIUM(3)-SOFT(4)-SOFT(5), pits on laps 18 and 38, 5856.92 s. The best 1-stop (MEDIUM(3)-SOFT(4), pit on lap 18) is 215.68 s slower.
-The model's preference for used sets comes from the new-set second lap described in step 2 (#20). It is not tyre physics.
-[TODO #11, P1, see diagnostic.md] Each stop drops its pit lap (~100-110 s) from the total for 22 s of pit loss, which favours 2 stops.
-It is not a valid recommendation.
+car 16: SOFT(0)-SOFT(0)-HARD(0), pits on laps 19 and 38, 6113.18 s (three 19-lap stints, so any order of these sets ties). Swapping in
+the used SOFT(6) set is 3.42 s slower. The best 1-stop (SOFT(6)-HARD(0), pit on lap 38) is 101.37 s slower.
+car 44: MEDIUM(3)-SOFT(4)-SOFT(5), pits on laps 17 and 40, 6082.41 s (any order of these sets with stints of 17, 17 and 23 laps ties).
+The best 1-stop (MEDIUM(3)-SOFT(4), pit on lap 17) is 102.60 s slower.
+Every lap carries the same race fuel term whatever the strategy, so a total depends only on which stints (compound, set age, length) it uses.
+2 stops win because each rollout steps up by 6-13 s within about 14-20 stint laps and then plateaus (step 2), so three short stints keep
+more laps on the fast early part. Car 44's preference for used sets comes from the new-set second lap described in step 2 (#20). Neither is
+tyre physics.
+[TODO #19, P1, see diagnostic.md] The fuel correction behind fcp is still wrong, and the slow non-push laps (#20) are still in training, so
+this is not a valid recommendation yet.
 
 Future work: Dynamic Programming to prune inferior strategies and an optional Genetic Algorithm for deeper search across larger sequences.
 
@@ -453,7 +459,7 @@ The solution is stable and not sensitive to minor model noise
 KNOWN ISSUES
 Known bugs and their effect on the results are documented in diagnostic.md.
 Open TODOs by priority (IDs as in diagnostic.md; each is tagged [TODO #N, ...] where it applies above):
-P1, results are invalid until fixed:  #11 pit lap missing from sum, #19 fuel correction sign
+P1, results are invalid until fixed:  #19 fuel correction sign
 P2, method or validation misleading:  #18 splits mix laps of one stint, #6 residual plot leakage, #5 placeholder t-test,
                                       #13 model choice, #20 slow non-push laps
 P3, completeness and cleanup:         #12 dead starting-compound setting, #16 car data not a model input, #15 results documentation

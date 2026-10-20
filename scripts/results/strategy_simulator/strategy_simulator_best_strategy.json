@@ -8,15 +8,15 @@
         "HARD"
       ],
       "best_set_ages_at_start": [
-        6,
+        0,
         0,
         0
       ],
       "best_pit_laps": [
-        18,
+        19,
         38
       ],
-      "best_total_time": 5890.481805653497
+      "best_total_time": 6113.18489579221
     },
     "44": {
       "best_compound_sequence": [
@@ -30,10 +30,10 @@
         5
       ],
       "best_pit_laps": [
-        18,
-        38
+        17,
+        40
       ],
-      "best_total_time": 5856.915533912392
+      "best_total_time": 6082.413736987517
     }
   }
 }

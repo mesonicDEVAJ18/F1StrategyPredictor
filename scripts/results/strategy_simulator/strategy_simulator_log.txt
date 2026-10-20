@@ -22,14 +22,14 @@ Dropped 2109 strategies using fewer than 2 compounds.
 Total strategies to evaluate per car: 16206
 
 Car 16: 3996 strategies skipped (not enough sets of a compound), 12210 evaluated
-Car 16 best strategy: {'best_compound_sequence': ('SOFT', 'SOFT', 'HARD'), 'best_set_ages_at_start': (6, 0, 0), 'best_pit_laps': [18, 38], 'best_total_time': 5890.481805653497}
+Car 16 best strategy: {'best_compound_sequence': ('SOFT', 'SOFT', 'HARD'), 'best_set_ages_at_start': (0, 0, 0), 'best_pit_laps': [19, 38], 'best_total_time': 6113.18489579221}
 
 Car 44: 3996 strategies skipped (not enough sets of a compound), 12210 evaluated
-Car 44 best strategy: {'best_compound_sequence': ('MEDIUM', 'SOFT', 'SOFT'), 'best_set_ages_at_start': (3, 4, 5), 'best_pit_laps': [18, 38], 'best_total_time': 5856.915533912392}
+Car 44 best strategy: {'best_compound_sequence': ('MEDIUM', 'SOFT', 'SOFT'), 'best_set_ages_at_start': (3, 4, 5), 'best_pit_laps': [17, 40], 'best_total_time': 6082.413736987517}
 
 OPTIMIZATION COMPLETE
-Car 16: ('SOFT', 'SOFT', 'HARD'), set ages (6, 0, 0), pits [18, 38], time 5890.48 s
-Car 44: ('MEDIUM', 'SOFT', 'SOFT'), set ages (3, 4, 5), pits [18, 38], time 5856.92 s
+Car 16: ('SOFT', 'SOFT', 'HARD'), set ages (0, 0, 0), pits [19, 38], time 6113.18 s
+Car 44: ('MEDIUM', 'SOFT', 'SOFT'), set ages (3, 4, 5), pits [17, 40], time 6082.41 s
 
 FILES GENERATED:
   - strategy_simulator_stint_rollouts.csv

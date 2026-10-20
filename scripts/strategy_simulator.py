@@ -235,9 +235,11 @@ def simulate_strategy_fast(stint_totals, fuel_prefix, total_laps, compounds, set
     pit_laps = sorted(pit_laps)
     segments = []
 
+    # Every race lap is summed once: lap p is the in-lap (last lap of the old stint),
+    # the next stint starts on lap p + 1, and PIT_LOSS is added on top
     last = 1
     for p in pit_laps:
-        segments.append((last, p - 1))
+        segments.append((last, p))
         last = p + 1
     segments.append((last, total_laps))
 

@@ -84,12 +84,18 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **Fixed** (together with #9): `precompute_stint_rollouts()` rolls every compound out for every stint length L = 1..57, always from tyre age 1 (`laps_since_stint_start` = 1 on the stint's first lap). `stint_time()` prices a stint as the summed predicted fcp of the L-lap rollout plus the race fuel term (`FUEL_PENALTY_PER_LAP` × fuel on board) of the race laps it covers. So a stint costs the same wherever it starts, apart from the fuel. Race stints originally always started on a new set; since #21 they start at the age of the set the car fits.
     - **Training range:** `laps_since_stint_start` is 2–18 in training (pit-out laps are cleaned out). Age 1 is treated like 2. Beyond 18, XGBoost's response to tyre age is flat, so any later change comes from the fed-back inputs (#9).
 
-- [ ] **#11 The pit lap is missing from the race-time sum**
+- [x] **#11 The pit lap is missing from the race-time sum**
   - **Where:** `simulate_strategy_fast()` in `scripts/strategy_simulator.py`.
   - **Problem:** stints are summed over `(last, p - 1)`, then `last = p + 1`, so lap `p` is never counted. The pit loss replaces a whole lap instead of being added to it.
   - **Effect:** now that #7 is fixed, a dropped lap (~100–110 s) outweighs the 22 s pit loss, so every extra stop makes a strategy look faster. The optimiser picks 2 stops on consecutive laps (12 and 13 since #9/#10; 10 and 11 before). The middle "stint" is empty and two laps go missing from the total.
   - **Fix:** sum every race lap exactly once and add the pit loss on top.
   - **readme.txt:** Race Simulation step 3.
+  - **Fixed:** stints are now summed over `(last, p)`, then `last = p + 1`. "Pit on lap `p`" means the car comes in at the end of lap `p`: lap `p` is the in-lap, the last lap of the old stint, and the next stint starts on lap `p + 1`. The in- and out-lap time loss is all in `PIT_LOSS_S`, which is added once per stop on top of the laps. The pit window (laps 10–46) and the strategy space are unchanged. Consecutive pit laps now give a 1-lap middle stint instead of an empty one.
+    - **Checks:** on all 24,420 rows of `strategy_simulator_all_strategy_results.csv`, the stint lengths sum to 57 and are each ≥ 1. Each `total_time` equals the summed `stint_totals` of its stints + the full-race fuel term + 22 s × stops, to within 3e-12 s. The rollouts and stint totals are unchanged; only the race sum moved. Because every lap is counted once, the race fuel term is the same for every strategy, so a total depends only on which (compound, set age, stint length) stints it uses.
+    - **Effect on strategy:** each total rises by about one lap per stop. 2 stops still win, but by about 100 s instead of ~210 s, and consecutive pit laps no longer do (best one is 104–113 s behind the winner).
+      - **Car 16:** SOFT(0)–SOFT(0)–HARD(0), pits on laps 19 and 38 (three 19-lap stints), 6113.18 s. SOFT–HARD–SOFT and HARD–SOFT–SOFT on the same sets and laps tie with it. Swapping in the used SOFT(6) set is 3.42 s slower. Best 1-stop: SOFT(6)–HARD(0), pit on lap 38, 6214.55 s (+101.37 s). Was SOFT(6)–SOFT(0)–HARD(0), 18 and 38, 5890.48 s.
+      - **Car 44:** MEDIUM(3)–SOFT(4)–SOFT(5), pits on laps 17 and 40, 6082.41 s. Any order of the same three sets with stints of 17, 17 and 23 laps ties with it, e.g. pits on 17 and 34. Best 1-stop: MEDIUM(3)–SOFT(4), pit on lap 17, 6185.01 s (+102.60 s). Was the same sets, 18 and 38, 5856.92 s.
+      - 2 stops still win because each rollout steps up 6–13 s within about 14–20 stint laps and then plateaus, so three short stints keep more laps on the fast early part. That shape comes from practice data with #20 still open, and #19 is still open, so this is still **not** a valid recommendation.
 
 - [ ] **#19 The fuel correction has the wrong sign and horizon**
   - **Where:** `fuel_corrected_pace` in `scripts/feature_engineer.py`.

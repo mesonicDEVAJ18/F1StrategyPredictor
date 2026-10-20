@@ -239,10 +239,12 @@ Minimize: Total Race Time (s) = Σ(stint lap times) + 22 s × number of pit stop
 ```
 
 Current output (set age at the start of each stint in brackets):
-- car 16: SOFT(6)–SOFT(0)–HARD(0), stops on laps 18 and 38, 5890.48 s (tied with SOFT(6)–HARD(0)–SOFT(0))
-- car 44: MEDIUM(3)–SOFT(4)–SOFT(5), stops on laps 18 and 38, 5856.92 s
+- car 16: SOFT(0)–SOFT(0)–HARD(0), stops on laps 19 and 38, 6113.18 s (three 19-lap stints, so any order of these sets ties); best 1-stop is 101.37 s slower
+- car 44: MEDIUM(3)–SOFT(4)–SOFT(5), stops on laps 17 and 40, 6082.41 s; best 1-stop is 102.60 s slower
 
-The preference for used sets is learnt from practice, not tyre physics. On a new set, the model predicts a slow second lap (~113 s), because practice runs on new sets are mostly push lap then cool-down lap, and the cool-down laps are still in the data (#20). This is not a valid recommendation yet: the pit lap is never summed (diagnostic.md #11), so each stop drops a ~100–110 s lap for 22 s of pit loss, which favours 2 stops.
+Every race lap is summed once: "stop on lap p" means lap p is the in-lap and the next stint starts on lap p + 1, with the 22 s pit loss on top (diagnostic.md #11).
+
+None of this is tyre physics yet. 2 stops win because every rollout steps up by 6–13 s within about 14–20 stint laps and then plateaus. Car 44 prefers its used sets because the model predicts a slow second lap (~113 s) on a new set: practice runs on new sets are mostly push lap then cool-down lap, and the cool-down laps are still in the data (#20). With #19 (fuel correction) and #20 still open, this is not a valid recommendation yet.
 
 ### 4. Optimization Engine
 
