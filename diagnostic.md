@@ -99,16 +99,28 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
 
 ## P2: method or validation is misleading
 
-- [ ] **#17 `stint_avg_pace` contains the target lap**
+- [x] **#17 `stint_avg_pace` contains the target lap**
   - **Where:** the leave-one-out `stint_avg_pace` in `scripts/feature_engineer.py`.
   - **Problem:** it averages `lap_duration` over every other lap of the stint, and that includes lap *t+1*. The target is lap *t+1*'s `fuel_corrected_pace`, which is that same `lap_duration` plus a fuel term, so part of the target is fed in as an input.
   - **Effect:** it is the top feature by far (importance 0.25 XGB, 0.46 RF), so the R² of ~0.65 after #4 is probably inflated. The simulator sets it to 0, so the model's main signal is missing when it predicts.
   - **Fix:** use only laps before *t* (an expanding mean of the stint so far, NaN or median on the first lap), or drop the feature.
   - **readme.txt:** Feature Engineering, stint_avg_pace.
+  - **Fixed:** `feature_engineer.py` now builds `stint_avg_pace` as the mean `lap_duration` of the stint's earlier laps only (per `(driver_number, stint_number)`, ordered by `lap_number`: `shift(1).expanding().mean()`). Lap *t* itself is left out, since it is already an input through the sector times. This is the definition the simulator's rollout already used (#9), so training and simulation now agree.
+    - **First lap:** NaN on the first cleaned lap of each stint (260 rows). `train_model.py` already fills it with the training median, which is also the simulator's lap-1 seed. `validate_strategy.py` passed NaN straight to XGBoost; it now fills with the bundle's `medians` too, so CV sees the same inputs as training.
+    - **Checks:** on all 839 laps, the value equals the mean of the earlier laps of the same driver and stint (0 mismatches), and it is NaN on exactly the 260 first laps. Rows are unchanged: 839 engineered, 514 after the target.
+    - **Effect on metrics:** held-out MAE 16.62 / 12.54 / 12.06 s, RMSE 20.44 / 17.03 / 15.91 s and R² 0.373 / 0.565 / 0.620 (LR/RF/XGB; was 0.586 / 0.640 / 0.656). XGBoost 5-fold CV MAE 12.02 s, RMSE 16.32 s (was 9.81 / 14.05 s). XGBoost is still the best of the three (#13). These still use the shuffled per-lap split (#18).
+    - **Feature importance:** `stint_avg_pace` fell from 0.260 to 0.045 (XGB, now 10th) and from 0.492 to 0.037 (RF, now 7th). XGB's top five are now `track_temperature` 0.110, `i2_speed` 0.106, `st_speed` 0.073, `duration_sector_3` 0.072 and `pressure` 0.065. RF's are led by `i2_speed` 0.233 and `duration_sector_3` 0.212.
+    - **Rollout behaviour** (57-lap stint, fcp in s):
+      - SOFT: 100.94 at age 1, 109.30 at 18, 109.72 at 57
+      - MEDIUM: 100.94 → 106.62 → 110.23
+      - HARD: 100.94 → 108.72 → 109.84
+      - Each compound stays near 99–102 s for a few laps, then steps up by 7–8 s over 2–4 laps (HARD from age ~5, SOFT ~11, MEDIUM ~16) and plateaus near 109–110 s. The early ±3 s zig-zag is gone; the largest lap-to-lap step is 2.8–5.2 s (was 5.7–6.4 s). All rollouts stay within 98.98–110.39 s.
+      - HARD degrading first and MEDIUM last is still not tyre physics (#18, #20).
+    - **Effect on strategy:** the best total is now 6023.36 s, HARD–HARD–SOFT with pits on laps 12 and 24 (was SOFT–SOFT–SOFT, 12 and 13, 5695.12 s). Neighbouring pit laps are within 1 s. The best 1-stop is HARD–SOFT, pit on lap 11, 6144.94 s, and the best 0-stop is MEDIUM at 6178.24 s. Each extra stop still drops its ~100–110 s pit lap for 22 s of pit loss, so #11 still favours more stops and this is still **not** a valid recommendation. The winner happens to use two compounds, but #8 is still open.
 
 - [ ] **#18 Train/test splits mix laps from the same stint**
   - **Where:** `train_test_split(..., shuffle=True)` in `scripts/train_model.py` and `KFold(n_splits=5, shuffle=True)` in `scripts/validate_strategy.py`.
-  - **Problem:** rows are shuffled one lap at a time, so most stints have laps in both the training and the test set. Consecutive laps of one stint are highly correlated (same driver, car, tyre, fuel and conditions), and with #17 the test laps' own lap times are spread through the training rows.
+  - **Problem:** rows are shuffled one lap at a time, so most stints have laps in both the training and the test set. Consecutive laps of one stint are highly correlated (same driver, car, tyre, fuel and conditions), and before #17 was fixed the test laps' own lap times were spread through the training rows.
   - **Effect:** the test and CV scores measure interpolation within stints the model has already seen, not prediction on a new stint (which is what the simulator does). They overstate the model.
   - **Fix:** split by stint with `GroupShuffleSplit` / `GroupKFold`, grouped on `(driver_number, stint_number)` (or by session, or by driver, for a stricter test). Both id columns are in the engineered dataset since #4.
   - **readme.txt:** ML Modelling, training (80/20 split); Evaluation step 1, cross-validation.
@@ -134,7 +146,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - **Step:** the model predicts lap *a+1*'s fcp from lap *a*'s state (the training relationship), still averaged over the session one-hots (`predict_fcp()`).
     - **Feedback:** the prediction is turned back into a raw lap time by undoing training's fuel term, `raw = fcp − FUEL_EFFECT_K × (L − age)` for a stint of L laps. This needs one rollout per (compound, L): 4959 laps in total, about 6 s. It then becomes the next state:
       - the sector times are the median sector shares scaled to sum to `raw`
-      - `stint_avg_pace` is the mean of the stint's earlier raw laps (the causal form #17 proposes; training still uses the leave-one-out mean)
+      - `stint_avg_pace` is the mean of the stint's earlier raw laps (the causal form #17 proposed; training uses it too since #17 was fixed)
       - `laps_since_stint_start` goes up by one
       - `fuel_corrected_pace` holds the lap's fcp instead of a 0.0 dummy
     - **Held fixed:** speeds, segment counts and weather stay at the medians. The k = 0.035 used to build fcp is now `FUEL_EFFECT_K` in `feature_config.py`, shared by `feature_engineer.py` and the simulator.
@@ -169,9 +181,9 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
 
 - [ ] **#13 The saved model is the weakest of the three on the test split**
   - **Where:** `scripts/train_model.py` always saves XGBoost.
-  - **Problem:** `readme.txt` justifies XGBoost on qualitative grounds. Before #4 was fixed, the held-out R² was 0.043 for Linear Regression, 0.060 for Random Forest and −0.039 for XGBoost. After #4, XGBoost is now the best of the three: 0.534 for LR, 0.625 for RF and 0.652 for XGB. After #7 (seconds, 25 inputs with the session one-hot), it is 0.586 / 0.640 / 0.656, with MAE 12.12 / 10.65 / 10.51 s. The gap to Random Forest is small, comes from one shuffled split, and may be inflated by #17.
-  - **Fix:** re-run the comparison once #17 and #18 are fixed. Then either keep XGBoost with metrics that support it, or save the best model and update the reasoning.
-  - **Depends on:** #17 and #18 (#2, #3 and #4 are fixed).
+  - **Problem:** `readme.txt` justifies XGBoost on qualitative grounds. Before #4 was fixed, the held-out R² was 0.043 for Linear Regression, 0.060 for Random Forest and −0.039 for XGBoost. After #4, XGBoost is now the best of the three: 0.534 for LR, 0.625 for RF and 0.652 for XGB. After #7 (seconds, 25 inputs with the session one-hot), it is 0.586 / 0.640 / 0.656, with MAE 12.12 / 10.65 / 10.51 s. After #17 (causal `stint_avg_pace`), it is 0.373 / 0.565 / 0.620, with MAE 16.62 / 12.54 / 12.06 s: XGBoost's lead over Random Forest grew, but it still comes from one shuffled split.
+  - **Fix:** re-run the comparison once #18 is fixed. Then either keep XGBoost with metrics that support it, or save the best model and update the reasoning.
+  - **Depends on:** #18 (#2, #3, #4 and #17 are fixed).
   - **readme.txt:** ML Modelling step 3, results table.
 
 ## P3: completeness and cleanup

@@ -248,8 +248,9 @@ Session one-hot: session_name -> session_FP1/FP2/FP3 (see Encoding); session_nam
 
 laps_since_stint_start = lap_number - lap_start + 1 (clipped to at least 1)
 
-stint_avg_pace = mean(lap_duration of all other laps for that driver & stint, excluding the current lap) (Leave-One-Out average), in seconds
-[TODO #17, P2, see diagnostic.md] The other laps include lap t+1, whose lap_duration is part of the target, so this leaks the target.
+stint_avg_pace = mean(lap_duration of the earlier laps of that driver & stint), in seconds (an expanding mean of the stint so far).
+It is NaN on a stint's first lap (260 rows), which training fills with the column median, the same value the simulator seeds lap 1 with.
+Only laps before t are used: a leave-one-out mean over the whole stint would include lap t+1, whose lap_duration is part of the target.
 
 fuel_corrected_pace: laps_remaining = lap_end - lap_number (laps left in the stint) and fuel_corrected_pace = lap_duration + k*laps_remaining (k = 0.035 s per lap), in seconds
 The current lap's fuel_corrected_pace is not a model input; the NEXT lap's value is the model's target.
@@ -317,14 +318,13 @@ non-linear learning, stable rollouts, fast inference, and direct interpretabilit
 
 Held-out test results on the current data (MAE and RMSE in seconds):
 | Model             | MAE (s) | RMSE (s) | R2    |
-| LinearRegression  | 12.12   | 16.61    | 0.586 |
-| RandomForest      | 10.65   | 15.50    | 0.640 |
-| XGBoost           | 10.51   | 15.13    | 0.656 |
+| LinearRegression  | 16.62   | 20.44    | 0.373 |
+| RandomForest      | 12.54   | 17.03    | 0.565 |
+| XGBoost           | 12.06   | 15.91    | 0.620 |
 XGBoost is the best of the three on this split, and is kept for the reasons above. Before the target was restricted to the same driver's next
-lap, every model's R2 was about 0 (-0.04 to 0.06).
+lap, every model's R2 was about 0 (-0.04 to 0.06). Before stint_avg_pace was made causal (it used to include lap t+1), R2 was
+0.586 / 0.640 / 0.656 and stint_avg_pace was the top feature; it is now 10th for XGBoost (0.045) and 7th for Random Forest (0.037).
 [TODO #20, P2, see diagnostic.md] The errors are large in seconds because the target still mixes push laps with slow non-push laps.
-[TODO #17, P2, see diagnostic.md] stint_avg_pace (the top feature) averages over the whole stint, including lap t+1, so these R2 values are
-probably inflated.
 [TODO #13, P2, see diagnostic.md] Re-run the comparison after the P1 data fixes and confirm (or change) the saved model.
 
 This choice also aligns with how real-world motorsport predictive pipelines are structured:
@@ -351,12 +351,12 @@ Each prediction is fed back as the next lap's inputs:
 - it is turned into a raw lap time by undoing the training fuel term: raw = fcp - 0.035 x (L - age), the laps left in the stint
   (k is FUEL_EFFECT_K in feature_config.py, shared with feature_engineer.py)
 - the sector times are the median sector shares scaled to sum to that raw lap time
-- stint_avg_pace is the mean of the stint's earlier raw laps (causal; training still uses a leave-one-out mean, see #17)
+- stint_avg_pace is the mean of the stint's earlier raw laps (the same causal definition as in training)
 - laps_since_stint_start goes up by one
 Speeds, segment counts and weather stay at their medians.
 In training, laps_since_stint_start runs from 2 to 18 (pit-out laps are cleaned out). Beyond 18, the model's response to tyre age is flat, so
 changes later in a long stint come from the fed-back inputs only.
-Predictions stay within 96-120 s. Per-lap rollouts are saved to scripts/results/strategy_simulator/strategy_simulator_stint_rollouts.csv,
+Predictions stay within 99-111 s. Per-lap rollouts are saved to scripts/results/strategy_simulator/strategy_simulator_stint_rollouts.csv,
 and the summed fcp per compound and stint length to strategy_simulator_stint_totals.csv.
 [TODO #21, P3, see diagnostic.md] Every stint starts on a new set; used sets from practice and qualifying are not tracked.
 [TODO #12, P3, see diagnostic.md] The starting-compound setting in start_features is overwritten and has no effect.
@@ -372,10 +372,10 @@ the 22 s pit loss.
 4. Strategy optimisation
 All 18,318 strategies are evaluated and the one with the lowest predicted race time is selected.
 Results: scripts/results/strategy_simulator/ (all_strategy_results.csv, best_strategy.json, final_summary.txt).
-Current output: SOFT-SOFT-SOFT, pit stops on laps 12 and 13, total 5695.12 s (SOFT-MEDIUM-SOFT and SOFT-HARD-SOFT tie with it).
-[TODO #11, P1, see diagnostic.md] Pitting on consecutive laps leaves an empty middle stint and drops two laps from the total, which is why
-this strategy wins. It is not a valid recommendation.
-[TODO #8, P1, see diagnostic.md] The winning sequence uses a single compound, which breaks the two-compound rule.
+Current output: HARD-HARD-SOFT, pit stops on laps 12 and 24, total 6023.36 s. The best 1-stop (HARD-SOFT, pit on lap 11) is 121.58 s slower.
+[TODO #11, P1, see diagnostic.md] Each stop drops its pit lap (~100-110 s) from the total for 22 s of pit loss, which favours 2 stops.
+It is not a valid recommendation.
+[TODO #8, P1, see diagnostic.md] Single-compound and 0-stop sequences are still in the search space (the current winner happens to use two).
 
 Future work: Dynamic Programming to prune inferior strategies and an optional Genetic Algorithm for deeper search across larger sequences.
 
@@ -383,7 +383,8 @@ EVALUATION AND VALIDATION (validate_strategy.py)
 1. Model Validation
 Implemented:
 5-fold shuffled cross-validation (random_state 42) of the XGBoost configuration on next-lap fuel-corrected pace.
-Current result: CV MAE 9.81 s, CV RMSE 14.05 s.
+Missing inputs (stint_avg_pace on a stint's first lap) are filled with the training medians from the model bundle, as in train_model.py.
+Current result: CV MAE 12.02 s, CV RMSE 16.32 s.
 [TODO #18, P2, see diagnostic.md] The folds shuffle single laps, so a stint's laps land in both train and test folds. Use GroupKFold by stint.
 Residual plot (predicted vs residual) to check for systematic bias.
 [TODO #6, P2, see diagnostic.md] The plot uses the last fold's model on all rows, including its training rows. Use out-of-fold predictions.
@@ -394,12 +395,12 @@ strategy, and its p-value changes from run to run.
 
 Rollout check (logged by strategy_simulator.py on every run): for a 57-lap stint of each compound, fcp at ages 1, 18 and 57 and the
 largest lap-to-lap step.
-Current result: SOFT 100.94 -> 99.34 -> 114.05, MEDIUM 100.94 -> 114.82 -> 118.40, HARD 100.94 -> 115.06 -> 119.42 s.
-The largest step is 5.7-6.4 s.
-No runaway drift: every rollout stays within 96-120 s.
-Not fully smooth: the first ~8 laps zig-zag by about +-3 s (a slow fed-back lap is followed by a fast prediction).
-MEDIUM and HARD step up by about 12 s around ages 11-15, while SOFT stays near 99 s until about age 48.
-SOFT degrading least is not tyre physics; see #17 and #20.
+Current result: SOFT 100.94 -> 109.30 -> 109.72, MEDIUM 100.94 -> 106.62 -> 110.23, HARD 100.94 -> 108.72 -> 109.84 s.
+The largest step is 2.8-5.2 s.
+No runaway drift: every rollout stays within 99-111 s.
+Not fully smooth: each compound stays near 99-102 s for a few laps, then steps up by about 7-8 s within 2-4 laps (HARD from age ~5,
+SOFT ~11, MEDIUM ~16) and plateaus near 109-110 s for the rest of the stint.
+HARD degrading first and MEDIUM last is not tyre physics; it is what the model learns from FP data that still has #18 and #20 open.
 
 Planned critical checks:
 Feature influence aligns with expected tyre-degradation behaviour (e.g. tyre age, compound, track temperature matter most)
@@ -420,10 +421,10 @@ KNOWN ISSUES
 Known bugs and their effect on the results are documented in diagnostic.md.
 Open TODOs by priority (IDs as in diagnostic.md; each is tagged [TODO #N, ...] where it applies above):
 P1, results are invalid until fixed:  #8 illegal strategies, #11 pit lap missing from sum, #19 fuel correction sign
-P2, method or validation misleading:  #17 stint_avg_pace leaks the target, #18 splits mix laps of one stint,
-                                      #6 residual plot leakage, #5 placeholder t-test, #13 model choice, #20 slow non-push laps
+P2, method or validation misleading:  #18 splits mix laps of one stint, #6 residual plot leakage, #5 placeholder t-test,
+                                      #13 model choice, #20 slow non-push laps
 (Fixed: #1 weather event, #2 stint merge key, #3 stint/session mask, #4 cross-driver target, #7 mixed units, #9 autoregressive rollout,
- #10 tyre age reset, #14 car-data stage.)
+ #10 tyre age reset, #14 car-data stage, #17 stint_avg_pace target leak, #22 hardcoded settings.)
 P3, completeness and cleanup:         #12 dead starting-compound setting, #16 car data not a model input, #21 tyre-set tracking,
                                       #15 results documentation
 [TODO #15, P3, see diagnostic.md] Results are not written up yet. Do this after the P1 fixes, since the numbers will change.

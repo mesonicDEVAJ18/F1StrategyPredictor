@@ -1,13 +1,13 @@
 {
   "best_compound_sequence": [
-    "SOFT",
-    "SOFT",
+    "HARD",
+    "HARD",
     "SOFT"
   ],
   "best_pit_laps": [
     12,
-    13
+    24
   ],
-  "best_total_time": 5695.115109615459,
+  "best_total_time": 6023.361798905193,
   "time_units": "seconds"
 }

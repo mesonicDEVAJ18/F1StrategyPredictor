@@ -1,2 +1,2 @@
-Best: (('SOFT', 'SOFT', 'SOFT'), [12, 13])
-Time: 5695.12 s
+Best: (('HARD', 'HARD', 'SOFT'), [12, 24])
+Time: 6023.36 s

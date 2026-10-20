@@ -6,16 +6,16 @@ Session weights for averaging predictions: {'session_FP1': 0.4066147859922179, '
 Saved stint rollouts and stint totals.
 
 Rollout check (stint of 57 laps, fcp in s):
-  SOFT: age 1: 100.94, age 18: 99.34, age 57: 114.05, max |lap-to-lap step|: 5.99
-  MEDIUM: age 1: 100.94, age 18: 114.82, age 57: 118.40, max |lap-to-lap step|: 5.68
-  HARD: age 1: 100.94, age 18: 115.06, age 57: 119.42, max |lap-to-lap step|: 6.39
+  SOFT: age 1: 100.94, age 18: 109.30, age 57: 109.72, max |lap-to-lap step|: 5.23
+  MEDIUM: age 1: 100.94, age 18: 106.62, age 57: 110.23, max |lap-to-lap step|: 3.89
+  HARD: age 1: 100.94, age 18: 108.72, age 57: 109.84, max |lap-to-lap step|: 2.75
 Total strategies to evaluate: 18318
 Best strategy:
-{'best_compound_sequence': ('SOFT', 'SOFT', 'SOFT'), 'best_pit_laps': [12, 13], 'best_total_time': 5695.115109615459, 'time_units': 'seconds'}
+{'best_compound_sequence': ('HARD', 'HARD', 'SOFT'), 'best_pit_laps': [12, 24], 'best_total_time': 6023.361798905193, 'time_units': 'seconds'}
 
 OPTIMIZATION COMPLETE
-Best strategy: (('SOFT', 'SOFT', 'SOFT'), [12, 13])
-Total time: 5695.12 s
+Best strategy: (('HARD', 'HARD', 'SOFT'), [12, 24])
+Total time: 6023.36 s
 
 FILES GENERATED:
   - strategy_simulator_stint_rollouts.csv

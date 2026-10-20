@@ -147,7 +147,7 @@ Environmental conditions:
 | weather join | nearest weather sample to each lap's `date_start` (`merge_asof`, 5 min tolerance) | Give each lap the conditions it was driven in |
 | `laps_since_stint_start` | `lap_number - lap_start + 1` | Measure tyre age in current stint |
 | `session_FP1/2/3` | One-hot of the practice session | Separate session-level pace offsets |
-| `stint_avg_pace` | Leave-one-out mean of lap times (s) | Capture stint-level performance |
+| `stint_avg_pace` | Mean lap time (s) of the stint's earlier laps (NaN on the first lap, filled with the median) | Capture stint-level performance without seeing lap `t+1` |
 | `fuel_corrected_pace` | `lap_duration + 0.035 × laps_remaining` in seconds (`laps_remaining = lap_end - lap_number`) | Account for fuel load reduction (sign and horizon are open, diagnostic.md #19) |
 
 > **Note**: Track evolution was excluded to avoid deriving dependent variables.
@@ -171,11 +171,11 @@ Predict **fuel-corrected pace on the next lap** rather than explicitly computing
 
 | Model | Reasoning | Test MAE | Test RMSE | Test R² |
 |-------|-----------|----------|-----------|---------|
-| Linear Regression | Underfits non-linear tyre behavior | 12.12 s | 16.61 s | 0.586 |
-| Random Forest | Noisy, stepwise predictions | 10.65 s | 15.50 s | 0.640 |
-| **XGBoost** | Chosen for non-linear learning and smooth predictions | 10.51 s | 15.13 s | 0.656 |
+| Linear Regression | Underfits non-linear tyre behavior | 16.62 s | 20.44 s | 0.373 |
+| Random Forest | Noisy, stepwise predictions | 12.54 s | 17.03 s | 0.565 |
+| **XGBoost** | Chosen for non-linear learning and smooth predictions | 12.06 s | 15.91 s | 0.620 |
 
-*MAE and RMSE are in seconds, from the current run. R² is probably inflated, because `stint_avg_pace` (the top feature) includes the target lap (diagnostic.md #17). The errors are large because the target still includes slow non-push laps (#20); see [diagnostic.md](diagnostic.md).*
+*MAE and RMSE are in seconds, from the current run. The split still shuffles single laps, so laps of one stint are in both train and test, which flatters these numbers (diagnostic.md #18). The errors are large because the target still includes slow non-push laps (#20); see [diagnostic.md](diagnostic.md).*
 
 **XGBoost Advantages:**
 - Captures non-linear tyre physics (warm-up, thermal degradation, cliff effects)
@@ -235,7 +235,7 @@ For each compound and every stint length L = 1–57, roll the stint forward from
 Minimize: Total Race Time (s) = Σ(stint lap times) + 22 s × number of pit stops
 ```
 
-Current output: SOFT–SOFT–SOFT with stops on laps 12 and 13, 5695.12 s. This is not a valid recommendation yet: the pit lap is never summed (diagnostic.md #11), so back-to-back stops drop two laps from the total, and the two-compound rule is not enforced (#8).
+Current output: HARD–HARD–SOFT with stops on laps 12 and 24, 6023.36 s. This is not a valid recommendation yet: the pit lap is never summed (diagnostic.md #11), so each stop drops a ~100–110 s lap for 22 s of pit loss, which favours 2 stops, and the two-compound rule is not enforced (#8).
 
 ### 4. Optimization Engine
 
@@ -248,14 +248,14 @@ Current output: SOFT–SOFT–SOFT with stops on laps 12 and 13, 5695.12 s. This
 ## ✅ Evaluation & Validation
 
 ### Model Validation (`validate_strategy.py`)
-- **Cross-validation**: 5-fold CV on next-lap predictions (current: MAE 9.81 s, RMSE 14.05 s)
+- **Cross-validation**: 5-fold CV on next-lap predictions (current: MAE 12.02 s, RMSE 16.32 s)
 - **Residual analysis**: Check for systematic bias
 - **Feature importance**: Verify alignment with tyre physics
   - Expected top features: tyre age, compound, track temperature
 - **t-test**: Placeholder on random sample data
 - **Simulation stability** (logged by `strategy_simulator.py`): fcp at tyre ages 1, 18 and 57 of a full-length rollout, plus the largest lap-to-lap step.
-  - No runaway drift: every rollout stays within 96–120 s.
-  - Not fully smooth: steps of up to about 6 s, and a ±3 s zig-zag over the first laps.
+  - No runaway drift: every rollout stays within 99–111 s.
+  - Not fully smooth: each compound steps up by about 7–8 s within a few laps (HARD from tyre age ~5, SOFT ~11, MEDIUM ~16) and then plateaus near 109–110 s; the largest single step is about 5 s.
   - See diagnostic.md #9.
 
 ### Strategy Validation *(planned, not implemented yet)*

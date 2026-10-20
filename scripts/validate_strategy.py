@@ -65,7 +65,8 @@ log(f"Loaded dataset with {len(df)} rows.")
 # ============================================================
 df = build_next_lap_target(df)
 
-X = df[FEATURES].values
+# Fill missing inputs (e.g. stint_avg_pace on a stint's first lap) with the training medians, as train_model.py does
+X = df[FEATURES].replace([np.inf, -np.inf], np.nan).fillna(bundle["medians"]).values
 y = df["target_next_fcp"].values
 
 log(f"Rows after target shift drop: {len(df)}")

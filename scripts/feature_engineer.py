@@ -188,13 +188,15 @@ log(f"  → Session one-hot rows: {session_dummies.sum().to_dict()}")
 laps["laps_since_stint_start"] = laps["lap_number"] - laps["lap_start"] + 1
 laps["laps_since_stint_start"] = laps["laps_since_stint_start"].clip(lower=1)
 
-# Leave-one-out stint average pace (seconds)
-grp = laps.groupby(["driver_number", "stint_number"])
-stint_sum = grp["lap_duration"].transform("sum")
-stint_count = grp["lap_duration"].transform("count")
-
-laps["stint_avg_pace"] = (stint_sum - laps["lap_duration"]) / (stint_count - 1)
-laps.loc[stint_count <= 1, "stint_avg_pace"] = np.nan
+# Causal stint average pace (seconds): mean of the stint's earlier laps only, so the
+# target lap t+1 can't leak in (diagnostic.md #17). NaN on a stint's first lap; training
+# fills it with the median, which is also the simulator's seed value.
+laps["stint_avg_pace"] = (
+    laps.sort_values(["driver_number", "stint_number", "lap_number"])
+    .groupby(["driver_number", "stint_number"])["lap_duration"]
+    .transform(lambda s: s.shift(1).expanding().mean())
+)
+log(f"  → stint_avg_pace NaN (first lap of a stint): {laps['stint_avg_pace'].isna().sum()}")
 
 # fuel_corrected_pace (seconds; lap_duration is unscaled, k is s/lap)
 laps["laps_remaining"] = laps["lap_end"] - laps["lap_number"]
