@@ -75,7 +75,7 @@ PIT_WINDOW_END_BUFFER = env_int("PIT_WINDOW_END_BUFFER")   # no pit in the last 
 STOP_COUNTS = env_list("STOP_COUNTS", cast=int)
 MIN_COMPOUNDS_USED = env_int("MIN_COMPOUNDS_USED")         # two-compound rule (diagnostic.md #8)
 SECTOR_COLUMNS = ["duration_sector_1", "duration_sector_2", "duration_sector_3"]
-SMOOTHNESS_AGES = env_list("SMOOTHNESS_CHECK_AGES", cast=int) + [NUM_LAPS]  # 18 = longest stint age seen in training
+SMOOTHNESS_AGES = env_list("SMOOTHNESS_CHECK_AGES", cast=int) + [NUM_LAPS]  # 18 is past the longest stint age in training
 
 
 # ============================================================

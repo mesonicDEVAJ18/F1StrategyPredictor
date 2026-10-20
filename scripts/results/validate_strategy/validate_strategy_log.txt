@@ -1,22 +1,22 @@
 Loaded model and feature metadata.
-Loaded dataset with 839 rows.
-Rows after target shift drop: 514
+Loaded dataset with 467 rows.
+Rows after target shift drop: 153
 
 Running 5-fold cross-validation...
- Fold 1 → MAE=11.7801 s, RMSE=16.0494 s
- Fold 2 → MAE=12.8376 s, RMSE=17.2207 s
- Fold 3 → MAE=12.7190 s, RMSE=17.1536 s
- Fold 4 → MAE=10.3246 s, RMSE=14.8465 s
- Fold 5 → MAE=11.9621 s, RMSE=16.5514 s
+ Fold 1 → MAE=1.0788 s, RMSE=1.4899 s
+ Fold 2 → MAE=1.0791 s, RMSE=1.3801 s
+ Fold 3 → MAE=1.1553 s, RMSE=1.5982 s
+ Fold 4 → MAE=1.4883 s, RMSE=2.3075 s
+ Fold 5 → MAE=1.1481 s, RMSE=1.5905 s
 
-CV MAE = 11.924683140830332 s
-CV RMSE = 16.3643250093158 s
+CV MAE = 1.189933891680318 s
+CV RMSE = 1.6732078904691163 s
 
 Generating residual plot...
 Residual plot saved.
 
 Running example t-test...
-T-test p-value: 5.727971365326899e-158
+T-test p-value: 7.39543432555701e-154
 
 Validation summary saved.
 

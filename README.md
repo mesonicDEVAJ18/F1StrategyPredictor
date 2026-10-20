@@ -111,7 +111,7 @@ Environmental conditions:
 
 **1. Redundancy Removal**
 - Removed session and meeting keys
-- Excluded pit-out laps (slow in-laps are caught by the outlier filters)
+- Excluded pit-out laps (slow in-laps are caught by the non-push filter)
 
 **2. Outlier Detection & Removal**
 
@@ -120,6 +120,7 @@ Environmental conditions:
 - Unrealistic lap times (≤ 30s or ≥ 2× session median)
 - Aborted laps (`i1_speed`, `i2_speed` or `st_speed` ≤ 50 km/h)
 - Rolling median residual filtering: residual = lap time − 5-lap centred rolling median per driver; removed laps outside `[Q1 - 3×IQR, Q3 + 3×IQR]`
+- Non-push laps (cool-down, in- and traffic laps): slower than 1.15× the driver's best lap in the session (`PUSH_LAP_MAX_BEST_RATIO`), which leaves 467 laps (diagnostic.md #20)
 
 *Stints:*
 - Logical validation: `lap_start ≤ lap_end`
@@ -173,11 +174,11 @@ Predict **fuel-corrected pace on the next lap** rather than explicitly computing
 
 | Model | Reasoning | Test MAE | Test RMSE | Test R² |
 |-------|-----------|----------|-----------|---------|
-| Linear Regression | Underfits non-linear tyre behavior | 16.64 s | 20.48 s | 0.374 |
-| Random Forest | Noisy, stepwise predictions | 12.42 s | 17.02 s | 0.568 |
-| **XGBoost** | Chosen for non-linear learning and smooth predictions | 12.19 s | 16.06 s | 0.615 |
+| Linear Regression | Underfits non-linear tyre behavior | 1.67 s | 2.10 s | 0.157 |
+| Random Forest | Noisy, stepwise predictions | 1.13 s | 1.61 s | 0.505 |
+| **XGBoost** | Chosen for non-linear learning and smooth predictions | 1.03 s | 1.46 s | 0.590 |
 
-*MAE and RMSE are in seconds, from the current run. The split still shuffles single laps, so laps of one stint are in both train and test, which flatters these numbers (diagnostic.md #18). The errors are large because the target still includes slow non-push laps (#20); see [diagnostic.md](diagnostic.md).*
+*MAE and RMSE are in seconds, from the current run (31 test rows). The split still shuffles single laps, so laps of one stint are in both train and test, which flatters these numbers (diagnostic.md #18); see [diagnostic.md](diagnostic.md).*
 
 **XGBoost Advantages:**
 - Captures non-linear tyre physics (warm-up, thermal degradation, cliff effects)
@@ -191,7 +192,7 @@ Predict **fuel-corrected pace on the next lap** rather than explicitly computing
 ```python
 y = fuel_corrected_pace_next_lap
 ```
-Built by `build_next_lap_target()` in `scripts/feature_config.py`: the same driver's lap `lap_number + 1` in the same stint. The last lap of each stint and laps followed by a cleaning gap are dropped (839 → 514 rows).
+Built by `build_next_lap_target()` in `scripts/feature_config.py`: the same driver's lap `lap_number + 1` in the same stint. The last lap of each stint and laps followed by a cleaning gap are dropped (467 → 153 rows: practice runs alternate push and cool-down laps, so removing the cool-down laps breaks most pairs).
 
 **2. Removed Dependent Variables**
 - `lap_duration` (sum of sector times)
@@ -239,13 +240,12 @@ Minimize: Total Race Time (s) = Σ(stint lap times) + 22 s × number of pit stop
 ```
 
 Current output (set age at the start of each stint in brackets):
-- both cars: SOFT(0)–SOFT(0)–HARD(0), stops on laps 19 and 38, 6005.04 s (three 19-lap stints, so any order of these sets ties)
-- car 16: best with a used set is 25.23 s slower, best 1-stop 114.18 s slower
-- car 44: swapping in the used MEDIUM(3) set is 3.43 s slower, best 1-stop 113.37 s slower
+- car 16: SOFT(6)–MEDIUM(0), stop on lap 46, 5838.86 s (ties with MEDIUM(0)–SOFT(6), stop on lap 11); best 2-stop 9.44 s slower
+- car 44: SOFT(6)–MEDIUM(3), stop on lap 46, 5838.15 s (ties with the reverse, stop on lap 11); best 2-stop 11.21 s slower
 
 Every race lap is summed once: "stop on lap p" means lap p is the in-lap and the next stint starts on lap p + 1, with the 22 s pit loss on top (diagnostic.md #11).
 
-None of this is tyre physics yet. 2 stops win because every rollout steps up by 5–8 s at a tyre age of about 20 (the top of the training range) and then plateaus, so three short stints keep more laps on the fast early part. New sets win because used sets reach that step sooner, which outweighs the slow second lap (~112 s) the model predicts on a new set: practice runs on new sets are mostly push lap then cool-down lap, and the cool-down laps are still in the data (#20). With #20 still open, this is not a valid recommendation yet.
+None of this is tyre physics yet. 1 stop wins because every rollout is almost flat (about 101 s from stint lap 3 on, whatever the compound or set age), so an extra stop can't win back its 22 s. Neighbouring pit laps are within about 1 s and the compounds barely differ, so the pit lap and compound choice are close to arbitrary. The model is trained on only 153 rows, and its metrics still come from a shuffled split (#18), so this is not a valid recommendation yet.
 
 ### 4. Optimization Engine
 
@@ -258,16 +258,14 @@ None of this is tyre physics yet. 2 stops win because every rollout steps up by 
 ## ✅ Evaluation & Validation
 
 ### Model Validation (`validate_strategy.py`)
-- **Cross-validation**: 5-fold CV on next-lap predictions (current: MAE 11.92 s, RMSE 16.36 s)
+- **Cross-validation**: 5-fold CV on next-lap predictions (current: MAE 1.19 s, RMSE 1.67 s)
 - **Residual analysis**: Check for systematic bias
 - **Feature importance**: Verify alignment with tyre physics
   - Expected top features: tyre age, compound, track temperature
 - **t-test**: Placeholder on random sample data
 - **Simulation stability** (logged by `strategy_simulator.py`): fcp at stint laps 1, 18 and 57 of a full-length rollout for each compound and set age, plus the largest lap-to-lap step.
-  - No runaway drift: every rollout stays within 97–113 s.
-  - Not fully smooth:
-    - New sets jump to about 112 s on their second lap (the cool-down pattern above), drop back near 102–105 s, then step up again to about 111 s around stint lap 20.
-    - Used sets (age 3–6) stay near 101–105 s, then step up by about 5–7 s to about 110.3 s around stint laps 14–17 (a tyre age of about 20, like the new sets).
+  - No runaway drift: every rollout stays within 97.15–101.70 s, and the largest lap-to-lap step is 2.2–2.5 s (stint laps 1–3).
+  - Smooth but nearly flat: about 99.5 s on stint lap 2 and 101 s on lap 3, then 100.5–101.7 s to lap 57. All compounds and set ages are within 0.3 s, so the model shows almost no tyre degradation yet.
 
 ### Strategy Validation *(planned, not implemented yet)*
 - Simulate multiple race conditions with variations

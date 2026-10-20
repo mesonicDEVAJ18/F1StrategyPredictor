@@ -38,6 +38,7 @@ LAP_MAX_MEDIAN_MULTIPLE = env_float("LAP_MAX_MEDIAN_MULTIPLE")
 MIN_SPEED_KMH = env_float("MIN_SPEED_KMH")
 ROLLING_MEDIAN_WINDOW = env_int("ROLLING_MEDIAN_WINDOW")
 IQR_MULTIPLIER = env_float("IQR_MULTIPLIER")
+PUSH_LAP_MAX_BEST_RATIO = env_float("PUSH_LAP_MAX_BEST_RATIO")
 
 removed_rows_summary = []
 list_fix_summary = []
@@ -103,6 +104,20 @@ def apply_iqr_residual_filter(df, fname):
     return df.drop(columns=["rolling_median", "residual"], errors="ignore")
 
 
+def apply_push_lap_filter(df, fname):
+    """Drop non-push laps: slower than PUSH_LAP_MAX_BEST_RATIO x the driver's best lap
+    in this session (diagnostic.md #20). Each file is one session."""
+    best_lap = df.groupby("driver_number")["lap_duration"].transform("min")
+
+    before = len(df)
+    df = df[df["lap_duration"] <= PUSH_LAP_MAX_BEST_RATIO * best_lap]
+    removed = before - len(df)
+    log(f"[{fname}] Removed {removed} non-push laps (> {PUSH_LAP_MAX_BEST_RATIO}x driver's session best)")
+    removed_rows_summary.append([fname, "non_push", removed])
+
+    return df
+
+
 def session_name_from_file(file):
     """laps_p1.csv -> FP1 (practice order, stable across weekends unlike session_key)."""
     match = re.search(r"_p(\d+)", file)
@@ -145,6 +160,7 @@ for file in laps_files:
     # Apply cleaning pipeline
     df = apply_domain_filters(df, file)
     df = apply_iqr_residual_filter(df, file)
+    df = apply_push_lap_filter(df, file)
 
     # Lap times and speeds stay in physical units (s, km/h): the models are scale-invariant,
     # and per-session scaling erased each session's pace level (diagnostic.md #7)

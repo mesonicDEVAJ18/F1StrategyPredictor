@@ -1,5 +1,5 @@
 Loading preprocessed data...
-  → Laps:   839 rows
+  → Laps:   467 rows
   → Stints: 275 rows
   → Weather:239 rows
 
@@ -7,7 +7,7 @@ Assigning stint numbers to laps...
   → Missing stint numbers: 0
 
 Merging stints into laps...
-  → Rows before/after merge: 839 / 839
+  → Rows before/after merge: 467 / 467
   → Laps without stint metadata: 0
   → Stints merged successfully
 
@@ -16,9 +16,9 @@ Merging weather on timestamps (lap date_start ~ weather date)...
   → Weather merged successfully
 
 Engineering features...
-  → Session one-hot rows: {'session_FP1': 309, 'session_FP2': 330, 'session_FP3': 200}
-  → tyre_age range: 2-21 laps
-  → stint_avg_pace NaN (first lap of a stint): 260
+  → Session one-hot rows: {'session_FP1': 164, 'session_FP2': 221, 'session_FP3': 82}
+  → tyre_age range: 2-19 laps
+  → stint_avg_pace NaN (first lap of a stint): 223
 
 Final cleanup...
 

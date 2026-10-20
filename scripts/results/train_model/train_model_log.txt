@@ -1,9 +1,9 @@
 Loading engineered dataset...
-Dataset rows: 839
-Rows after target shift drop: 514
-  → Dropped as last lap of a stint: 260
-  → Dropped for a gap to the next lap: 65
-Session weights: {'session_FP1': 0.407, 'session_FP2': 0.385, 'session_FP3': 0.208}
+Dataset rows: 467
+Rows after target shift drop: 153
+  → Dropped as last lap of a stint: 223
+  → Dropped for a gap to the next lap: 91
+Session weights: {'session_FP1': 0.294, 'session_FP2': 0.66, 'session_FP3': 0.046}
 Saved feature snapshot.
 Completed train/test split.
 
@@ -13,10 +13,10 @@ Training RandomForest...
 Training XGBoost...
 
 Test metrics (MAE/RMSE in seconds):
-                      MAE     RMSE      R2
-LinearRegression  16.6415  20.4809  0.3740
-RandomForest      12.4173  17.0173  0.5678
-XGBoost           12.1926  16.0614  0.6150
+                     MAE    RMSE      R2
+LinearRegression  1.6744  2.0963  0.1573
+RandomForest      1.1305  1.6075  0.5045
+XGBoost           1.0319  1.4618  0.5902
 Saved model metrics table.
 Saved feature importance CSVs.
 Saved trained XGB model.

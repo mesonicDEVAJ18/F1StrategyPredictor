@@ -149,13 +149,34 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **Fix:** split by stint with `GroupShuffleSplit` / `GroupKFold`, grouped on `(driver_number, stint_number)` (or by session, or by driver, for a stricter test). Both id columns are in the engineered dataset since #4.
   - **readme.txt:** ML Modelling, training (80/20 split); Evaluation step 1, cross-validation.
 
-- [ ] **#20 The cleaned laps still include slow non-push laps**
+- [x] **#20 The cleaned laps still include slow non-push laps**
   - **Where:** the filters in `scripts/process_laps.py`.
   - **Problem:** the filters drop pit-out laps, invalid sectors, laps over 2× the median and IQR residual outliers. Cool-down, in- and traffic laps under 2× the median remain. Cleaned laps have a median of about 100–117 s per session, but a mean of 111–121 s and a 90th percentile of about 147–159 s.
   - **Effect:** the target mixes push laps with slow laps, so the errors in seconds are large (XGB MAE about 10.5 s). The simulator's median-feature lap (103–112 s) is slower than race pace.
   - **Since #21:** with the real `tyre_age` as an input, the model predicts a ~113 s second lap on every new set (push lap then cool-down lap in practice), so the optimiser prefers used sets.
   - **Fix:** flag or drop non-push laps, e.g. laps more than a set margin slower than the driver's best on that compound in the session, or train only on long-run stints.
   - **readme.txt:** Data Preparation, laps cleaning.
+  - **Fixed:** `apply_push_lap_filter()` in `process_laps.py` runs after the IQR filter and drops every lap slower than `PUSH_LAP_MAX_BEST_RATIO` (`.env`, 1.15) × the driver's best lap in that session.
+    - **Threshold:** after the other filters, laps divided by the driver's session best split into two groups: push laps and long runs at ≤ 1.10× (FP2's long runs sit at 1.06–1.10×), and cool-down laps from about 1.3×. Few laps fall in between, with a gap around 1.14–1.16×.
+    - **Driver's best, not per compound:** the compound only reaches the laps in `feature_engineer.py` (from the stints). The gap between compounds (about 1 s, ~1%) is well inside the 15% margin.
+    - **Rows:** 839 → 467 cleaned laps (145 / 109 / 118 removed in FP1 / FP2 / FP3, leaving 164 / 221 / 82). Median 98.1 / 98.8 / 94.9 s, mean 98.4 / 97.8 / 95.7 s and 90th percentile 101.8 / 101.3 / 99.9 s.
+    - **Target rows:** 514 → 153 (223 are a stint's last lap, 91 have a gap to the next lap). Practice runs alternate push and cool-down laps, so dropping the cool-down lap breaks most lap + 1 pairs. 50 stints remain (SOFT 64, MEDIUM 63, HARD 26 rows), and FP3 has only 7 rows: session weights are now FP1 0.294, FP2 0.660, FP3 0.046. In training, `laps_since_stint_start` runs 2–13 and `tyre_age` 2–18.
+    - **Car data:** 90 → 55 laps (5–14 per driver and session), since `process_cardata.py` keeps only the laps in `data/laps_combined_clean.csv`.
+    - **Checks:** every lap in `data/laps_combined_clean.csv` is within 1.15× its driver's session best (max 1.1475). The removed counts add up: 839 − 372 = 467.
+    - **Effect on metrics:** held-out MAE 1.67 / 1.13 / 1.03 s, RMSE 2.10 / 1.61 / 1.46 s and R² 0.157 / 0.505 / 0.590 (LR/RF/XGB; was 16.64 / 12.42 / 12.19 s and R² 0.374 / 0.568 / 0.615). XGBoost 5-fold CV MAE 1.19 s, RMSE 1.67 s (was 11.92 / 16.36 s).
+      - The errors are about 10× smaller because the slow laps are gone.
+      - R² fell because there is much less variance left to explain.
+      - The test set is now 31 rows from a shuffled split (#18).
+    - **Feature importance:** XGB's top five are `i2_speed` 0.144, `stint_avg_pace` 0.120, `duration_sector_2` 0.084, `wind_speed` 0.077 and `session_FP1` 0.074. `tyre_age` is 10th (0.042) and `track_temperature` 16th (0.020). RF is led by `duration_sector_2` 0.265, `i2_speed` 0.182, `duration_sector_1` 0.120 and `stint_avg_pace` 0.109.
+    - **Rollout behaviour** (57-lap stint, fcp in s):
+      - The seed is now 99.15 s raw (median sectors of the training rows; was 98.98 s), so fcp 97.15 s on stint lap 1.
+      - Every compound and set age predicts about 99.4–99.7 s on stint lap 2 and about 101 s on lap 3. It then stays at 100.5–101.7 s to lap 57, with all seven (compound, set age) pairs within 0.3 s of each other.
+      - The new-set second-lap jump is gone. The largest lap-to-lap step is 2.2–2.5 s (laps 1–3), and every rollout stays within 97.15–101.70 s.
+    - **Effect on strategy:** both cars now pick 1 stop.
+      - **Car 16:** SOFT(6)–MEDIUM(0), pit on lap 46, 5838.86 s. It ties with MEDIUM(0)–SOFT(6), pit on lap 11 (the same two stints in reverse order); SOFT(6)–HARD(0) is +0.09 s. The best 2-stop is MEDIUM(0)–SOFT(6)–SOFT(6), pits on laps 18 and 44, +9.44 s.
+      - **Car 44:** SOFT(6)–MEDIUM(3), pit on lap 46, 5838.15 s (ties with the reverse, pit on lap 11). The best 2-stop is +11.21 s.
+      - Neighbouring pit laps are within about 1 s. The rollouts are almost flat, so tyre age barely matters, and an extra stop can't win back its 22 s. The model has learnt almost no compound or tyre-age effect from 153 rows. Every new stint also gets a fast median seed lap, which narrows the gap to 2 stops.
+      - The metrics still come from a shuffled split (#18). This is still **not** a valid recommendation.
 
 - [x] **#9 The simulation does not roll predictions forward**
   - **Where:** `precompute_lap_predictions()` in `scripts/strategy_simulator.py`.
@@ -206,7 +227,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
 
 - [ ] **#13 The saved model is the weakest of the three on the test split**
   - **Where:** `scripts/train_model.py` always saves XGBoost.
-  - **Problem:** `readme.txt` justifies XGBoost on qualitative grounds. Before #4 was fixed, the held-out R² was 0.043 for Linear Regression, 0.060 for Random Forest and −0.039 for XGBoost. After #4, XGBoost is now the best of the three: 0.534 for LR, 0.625 for RF and 0.652 for XGB. After #7 (seconds, 25 inputs with the session one-hot), it is 0.586 / 0.640 / 0.656, with MAE 12.12 / 10.65 / 10.51 s. After #17 (causal `stint_avg_pace`), it is 0.373 / 0.565 / 0.620, with MAE 16.62 / 12.54 / 12.06 s: XGBoost's lead over Random Forest grew, but it still comes from one shuffled split. After #21 and #19 (fuel term subtracted), it is 0.374 / 0.568 / 0.615, with MAE 16.64 / 12.42 / 12.19 s.
+  - **Problem:** `readme.txt` justifies XGBoost on qualitative grounds. Before #4 was fixed, the held-out R² was 0.043 for Linear Regression, 0.060 for Random Forest and −0.039 for XGBoost. After #4, XGBoost is now the best of the three: 0.534 for LR, 0.625 for RF and 0.652 for XGB. After #7 (seconds, 25 inputs with the session one-hot), it is 0.586 / 0.640 / 0.656, with MAE 12.12 / 10.65 / 10.51 s. After #17 (causal `stint_avg_pace`), it is 0.373 / 0.565 / 0.620, with MAE 16.62 / 12.54 / 12.06 s: XGBoost's lead over Random Forest grew, but it still comes from one shuffled split. After #21 and #19 (fuel term subtracted), it is 0.374 / 0.568 / 0.615, with MAE 16.64 / 12.42 / 12.19 s. After #20 (non-push laps dropped, 153 target rows), it is 0.157 / 0.505 / 0.590, with MAE 1.67 / 1.13 / 1.03 s.
   - **Fix:** re-run the comparison once #18 is fixed. Then either keep XGBoost with metrics that support it, or save the best model and update the reasoning.
   - **Depends on:** #18 (#2, #3, #4 and #17 are fixed).
   - **readme.txt:** ML Modelling step 3, results table.

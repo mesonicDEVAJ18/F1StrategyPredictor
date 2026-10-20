@@ -4,36 +4,30 @@
     "16": {
       "best_compound_sequence": [
         "SOFT",
-        "SOFT",
-        "HARD"
+        "MEDIUM"
       ],
       "best_set_ages_at_start": [
-        0,
-        0,
+        6,
         0
       ],
       "best_pit_laps": [
-        19,
-        38
+        46
       ],
-      "best_total_time": 6005.039970321001
+      "best_total_time": 5838.861377513212
     },
     "44": {
       "best_compound_sequence": [
         "SOFT",
-        "SOFT",
-        "HARD"
+        "MEDIUM"
       ],
       "best_set_ages_at_start": [
-        0,
-        0,
-        0
+        6,
+        3
       ],
       "best_pit_laps": [
-        19,
-        38
+        46
       ],
-      "best_total_time": 6005.039970321001
+      "best_total_time": 5838.146816898519
     }
   }
 }
