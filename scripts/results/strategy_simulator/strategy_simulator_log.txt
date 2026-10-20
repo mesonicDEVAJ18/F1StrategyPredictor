@@ -11,25 +11,25 @@ Rolling out 7 (compound, set age) pairs: [('SOFT', 0), ('SOFT', 4), ('SOFT', 5),
 Saved stint rollouts and stint totals.
 
 Rollout check (stint of 57 laps, fcp in s, by stint lap):
-  SOFT set age 0: lap 1: 100.94, lap 18: 105.35, lap 57: 113.19, max |lap-to-lap step|: 12.73
-  SOFT set age 4: lap 1: 100.94, lap 18: 111.61, lap 57: 111.63, max |lap-to-lap step|: 5.73
-  SOFT set age 5: lap 1: 100.94, lap 18: 111.61, lap 57: 111.63, max |lap-to-lap step|: 6.50
-  SOFT set age 6: lap 1: 100.94, lap 18: 111.55, lap 57: 111.62, max |lap-to-lap step|: 6.52
-  MEDIUM set age 0: lap 1: 100.94, lap 18: 106.00, lap 57: 114.15, max |lap-to-lap step|: 12.77
-  MEDIUM set age 3: lap 1: 100.94, lap 18: 111.91, lap 57: 111.98, max |lap-to-lap step|: 6.21
-  HARD set age 0: lap 1: 100.94, lap 18: 105.89, lap 57: 114.20, max |lap-to-lap step|: 12.27
+  SOFT set age 0: lap 1: 96.98, lap 18: 104.57, lap 57: 110.66, max |lap-to-lap step|: 14.99
+  SOFT set age 4: lap 1: 96.98, lap 18: 110.51, lap 57: 110.39, max |lap-to-lap step|: 4.71
+  SOFT set age 5: lap 1: 96.98, lap 18: 110.58, lap 57: 110.40, max |lap-to-lap step|: 4.71
+  SOFT set age 6: lap 1: 96.98, lap 18: 110.57, lap 57: 110.39, max |lap-to-lap step|: 4.49
+  MEDIUM set age 0: lap 1: 96.98, lap 18: 104.50, lap 57: 110.66, max |lap-to-lap step|: 15.21
+  MEDIUM set age 3: lap 1: 96.98, lap 18: 110.33, lap 57: 110.40, max |lap-to-lap step|: 8.84
+  HARD set age 0: lap 1: 96.98, lap 18: 104.50, lap 57: 110.62, max |lap-to-lap step|: 14.68
 Dropped 2109 strategies using fewer than 2 compounds.
 Total strategies to evaluate per car: 16206
 
 Car 16: 3996 strategies skipped (not enough sets of a compound), 12210 evaluated
-Car 16 best strategy: {'best_compound_sequence': ('SOFT', 'SOFT', 'HARD'), 'best_set_ages_at_start': (0, 0, 0), 'best_pit_laps': [19, 38], 'best_total_time': 6113.18489579221}
+Car 16 best strategy: {'best_compound_sequence': ('SOFT', 'SOFT', 'HARD'), 'best_set_ages_at_start': (0, 0, 0), 'best_pit_laps': [19, 38], 'best_total_time': 6005.039970321001}
 
 Car 44: 3996 strategies skipped (not enough sets of a compound), 12210 evaluated
-Car 44 best strategy: {'best_compound_sequence': ('MEDIUM', 'SOFT', 'SOFT'), 'best_set_ages_at_start': (3, 4, 5), 'best_pit_laps': [17, 40], 'best_total_time': 6082.413736987517}
+Car 44 best strategy: {'best_compound_sequence': ('SOFT', 'SOFT', 'HARD'), 'best_set_ages_at_start': (0, 0, 0), 'best_pit_laps': [19, 38], 'best_total_time': 6005.039970321001}
 
 OPTIMIZATION COMPLETE
-Car 16: ('SOFT', 'SOFT', 'HARD'), set ages (0, 0, 0), pits [19, 38], time 6113.18 s
-Car 44: ('MEDIUM', 'SOFT', 'SOFT'), set ages (3, 4, 5), pits [17, 40], time 6082.41 s
+Car 16: ('SOFT', 'SOFT', 'HARD'), set ages (0, 0, 0), pits [19, 38], time 6005.04 s
+Car 44: ('SOFT', 'SOFT', 'HARD'), set ages (0, 0, 0), pits [19, 38], time 6005.04 s
 
 FILES GENERATED:
   - strategy_simulator_stint_rollouts.csv

@@ -203,9 +203,12 @@ laps["stint_avg_pace"] = (
 )
 log(f"  → stint_avg_pace NaN (first lap of a stint): {laps['stint_avg_pace'].isna().sum()}")
 
-# fuel_corrected_pace (seconds; lap_duration is unscaled, k is s/lap)
-laps["laps_remaining"] = laps["lap_end"] - laps["lap_number"]
-laps["fuel_corrected_pace"] = laps["lap_duration"] + FUEL_EFFECT_K * laps["laps_remaining"]
+# fuel_corrected_pace (seconds; lap_duration is unscaled, k is s/lap): the fuel effect is
+# removed. Practice fuel loads aren't recorded, so the laps left in the stint, counting lap t,
+# stand in for the fuel on board at the start of lap t (assumption, diagnostic.md #19). The
+# simulator's race fuel term uses the same convention (laps left in the race, counting the lap).
+laps["laps_remaining"] = laps["lap_end"] - laps["lap_number"] + 1
+laps["fuel_corrected_pace"] = laps["lap_duration"] - FUEL_EFFECT_K * laps["laps_remaining"]
 
 feat_snapshot = f"{SCRIPT_NAME}_feature_engineered_snapshot.csv"
 laps.to_csv(f"{RESULTS_DIR}/{feat_snapshot}", index=False)

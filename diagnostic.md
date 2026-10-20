@@ -97,7 +97,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
       - **Car 44:** MEDIUM(3)–SOFT(4)–SOFT(5), pits on laps 17 and 40, 6082.41 s. Any order of the same three sets with stints of 17, 17 and 23 laps ties with it, e.g. pits on 17 and 34. Best 1-stop: MEDIUM(3)–SOFT(4), pit on lap 17, 6185.01 s (+102.60 s). Was the same sets, 18 and 38, 5856.92 s.
       - 2 stops still win because each rollout steps up 6–13 s within about 14–20 stint laps and then plateaus, so three short stints keep more laps on the fast early part. That shape comes from practice data with #20 still open, and #19 is still open, so this is still **not** a valid recommendation.
 
-- [ ] **#19 The fuel correction has the wrong sign and horizon**
+- [x] **#19 The fuel correction has the wrong sign and horizon**
   - **Where:** `fuel_corrected_pace` in `scripts/feature_engineer.py`.
   - **Problem:**
     - `fuel_corrected_pace = lap_duration + 0.035 × laps_remaining` adds the fuel effect. Laps with more fuel on board are already slower, so the correction should subtract it.
@@ -105,6 +105,21 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **Effect:** the target is not fuel-free pace. The simulator still adds race fuel (`0.035 ×` laps of fuel remaining) on top of it, so early-stint fuel is counted twice in training and differently in simulation.
   - **Fix:** subtract the term, and decide on a fuel proxy (e.g. laps left in the stint as an approximation of the run's fuel, stated as an assumption), or drop the correction and let the model learn it from `laps_since_stint_start`.
   - **readme.txt:** Feature Engineering, fuel_corrected_pace.
+  - **Fixed:** `feature_engineer.py` now subtracts the fuel term: `fuel_corrected_pace = lap_duration − k × laps_remaining`, with `laps_remaining = lap_end − lap_number + 1`.
+    - **Fuel proxy (assumption):** practice fuel loads aren't recorded, so the laps left in the stint, counting lap *t*, stand in for the fuel on board at the start of lap *t*. This assumes each run is fuelled for its own length. `lap_end` comes from the stints, so laps removed in cleaning still count. The `+ 1` matches the race term, which counts the current lap (`FUEL_PENALTY_PER_LAP × (NUM_LAPS − lap + 1)`), so fcp is fuel-free pace in both and the race fuel is added once, in the simulator only. `laps_remaining` is 1–17 in training, so the term moves fcp by −0.035 to −0.595 s (it was +0 to +0.56 s).
+    - **Simulator:** `rollout_stint()` inverts the new definition. The seed is `fcp = raw − k × L`, and each later lap is `raw = fcp + k × (L − age + 1)`. The race fuel term is unchanged.
+    - **Checks:** `fuel_corrected_pace + 0.035 × (lap_end − lap_number + 1)` equals `lap_duration` on all 839 laps (514 rows after the target, unchanged). On all 11,571 rollout rows, `raw − fcp = 0.035 × (L − age + 1)`, the sectors sum to the raw lap, and every stint lap 1 is the 98.98 s seed. On all 24,420 result rows, the totals equal the summed stint totals + the race fuel term + 22 s × stops (to 3e-12 s).
+    - **Effect on metrics:** almost none, since the target moves by at most ~1.2 s per lap. Held-out MAE is 16.64 / 12.42 / 12.19 s, RMSE 20.48 / 17.02 / 16.06 s and R² 0.374 / 0.568 / 0.615 (LR/RF/XGB; was 16.62 / 12.37 / 11.97 s and R² 0.373 / 0.574 / 0.620). XGBoost 5-fold CV MAE is 11.92 s, RMSE 16.36 s (was 11.77 / 16.16 s). XGB's top features are `i2_speed` 0.133, `tyre_age` 0.094, `track_temperature` 0.079 and `duration_sector_3` 0.077.
+    - **Rollout behaviour** (57-lap stint, fcp in s):
+      - The seed fcp is now 96.98 s (98.98 − 0.035 × 57), below the predicted laps rather than above them.
+      - New sets still predict a slow second lap (111.7–112.2 s, a step of up to 15.2 s from the seed), then 102–105 s, and step up to ~110.7–110.9 s around stint lap 20.
+      - Used sets have no jump: 100.7–103 s, stepping up to ~110.3 s at stint lap 14 (SOFT 6), 15 (SOFT 5), 16 (SOFT 4) and 17 (MEDIUM 3). Every set steps up at tyre age ~20, near the top of the training range (2–21), so this is the model running out of data, not tyre physics.
+      - All rollouts stay within 96.98–112.19 s.
+    - **Effect on strategy:** both cars now pick new sets. SOFT(0)–SOFT(0)–HARD(0), pits on laps 19 and 38 (three 19-lap stints), 6005.04 s, tied with SOFT–HARD–SOFT and HARD–SOFT–SOFT on the same sets.
+      - **Car 16:** the same strategy as before, 108.14 s faster (was 6113.18 s). The best strategy with a used set is SOFT(6)–SOFT(0)–HARD(0), pits on 14 and 33, +25.23 s. The best 1-stop is SOFT(0)–HARD(0), pit on lap 19, +114.18 s.
+      - **Car 44:** was MEDIUM(3)–SOFT(4)–SOFT(5) at 6082.41 s. Swapping one stint to MEDIUM(3) is +3.43 s. The best 1-stop is SOFT(4)–HARD(0), pit on lap 38, +113.37 s.
+      - Used sets now lose because they reach the tyre-age ~20 step sooner, which outweighs the new-set second lap. Neighbouring pit laps are 4–7 s behind, and consecutive pit laps 124.53 s.
+      - No P1 items are left, but the rollout shape still comes from practice laps that include cool-down laps (#20), and the metrics come from a shuffled split (#18). This is still **not** a valid recommendation.
 
 ## P2: method or validation is misleading
 
@@ -191,7 +206,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
 
 - [ ] **#13 The saved model is the weakest of the three on the test split**
   - **Where:** `scripts/train_model.py` always saves XGBoost.
-  - **Problem:** `readme.txt` justifies XGBoost on qualitative grounds. Before #4 was fixed, the held-out R² was 0.043 for Linear Regression, 0.060 for Random Forest and −0.039 for XGBoost. After #4, XGBoost is now the best of the three: 0.534 for LR, 0.625 for RF and 0.652 for XGB. After #7 (seconds, 25 inputs with the session one-hot), it is 0.586 / 0.640 / 0.656, with MAE 12.12 / 10.65 / 10.51 s. After #17 (causal `stint_avg_pace`), it is 0.373 / 0.565 / 0.620, with MAE 16.62 / 12.54 / 12.06 s: XGBoost's lead over Random Forest grew, but it still comes from one shuffled split.
+  - **Problem:** `readme.txt` justifies XGBoost on qualitative grounds. Before #4 was fixed, the held-out R² was 0.043 for Linear Regression, 0.060 for Random Forest and −0.039 for XGBoost. After #4, XGBoost is now the best of the three: 0.534 for LR, 0.625 for RF and 0.652 for XGB. After #7 (seconds, 25 inputs with the session one-hot), it is 0.586 / 0.640 / 0.656, with MAE 12.12 / 10.65 / 10.51 s. After #17 (causal `stint_avg_pace`), it is 0.373 / 0.565 / 0.620, with MAE 16.62 / 12.54 / 12.06 s: XGBoost's lead over Random Forest grew, but it still comes from one shuffled split. After #21 and #19 (fuel term subtracted), it is 0.374 / 0.568 / 0.615, with MAE 16.64 / 12.42 / 12.19 s.
   - **Fix:** re-run the comparison once #18 is fixed. Then either keep XGBoost with metrics that support it, or save the best model and update the reasoning.
   - **Depends on:** #18 (#2, #3, #4 and #17 are fixed).
   - **readme.txt:** ML Modelling step 3, results table.

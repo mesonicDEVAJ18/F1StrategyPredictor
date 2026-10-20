@@ -111,7 +111,8 @@ def rollout_stint(base_features, compound, set_age, stint_length):
 
     Lap 1 is the seed lap (training medians). Each later lap's fcp is predicted
     from the previous lap's state, then converted back to a raw lap time by
-    undoing training's fuel term (fcp = lap_duration + k * laps left in stint)
+    adding back training's fuel term (fcp = lap_duration - k * laps left in the
+    stint, counting the current lap)
     and fed in as the next state's sector times and running stint_avg_pace.
     """
     state = base_features.copy()
@@ -125,7 +126,7 @@ def rollout_stint(base_features, compound, set_age, stint_length):
     sector_share = seed_sectors / seed_sectors.sum()
 
     raw = float(seed_sectors.sum())
-    fcp = raw + FUEL_EFFECT_K * (stint_length - 1)
+    fcp = raw - FUEL_EFFECT_K * stint_length
     state["fuel_corrected_pace"] = fcp
 
     records = []
@@ -133,7 +134,7 @@ def rollout_stint(base_features, compound, set_age, stint_length):
     for age in range(1, stint_length + 1):
         if age > 1:
             fcp = predict_fcp(state)
-            raw = fcp - FUEL_EFFECT_K * (stint_length - age)
+            raw = fcp + FUEL_EFFECT_K * (stint_length - age + 1)
 
             # Previous lap's raw times are the laps before this one
             state["stint_avg_pace"] = float(np.mean(raw_laps))

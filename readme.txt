@@ -257,9 +257,13 @@ stint_avg_pace = mean(lap_duration of the earlier laps of that driver & stint), 
 It is NaN on a stint's first lap (260 rows), which training fills with the column median, the same value the simulator seeds lap 1 with.
 Only laps before t are used: a leave-one-out mean over the whole stint would include lap t+1, whose lap_duration is part of the target.
 
-fuel_corrected_pace: laps_remaining = lap_end - lap_number (laps left in the stint) and fuel_corrected_pace = lap_duration + k*laps_remaining (k = 0.035 s per lap), in seconds
+fuel_corrected_pace: laps_remaining = lap_end - lap_number + 1 (laps left in the stint, counting lap t) and
+fuel_corrected_pace = lap_duration - k*laps_remaining (k = 0.035 s per lap), in seconds. More fuel makes a lap slower, so the fuel effect is
+subtracted to leave fuel-free pace.
+Assumption: practice fuel loads are not recorded, so the laps left in the stint stand in for the fuel on board at the start of lap t (each
+run fuelled for its own length). The race fuel term in the simulator uses the same convention (laps left in the race, counting the lap), so
+race fuel is added once, in the simulator only (diagnostic.md #19).
 The current lap's fuel_corrected_pace is not a model input; the NEXT lap's value is the model's target.
-[TODO #19, P1, see diagnostic.md] The term is added rather than subtracted, and counts laps left in the stint rather than fuel on board.
 
 Finally date_start, date, lap_duration and laps_remaining are dropped, and the result is saved as data/final_engineered_dataset.csv.
 session_key and driver_number stay in it as identifiers for building the target (and later the car-data merge); the models only read the
@@ -276,7 +280,7 @@ lap_duration = duration_sector_1 + duration_sector_2 + duration_sector_3, and wa
 The sector durations of lap t are kept as inputs, since the target is lap t+1.
 The segments_sector_* counts were kept as they may have something to contribute in the model.
 
-laps_remaining = lap_end - lap_number, used to compute/approximate fuel_corrected_pace, not expected for the model.
+laps_remaining = lap_end - lap_number + 1, used to compute/approximate fuel_corrected_pace, not expected for the model.
 
 The 26 model inputs are defined once in scripts/feature_config.py (MODEL_FEATURE_COLUMNS):
 sector durations (3, s), i1/i2/st speed (3, km/h), segment counts (3), tyre_age_at_start, compound one-hots (3),
@@ -323,13 +327,13 @@ non-linear learning, stable rollouts, fast inference, and direct interpretabilit
 
 Held-out test results on the current data (MAE and RMSE in seconds):
 | Model             | MAE (s) | RMSE (s) | R2    |
-| LinearRegression  | 16.62   | 20.44    | 0.373 |
-| RandomForest      | 12.37   | 16.85    | 0.574 |
-| XGBoost           | 11.97   | 15.92    | 0.620 |
+| LinearRegression  | 16.64   | 20.48    | 0.374 |
+| RandomForest      | 12.42   | 17.02    | 0.568 |
+| XGBoost           | 12.19   | 16.06    | 0.615 |
 XGBoost is the best of the three on this split, and is kept for the reasons above. Before the target was restricted to the same driver's next
 lap, every model's R2 was about 0 (-0.04 to 0.06). Before stint_avg_pace was made causal (it used to include lap t+1), R2 was
-0.586 / 0.640 / 0.656 and stint_avg_pace was the top feature; it is now 14th for XGBoost (0.028) and 11th for Random Forest (0.029).
-tyre_age is XGBoost's 2nd most important input (0.087, after i2_speed) and Random Forest's 6th (0.062). Linear Regression is unchanged by it,
+0.586 / 0.640 / 0.656 and stint_avg_pace was the top feature; it is now 15th for XGBoost (0.029) and 11th for Random Forest (0.029).
+tyre_age is XGBoost's 2nd most important input (0.094, after i2_speed) and Random Forest's 6th (0.062). Linear Regression is unchanged by it,
 since it is the sum of two inputs it already had.
 [TODO #20, P2, see diagnostic.md] The errors are large in seconds because the target still mixes push laps with slow non-push laps.
 [TODO #13, P2, see diagnostic.md] Re-run the comparison after the P1 data fixes and confirm (or change) the saved model.
@@ -370,7 +374,8 @@ From then on the model predicts lap a+1's fuel_corrected_pace from lap a's input
 not one of the practice sessions, so each lap is predicted once per session one-hot (session_FP1, FP2, FP3) and the three predictions are
 averaged, weighted by each session's share of the training rows (FP1 0.407, FP2 0.385, FP3 0.208).
 Each prediction is fed back as the next lap's inputs:
-- it is turned into a raw lap time by undoing the training fuel term: raw = fcp - 0.035 x (L - age), the laps left in the stint
+- it is turned into a raw lap time by adding back the training fuel term: raw = fcp + 0.035 x (L - age + 1), the laps left in the
+  stint counting this one (the seed's fcp is 98.98 - 0.035 x L)
   (k is FUEL_EFFECT_K in feature_config.py, shared with feature_engineer.py)
 - the sector times are the median sector shares scaled to sum to that raw lap time
 - stint_avg_pace is the mean of the stint's earlier raw laps (the same causal definition as in training)
@@ -378,8 +383,10 @@ Each prediction is fed back as the next lap's inputs:
 Speeds, segment counts and weather stay at their medians.
 In training, laps_since_stint_start runs from 2 to 18 (pit-out laps are cleaned out) and tyre_age from 2 to 21. Beyond these, the model's
 response to tyre age is flat, so changes later in a long stint come from the fed-back inputs only.
-Predictions stay within 99-114 s. On a new set, every compound's second lap is predicted at about 113 s (a 12-13 s jump), then it settles
-near 104-106 s. Used sets (age 3-6) don't show the jump. This is learnt from practice: a new set is usually run as push lap then
+Predictions stay within 97-113 s. On a new set, every compound's second lap is predicted at about 112 s, then it settles near 102-105 s
+and steps up to about 111 s around stint lap 20. Used sets (age 3-6) don't show the jump, run at 101-103 s, and step up to about 110 s
+sooner (stint laps 14-17): every set steps up at a tyre age of about 20, near the top of the training range (21), so this is the model
+running out of data, not tyre physics. The new-set jump is learnt from practice: a new set is usually run as push lap then
 cool-down lap (median fuel-corrected pace 94.8 s on stint lap 2, 148.8 s on stint lap 3), and those cool-down laps are still in the
 training data (#20).
 Per-lap rollouts are saved to scripts/results/strategy_simulator/strategy_simulator_stint_rollouts.csv, and the summed fcp per compound,
@@ -402,16 +409,16 @@ compound sequence and set of pit laps, the fastest choice of the car's sets is k
 Results: scripts/results/strategy_simulator/ (all_strategy_results.csv with car_number and set_ages, best_strategy.json per car,
 final_summary.txt).
 Current output (set ages at the start of each stint in brackets):
-car 16: SOFT(0)-SOFT(0)-HARD(0), pits on laps 19 and 38, 6113.18 s (three 19-lap stints, so any order of these sets ties). Swapping in
-the used SOFT(6) set is 3.42 s slower. The best 1-stop (SOFT(6)-HARD(0), pit on lap 38) is 101.37 s slower.
-car 44: MEDIUM(3)-SOFT(4)-SOFT(5), pits on laps 17 and 40, 6082.41 s (any order of these sets with stints of 17, 17 and 23 laps ties).
-The best 1-stop (MEDIUM(3)-SOFT(4), pit on lap 17) is 102.60 s slower.
+both cars: SOFT(0)-SOFT(0)-HARD(0), pits on laps 19 and 38, 6005.04 s (three 19-lap stints, so any order of these sets ties).
+car 16: the best strategy with a used set (SOFT(6)-SOFT(0)-HARD(0), pits on 14 and 33) is 25.23 s slower, and the best 1-stop
+(SOFT(0)-HARD(0), pit on lap 19) is 114.18 s slower.
+car 44: swapping in the used MEDIUM(3) set is 3.43 s slower, and the best 1-stop (SOFT(4)-HARD(0), pit on lap 38) is 113.37 s slower.
 Every lap carries the same race fuel term whatever the strategy, so a total depends only on which stints (compound, set age, length) it uses.
-2 stops win because each rollout steps up by 6-13 s within about 14-20 stint laps and then plateaus (step 2), so three short stints keep
-more laps on the fast early part. Car 44's preference for used sets comes from the new-set second lap described in step 2 (#20). Neither is
+2 stops win because each rollout steps up by 5-8 s at a tyre age of about 20 and then plateaus (step 2), so three short stints keep more
+laps on the fast early part. New sets win because used sets reach that step sooner, which outweighs the slow new-set second lap. Neither is
 tyre physics.
-[TODO #19, P1, see diagnostic.md] The fuel correction behind fcp is still wrong, and the slow non-push laps (#20) are still in training, so
-this is not a valid recommendation yet.
+[TODO #20, P2, see diagnostic.md] The slow non-push laps are still in training, and they shape the rollouts, so this is not a valid
+recommendation yet.
 
 Future work: Dynamic Programming to prune inferior strategies and an optional Genetic Algorithm for deeper search across larger sequences.
 
@@ -420,7 +427,7 @@ EVALUATION AND VALIDATION (validate_strategy.py)
 Implemented:
 5-fold shuffled cross-validation (random_state 42) of the XGBoost configuration on next-lap fuel-corrected pace.
 Missing inputs (stint_avg_pace on a stint's first lap) are filled with the training medians from the model bundle, as in train_model.py.
-Current result: CV MAE 11.77 s, CV RMSE 16.16 s.
+Current result: CV MAE 11.92 s, CV RMSE 16.36 s.
 [TODO #18, P2, see diagnostic.md] The folds shuffle single laps, so a stint's laps land in both train and test folds. Use GroupKFold by stint.
 Residual plot (predicted vs residual) to check for systematic bias.
 [TODO #6, P2, see diagnostic.md] The plot uses the last fold's model on all rows, including its training rows. Use out-of-fold predictions.
@@ -431,13 +438,13 @@ strategy, and its p-value changes from run to run.
 
 Rollout check (logged by strategy_simulator.py on every run): for a 57-lap stint of each compound and set age, fcp at stint laps 1, 18
 and 57 and the largest lap-to-lap step.
-Current result, new sets: SOFT 100.94 -> 105.35 -> 113.19, MEDIUM 100.94 -> 106.00 -> 114.15, HARD 100.94 -> 105.89 -> 114.20 s.
-Used sets: SOFT (age 4, 5, 6) 100.94 -> 111.55-111.61 -> 111.62-111.63, MEDIUM (age 3) 100.94 -> 111.91 -> 111.98 s.
-The largest step is 12.3-12.8 s on new sets and 5.7-6.5 s on used sets.
-No runaway drift: every rollout stays within 99-114 s.
+Current result, new sets: SOFT 96.98 -> 104.57 -> 110.66, MEDIUM 96.98 -> 104.50 -> 110.66, HARD 96.98 -> 104.50 -> 110.62 s.
+Used sets: SOFT (age 4, 5, 6) 96.98 -> 110.51-110.58 -> 110.39-110.40, MEDIUM (age 3) 96.98 -> 110.33 -> 110.40 s.
+Lap 1 is the seed's fcp (98.98 s raw minus 57 laps of fuel). The largest step is 14.7-15.2 s on new sets and 4.5-8.8 s on used sets.
+No runaway drift: every rollout stays within 97-113 s.
 Not fully smooth:
-- New sets jump about 12-13 s on their second lap, drop back near 104-106 s, then step up again to 111-113 s around stint lap 20.
-- Used sets stay near 101-105 s, then step up by about 6 s around stint laps 14-17.
+- New sets jump to about 112 s on their second lap, drop back near 102-105 s, then step up again to about 111 s around stint lap 20.
+- Used sets stay near 101-105 s, then step up by about 5-7 s to about 110 s around stint laps 14-17 (a tyre age of about 20, like the new sets).
 The second-lap jump on new sets is the practice push/cool-down pattern (step 2 of Race Simulation, #20), and none of it is tyre physics. It
 is what the model learns from FP data that still has #18 and #20 open.
 
@@ -459,7 +466,7 @@ The solution is stable and not sensitive to minor model noise
 KNOWN ISSUES
 Known bugs and their effect on the results are documented in diagnostic.md.
 Open TODOs by priority (IDs as in diagnostic.md; each is tagged [TODO #N, ...] where it applies above):
-P1, results are invalid until fixed:  #19 fuel correction sign
+P1, results are invalid until fixed:  none open (#1-#4, #7, #8, #10, #11 and #19 are fixed)
 P2, method or validation misleading:  #18 splits mix laps of one stint, #6 residual plot leakage, #5 placeholder t-test,
                                       #13 model choice, #20 slow non-push laps
 P3, completeness and cleanup:         #12 dead starting-compound setting, #16 car data not a model input, #15 results documentation

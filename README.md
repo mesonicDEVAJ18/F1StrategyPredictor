@@ -150,7 +150,7 @@ Environmental conditions:
 | `tyre_age` | `tyre_age_at_start + laps_since_stint_start` | Real age of the set (laps on it including lap `t`), so used sets are told apart from new ones |
 | `session_FP1/2/3` | One-hot of the practice session | Separate session-level pace offsets |
 | `stint_avg_pace` | Mean lap time (s) of the stint's earlier laps (NaN on the first lap, filled with the median) | Capture stint-level performance without seeing lap `t+1` |
-| `fuel_corrected_pace` | `lap_duration + 0.035 × laps_remaining` in seconds (`laps_remaining = lap_end - lap_number`) | Account for fuel load reduction (sign and horizon are open, diagnostic.md #19) |
+| `fuel_corrected_pace` | `lap_duration − 0.035 × laps_remaining` in seconds (`laps_remaining = lap_end - lap_number + 1`, laps left in the stint counting this one) | Remove the fuel effect; practice fuel loads aren't recorded, so the stint's remaining laps stand in for fuel on board (assumption, diagnostic.md #19) |
 
 > **Note**: Track evolution was excluded to avoid deriving dependent variables.
 
@@ -173,9 +173,9 @@ Predict **fuel-corrected pace on the next lap** rather than explicitly computing
 
 | Model | Reasoning | Test MAE | Test RMSE | Test R² |
 |-------|-----------|----------|-----------|---------|
-| Linear Regression | Underfits non-linear tyre behavior | 16.62 s | 20.44 s | 0.373 |
-| Random Forest | Noisy, stepwise predictions | 12.37 s | 16.85 s | 0.574 |
-| **XGBoost** | Chosen for non-linear learning and smooth predictions | 11.97 s | 15.92 s | 0.620 |
+| Linear Regression | Underfits non-linear tyre behavior | 16.64 s | 20.48 s | 0.374 |
+| Random Forest | Noisy, stepwise predictions | 12.42 s | 17.02 s | 0.568 |
+| **XGBoost** | Chosen for non-linear learning and smooth predictions | 12.19 s | 16.06 s | 0.615 |
 
 *MAE and RMSE are in seconds, from the current run. The split still shuffles single laps, so laps of one stint are in both train and test, which flatters these numbers (diagnostic.md #18). The errors are large because the target still includes slow non-push laps (#20); see [diagnostic.md](diagnostic.md).*
 
@@ -226,7 +226,7 @@ For each compound and set age a car has left, and every stint length L = 1–57,
 2. **Predict:** XGBoost predicts the next lap's fuel-corrected pace from the current lap's inputs.
    - The race is not a practice session, so each lap is predicted under `session_FP1`, `session_FP2` and `session_FP3` and averaged, weighted by each session's share of training rows.
 3. **Feed back:** each prediction becomes the next lap's inputs.
-   - The training fuel term is undone first: `raw = fcp − 0.035 × (L − age)`.
+   - The training fuel term is added back first: `raw = fcp + 0.035 × (L − age + 1)`.
    - The sector times are rescaled to sum to `raw`.
    - `stint_avg_pace` is the mean of the earlier laps.
    - `laps_since_stint_start` and `tyre_age` go up by one.
@@ -239,12 +239,13 @@ Minimize: Total Race Time (s) = Σ(stint lap times) + 22 s × number of pit stop
 ```
 
 Current output (set age at the start of each stint in brackets):
-- car 16: SOFT(0)–SOFT(0)–HARD(0), stops on laps 19 and 38, 6113.18 s (three 19-lap stints, so any order of these sets ties); best 1-stop is 101.37 s slower
-- car 44: MEDIUM(3)–SOFT(4)–SOFT(5), stops on laps 17 and 40, 6082.41 s; best 1-stop is 102.60 s slower
+- both cars: SOFT(0)–SOFT(0)–HARD(0), stops on laps 19 and 38, 6005.04 s (three 19-lap stints, so any order of these sets ties)
+- car 16: best with a used set is 25.23 s slower, best 1-stop 114.18 s slower
+- car 44: swapping in the used MEDIUM(3) set is 3.43 s slower, best 1-stop 113.37 s slower
 
 Every race lap is summed once: "stop on lap p" means lap p is the in-lap and the next stint starts on lap p + 1, with the 22 s pit loss on top (diagnostic.md #11).
 
-None of this is tyre physics yet. 2 stops win because every rollout steps up by 6–13 s within about 14–20 stint laps and then plateaus. Car 44 prefers its used sets because the model predicts a slow second lap (~113 s) on a new set: practice runs on new sets are mostly push lap then cool-down lap, and the cool-down laps are still in the data (#20). With #19 (fuel correction) and #20 still open, this is not a valid recommendation yet.
+None of this is tyre physics yet. 2 stops win because every rollout steps up by 5–8 s at a tyre age of about 20 (the top of the training range) and then plateaus, so three short stints keep more laps on the fast early part. New sets win because used sets reach that step sooner, which outweighs the slow second lap (~112 s) the model predicts on a new set: practice runs on new sets are mostly push lap then cool-down lap, and the cool-down laps are still in the data (#20). With #20 still open, this is not a valid recommendation yet.
 
 ### 4. Optimization Engine
 
@@ -257,16 +258,16 @@ None of this is tyre physics yet. 2 stops win because every rollout steps up by 
 ## ✅ Evaluation & Validation
 
 ### Model Validation (`validate_strategy.py`)
-- **Cross-validation**: 5-fold CV on next-lap predictions (current: MAE 11.77 s, RMSE 16.16 s)
+- **Cross-validation**: 5-fold CV on next-lap predictions (current: MAE 11.92 s, RMSE 16.36 s)
 - **Residual analysis**: Check for systematic bias
 - **Feature importance**: Verify alignment with tyre physics
   - Expected top features: tyre age, compound, track temperature
 - **t-test**: Placeholder on random sample data
 - **Simulation stability** (logged by `strategy_simulator.py`): fcp at stint laps 1, 18 and 57 of a full-length rollout for each compound and set age, plus the largest lap-to-lap step.
-  - No runaway drift: every rollout stays within 99–114 s.
+  - No runaway drift: every rollout stays within 97–113 s.
   - Not fully smooth:
-    - New sets jump about 12–13 s on their second lap (the cool-down pattern above), drop back near 104–106 s, then step up again near 111–113 s around stint lap 20.
-    - Used sets (age 3–6) stay near 101–105 s, then step up by about 6 s to 111.6–111.9 s around stint laps 14–17.
+    - New sets jump to about 112 s on their second lap (the cool-down pattern above), drop back near 102–105 s, then step up again to about 111 s around stint lap 20.
+    - Used sets (age 3–6) stay near 101–105 s, then step up by about 5–7 s to about 110.3 s around stint laps 14–17 (a tyre age of about 20, like the new sets).
 
 ### Strategy Validation *(planned, not implemented yet)*
 - Simulate multiple race conditions with variations

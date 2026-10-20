@@ -1,6 +1,7 @@
 from env_config import env_float
 
-# Fuel effect (s per lap) used to build fuel_corrected_pace = lap_duration + k * laps_remaining.
+# Fuel effect (s per lap) used to build fuel_corrected_pace = lap_duration - k * laps_remaining,
+# where laps_remaining = lap_end - lap_number + 1 (laps left in the stint, counting lap t).
 # Shared so the simulator can undo it exactly when it feeds predictions back.
 FUEL_EFFECT_K = env_float("FUEL_EFFECT_K")
 

@@ -16,24 +16,24 @@
         19,
         38
       ],
-      "best_total_time": 6113.18489579221
+      "best_total_time": 6005.039970321001
     },
     "44": {
       "best_compound_sequence": [
-        "MEDIUM",
         "SOFT",
-        "SOFT"
+        "SOFT",
+        "HARD"
       ],
       "best_set_ages_at_start": [
-        3,
-        4,
-        5
+        0,
+        0,
+        0
       ],
       "best_pit_laps": [
-        17,
-        40
+        19,
+        38
       ],
-      "best_total_time": 6082.413736987517
+      "best_total_time": 6005.039970321001
     }
   }
 }

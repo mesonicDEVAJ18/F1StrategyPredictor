@@ -1,2 +1,2 @@
-Car 16: ('SOFT', 'SOFT', 'HARD'), set ages (0, 0, 0), pits [19, 38], time 6113.18 s
-Car 44: ('MEDIUM', 'SOFT', 'SOFT'), set ages (3, 4, 5), pits [17, 40], time 6082.41 s
+Car 16: ('SOFT', 'SOFT', 'HARD'), set ages (0, 0, 0), pits [19, 38], time 6005.04 s
+Car 44: ('SOFT', 'SOFT', 'HARD'), set ages (0, 0, 0), pits [19, 38], time 6005.04 s
