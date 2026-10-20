@@ -1,0 +1,19 @@
+car_number,set_id,compound,age,history
+16,S2,SOFT,6,FP2 #16 laps 7-10; FP2 #16 laps 10-13
+16,S4,SOFT,6,FP3 #16 laps 13-16; FP3 #16 laps 16-19
+16,S5,SOFT,0,new
+16,S6,SOFT,0,new
+16,S7,SOFT,0,new
+16,S8,SOFT,0,new
+16,M2,MEDIUM,0,new
+16,M3,MEDIUM,0,new
+16,H2,HARD,0,new
+44,S1,SOFT,6,FP1 #44 laps 17-23
+44,S4,SOFT,4,FP2 #44 laps 19-23
+44,S6,SOFT,5,FP3 #44 laps 13-16; FP3 #44 laps 16-18
+44,S7,SOFT,0,new
+44,S8,SOFT,0,new
+44,M1,MEDIUM,3,FP2 #44 laps 1-4
+44,M2,MEDIUM,0,new
+44,M3,MEDIUM,0,new
+44,H2,HARD,0,new

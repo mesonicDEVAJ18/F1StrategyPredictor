@@ -188,6 +188,11 @@ log(f"  → Session one-hot rows: {session_dummies.sum().to_dict()}")
 laps["laps_since_stint_start"] = laps["lap_number"] - laps["lap_start"] + 1
 laps["laps_since_stint_start"] = laps["laps_since_stint_start"].clip(lower=1)
 
+# Real tyre age: laps on the set including lap t (1 on a new set's first lap), so a stint
+# on a used set is told apart from one on a new set (diagnostic.md #21)
+laps["tyre_age"] = laps["tyre_age_at_start"] + laps["laps_since_stint_start"]
+log(f"  → tyre_age range: {laps['tyre_age'].min():.0f}-{laps['tyre_age'].max():.0f} laps")
+
 # Causal stint average pace (seconds): mean of the stint's earlier laps only, so the
 # target lap t+1 can't leak in (diagnostic.md #17). NaN on a stint's first lap; training
 # fills it with the median, which is also the simulator's seed value.

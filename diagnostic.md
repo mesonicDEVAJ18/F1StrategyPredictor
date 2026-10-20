@@ -81,7 +81,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **Problem:** predictions are indexed by race lap, and `laps_since_stint_start` is set to the race lap number. A stint that starts on lap 30 is priced as if its tyres were already 30 laps old.
   - **Fix:** predict each stint from tyre age 1, i.e. index by stint length rather than by race lap.
   - **readme.txt:** Race Simulation step 2.
-  - **Fixed** (together with #9): `precompute_stint_rollouts()` rolls every compound out for every stint length L = 1..57, always from tyre age 1 (`laps_since_stint_start` = 1 on the stint's first lap). `stint_time()` prices a stint as the summed predicted fcp of the L-lap rollout plus the race fuel term (`FUEL_PENALTY_PER_LAP` × fuel on board) of the race laps it covers. So a stint costs the same wherever it starts, apart from the fuel. Race stints start on a new set (`RACE_TYRE_AGE_AT_START = 0`, see #21); the training median was 3.
+  - **Fixed** (together with #9): `precompute_stint_rollouts()` rolls every compound out for every stint length L = 1..57, always from tyre age 1 (`laps_since_stint_start` = 1 on the stint's first lap). `stint_time()` prices a stint as the summed predicted fcp of the L-lap rollout plus the race fuel term (`FUEL_PENALTY_PER_LAP` × fuel on board) of the race laps it covers. So a stint costs the same wherever it starts, apart from the fuel. Race stints originally always started on a new set; since #21 they start at the age of the set the car fits.
     - **Training range:** `laps_since_stint_start` is 2–18 in training (pit-out laps are cleaned out). Age 1 is treated like 2. Beyond 18, XGBoost's response to tyre age is flat, so any later change comes from the fed-back inputs (#9).
 
 - [ ] **#11 The pit lap is missing from the race-time sum**
@@ -132,6 +132,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **Where:** the filters in `scripts/process_laps.py`.
   - **Problem:** the filters drop pit-out laps, invalid sectors, laps over 2× the median and IQR residual outliers. Cool-down, in- and traffic laps under 2× the median remain. Cleaned laps have a median of about 100–117 s per session, but a mean of 111–121 s and a 90th percentile of about 147–159 s.
   - **Effect:** the target mixes push laps with slow laps, so the errors in seconds are large (XGB MAE about 10.5 s). The simulator's median-feature lap (103–112 s) is slower than race pace.
+  - **Since #21:** with the real `tyre_age` as an input, the model predicts a ~113 s second lap on every new set (push lap then cool-down lap in practice), so the optimiser prefers used sets.
   - **Fix:** flag or drop non-push laps, e.g. laps more than a set margin slower than the driver's best on that compound in the session, or train only on long-run stints.
   - **readme.txt:** Data Preparation, laps cleaning.
 
@@ -233,7 +234,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - #9 (fixed): the simulator rolls a lap-*t* feature vector forward. Car-data features would need a seed value and a rule for how they evolve, or they stay at their medians like the speeds.
   - **readme.txt:** Data Collection step 5; Data Preparation, CarData.
 
-- [ ] **#21 Race stints always start on a new tyre set**
+- [x] **#21 Race stints always start on a new tyre set**
   - **Where:** `RACE_TYRE_AGE_AT_START` in `scripts/strategy_simulator.py`.
   - **Problem:** every simulated stint has `tyre_age_at_start = 0`. In a real race, some stints start on sets already used in practice or qualifying, and the sets available depend on what is left of the weekend allocation.
   - **What the data allows:**
@@ -246,6 +247,38 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - Hard-code the allocation and return rules (typically 2 HARD / 3 MEDIUM / 8 SOFT per weekend, with sets returned after sessions), which OpenF1 doesn't provide.
     - Let `generate_strategies()` choose from the sets left, and start each stint at its set's age.
   - **readme.txt:** Race Simulation step 2.
+  - **Fixed** (practice only, both Ferraris; the real tyre age is also a model input now):
+    - **New stage `scripts/tyre_sets.py`** (in `master.py` after `process_stints.py`) chains each race car's practice stints into sets. It writes the sets left for the race to `data/tyre_sets_race_inventory.csv`.
+      - A stint at `tyre_age_at_start` 0 takes a new set from the allocation.
+      - A used-set stint continues the same-compound set left at exactly that age, preferring the most recently used. If none matches, it is logged and takes a new set at that age.
+      - A set's age after a stint is `tyre_age_at_start + (lap_end − lap_start)`, which is how OpenF1 counts it.
+      - After practice session *i*, the `TYRE_RETURNS_PER_SESSION` most-worn sets are returned, keeping the `TYRE_RACE_RESERVED` new sets.
+      - New `.env` keys: `RACE_CARS=16,44`, `FP_STAND_INS=38:16`, `TYRE_ALLOCATION=SOFT:8,MEDIUM:3,HARD:2`, `TYRE_RETURNS_PER_SESSION=1,1,2`, `TYRE_RACE_RESERVED=HARD:1,MEDIUM:1` and `TYRE_SETS_FILE`. `RACE_TYRE_AGE_AT_START` is removed.
+    - **Chaining result:** 26 Ferrari stints (13 per car). 14 new sets, 11 exact matches and 1 ambiguous match (car 16, FP3: two SOFT sets at age 6; either choice gives the same inventory). No stint is unmatched. Assignments are in `tyre_sets_stint_set_assignment.csv` and returns in `tyre_sets_returned_sets.csv`.
+      - **Car 16:** returns HARD 12 (FP1), MEDIUM 17 (FP2), SOFT 15 and SOFT 7 (FP3). Races with SOFT 0, 0, 0, 0, 6, 6 / MEDIUM 0, 0 / HARD 0.
+      - **Car 44:** returns HARD 16, SOFT 12, then SOFT 8 and 7. Races with SOFT 0, 0, 4, 5, 6 / MEDIUM 0, 0, 3 / HARD 0.
+    - **Real tyre age feature:** `feature_engineer.py` adds `tyre_age = tyre_age_at_start + laps_since_stint_start` (laps on the set including lap *t*; 2–21 in training), which is in `MODEL_FEATURE_COLUMNS`. That gives 26 inputs; `tyre_age_at_start` and `laps_since_stint_start` are kept. Checked equal to the sum on all 839 rows; 514 rows after the target, unchanged.
+    - **Simulator:**
+      - `rollout_stint()` takes the set's age: `tyre_age_at_start` = set age, and `tyre_age` = set age + stint lap.
+      - Rollouts run once per (compound, set age) any car has (7 pairs, shared by both cars).
+      - `set_age_options()` lists the distinct set choices for a compound sequence, each set used at most once. For each sequence and set of pit laps, the fastest choice is kept.
+      - Sequences a car can't cover are skipped: 3,996 per car, since both have one HARD. That leaves 12,210 per car.
+      - Outputs gain `car_number`/`set_ages` (all-strategy CSV), `set_age_at_start` (rollouts, totals in long format), and a per-car `best_strategy.json`.
+      - Checked: every one of the 24,420 result rows uses only sets the car has, each at most once, and every rollout lap has `tyre_age = set_age_at_start + laps_since_stint_start`.
+    - **Effect on metrics:** held-out MAE 16.62 / 12.37 / 11.97 s, RMSE 20.44 / 16.85 / 15.92 s and R² 0.373 / 0.574 / 0.620 (LR/RF/XGB; was 12.54 / 12.06 MAE and R² 0.565 / 0.620 for RF/XGB). LR is unchanged, because `tyre_age` is a sum of two of its inputs. XGBoost 5-fold CV MAE 11.77 s, RMSE 16.16 s (was 12.02 / 16.32 s). `tyre_age` is XGB's 2nd feature (0.087, after `i2_speed` 0.130) and RF's 6th (0.062).
+    - **Rollout behaviour:**
+      - On a new set, every compound predicts its second lap at about 113 s, a 12–13 s jump, then drops back to 104–106 s before stepping up to 111–114 s around stint lap 20.
+      - Used sets (age 3–6) have no jump, and step up about 6 s around stint laps 14–17.
+      - Cause: in practice, new sets are mostly run as push lap then cool-down lap. The training median fcp on new-set stint lap 2 is 94.8 s and on stint lap 3 is 148.8 s. The model has learnt that pattern now that it can see the set's real age. This is #20, not tyre physics.
+    - **Effect on strategy:**
+      - **Car 16:** SOFT(6)–SOFT(0)–HARD(0), pits on laps 18 and 38, 5890.48 s (tied with SOFT(6)–HARD(0)–SOFT(0), since the last two stints are both 19 laps). Its best with new sets only is 5901.72 s, and its best 1-stop is HARD(0)–SOFT(6) at 6101.64 s.
+      - **Car 44:** MEDIUM(3)–SOFT(4)–SOFT(5), pits on laps 18 and 38, 5856.92 s. Its best 1-stop is MEDIUM(3)–SOFT(4) at 6072.59 s.
+      - The previous winner, HARD–HARD–SOFT (6023.36 s), needs two HARD sets, which neither car has left.
+      - Both cars prefer used sets because of the new-set second lap above, and #11 still drops the pit laps. So this is still **not** a valid recommendation.
+    - **Still open (limitations):**
+      - Qualifying stints aren't used (scope kept to FP1–FP3), so sets used in qualifying are counted as available.
+      - The allocation, the return counts, returning the most-worn sets and the reserved sets are assumptions in `.env`. They should be checked against the season's sporting regulations.
+      - Chaining is a heuristic: it assumes OpenF1's `tyre_age_at_start` counts every lap on the set.
 
 - [x] **#22 Settings are hardcoded across scripts**
   - **Where:** all 8 stage scripts and `scripts/feature_config.py`.

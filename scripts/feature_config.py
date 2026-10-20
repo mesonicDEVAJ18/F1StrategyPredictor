@@ -31,6 +31,7 @@ MODEL_FEATURE_COLUMNS = [
     "wind_direction",
     "wind_speed",
     "laps_since_stint_start",
+    "tyre_age",                 # tyre_age_at_start + laps_since_stint_start (laps on the set)
     "stint_avg_pace",
 ]
 

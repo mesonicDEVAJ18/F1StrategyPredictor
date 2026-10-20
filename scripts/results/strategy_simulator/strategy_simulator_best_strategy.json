@@ -1,13 +1,39 @@
 {
-  "best_compound_sequence": [
-    "HARD",
-    "HARD",
-    "SOFT"
-  ],
-  "best_pit_laps": [
-    12,
-    24
-  ],
-  "best_total_time": 6023.361798905193,
-  "time_units": "seconds"
+  "time_units": "seconds",
+  "cars": {
+    "16": {
+      "best_compound_sequence": [
+        "SOFT",
+        "SOFT",
+        "HARD"
+      ],
+      "best_set_ages_at_start": [
+        6,
+        0,
+        0
+      ],
+      "best_pit_laps": [
+        18,
+        38
+      ],
+      "best_total_time": 5890.481805653497
+    },
+    "44": {
+      "best_compound_sequence": [
+        "MEDIUM",
+        "SOFT",
+        "SOFT"
+      ],
+      "best_set_ages_at_start": [
+        3,
+        4,
+        5
+      ],
+      "best_pit_laps": [
+        18,
+        38
+      ],
+      "best_total_time": 5856.915533912392
+    }
+  }
 }

@@ -1,0 +1,9 @@
+car_number,returned_after,set_id,compound,age
+16,FP1,H1,HARD,12
+16,FP2,M1,MEDIUM,17
+16,FP3,S3,SOFT,15
+16,FP3,S1,SOFT,7
+44,FP1,H1,HARD,16
+44,FP2,S2,SOFT,12
+44,FP3,S3,SOFT,8
+44,FP3,S5,SOFT,7

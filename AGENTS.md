@@ -28,6 +28,7 @@ scripts/            # ALL pipeline code lives here; run scripts FROM this direct
   feature_config.py     # shared column lists (MODEL_FEATURE_COLUMNS, SIM_FEATURE_COLUMNS, SESSION_COLUMNS)
   process_laps.py       # clean lap data (kept in s / km/h, not scaled), tag session_name FP1-3
   process_stints.py     # clean stints, one-hot encode compound
+  tyre_sets.py          # infer each race car's tyre sets from practice stints -> race inventory
   process_weather.py    # clean + scale weather
   process_cardata.py    # clean car telemetry, aggregate per lap (not a model input yet)
   feature_engineer.py   # merge laps+stints+weather, build engineered features
@@ -57,7 +58,7 @@ python master.py            # run the full pipeline end-to-end
 python process_laps.py      # or run any single stage on its own
 ```
 
-`master.py` runs, in order: `process_laps` → `process_stints` → `process_weather` →
+`master.py` runs, in order: `process_laps` → `process_stints` → `tyre_sets` → `process_weather` →
 `process_cardata`, then `feature_engineer` → `train_model` → `strategy_simulator` →
 `validate_strategy`. It aborts the whole run if any stage exits non-zero.
 
@@ -76,6 +77,10 @@ hand-off file to `data/` in addition to its own `results/<name>/` copy:
 
 - `process_laps.py`   → `data/laps_combined_clean.csv`
 - `process_stints.py` → `data/stints_combined_clean.csv`
+- `tyre_sets.py`      → `data/tyre_sets_race_inventory.csv` (one row per set each car in `RACE_CARS` has
+  left for the race: compound and age in laps). OpenF1 has no set ID, so sets are chained by compound and
+  `tyre_age_at_start`; allocation, returns and race-reserved sets are `.env` settings (diagnostic.md #21).
+  Practice only: qualifying usage isn't tracked.
 - `process_weather.py`→ `data/cleaned_weather.csv`
 - `process_cardata.py`→ `data/cardata_per_lap_clean.csv` (keyed by `session_key`,
   `driver_number`, `lap_number`; lap windows come from the raw `laps_p*.csv`, and only laps in
@@ -92,9 +97,11 @@ hand-off file to `data/` in addition to its own `results/<name>/` copy:
 - `strategy_simulator.py` and `validate_strategy.py` load that `.pkl` bundle. The simulator starts from
   `medians` (inputs are in physical units, so 0 is not "average") and averages each lap's prediction over
   the session one-hots with `session_weights`, because the race is not a practice session. Each stint is
-  rolled out autoregressively from tyre age 1, once per (compound, stint length): every predicted fcp is
-  turned back into a raw lap time with `FUEL_EFFECT_K` (feature_config.py) and fed into the next lap's sector
-  times and running `stint_avg_pace`.
+  rolled out autoregressively from stint lap 1, once per (compound, set age at start, stint length), with
+  `tyre_age` = set age + stint lap: every predicted fcp is turned back into a raw lap time with
+  `FUEL_EFFECT_K` (feature_config.py) and fed into the next lap's sector times and running `stint_avg_pace`.
+  Strategies are optimised per car in `RACE_CARS` from its tyre-set inventory: each set is fitted at most
+  once, and the fastest choice of sets is kept for each compound sequence and pit-lap plan.
 
 The **model target** is next-lap `fuel_corrected_pace`: the same driver's lap `lap_number + 1` in the
 same stint, built by `build_next_lap_target()` in `feature_config.py` (shared by `train_model.py` and

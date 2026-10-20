@@ -32,6 +32,7 @@ def main():
     process_scripts = [
         "process_laps.py",
         "process_stints.py",
+        "tyre_sets.py",             # needs process_stints.py's hand-off
         "process_weather.py",
         "process_cardata.py"
     ]

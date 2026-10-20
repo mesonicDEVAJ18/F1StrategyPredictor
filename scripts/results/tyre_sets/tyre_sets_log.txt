@@ -1,0 +1,35 @@
+
+--- TYRE SETS START ---
+
+Loaded 275 stints from ../data\stints_combined_clean.csv
+Sessions: {10007: 'FP1', 10008: 'FP2', 10009: 'FP3'}
+Race cars: [16, 44], practice stand-ins: {38: 16}
+Allocation: {'SOFT': 8, 'MEDIUM': 3, 'HARD': 2}, returns per session: [1, 1, 2], race-reserved new sets: {'HARD': 1, 'MEDIUM': 1}
+
+Car 16: 13 practice stints (drivers [16, 38])
+  [car 16] Returned after FP1: H1 (HARD, age 12)
+  [car 16] Returned after FP2: M1 (MEDIUM, age 17)
+  [car 16] Returned after FP3: S3 (SOFT, age 15)
+  [car 16] Returned after FP3: S1 (SOFT, age 7)
+  [car 16] Stints: {'new': 6, 'matched': 6, 'ambiguous': 1, 'unmatched': 0}
+  [car 16] Race SOFT sets (age in laps): [0, 0, 0, 0, 6, 6]
+  [car 16] Race MEDIUM sets (age in laps): [0, 0]
+  [car 16] Race HARD sets (age in laps): [0]
+
+Car 44: 13 practice stints (drivers [44])
+  [car 44] Returned after FP1: H1 (HARD, age 16)
+  [car 44] Returned after FP2: S2 (SOFT, age 12)
+  [car 44] Returned after FP3: S3 (SOFT, age 8)
+  [car 44] Returned after FP3: S5 (SOFT, age 7)
+  [car 44] Stints: {'new': 8, 'matched': 5, 'ambiguous': 0, 'unmatched': 0}
+  [car 44] Race SOFT sets (age in laps): [0, 0, 4, 5, 6]
+  [car 44] Race MEDIUM sets (age in laps): [0, 0, 3]
+  [car 44] Race HARD sets (age in laps): [0]
+
+Saved hand-off dataset: ../data\tyre_sets_race_inventory.csv
+
+PROCESS COMPLETE. Files generated:
+  - tyre_sets_stint_set_assignment.csv
+  - tyre_sets_returned_sets.csv
+  - tyre_sets_race_inventory.csv
+  - tyre_sets_manifest.txt
