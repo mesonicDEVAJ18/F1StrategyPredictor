@@ -377,3 +377,29 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - [ ] **Strategy:** recommended strategy (compound sequence and pit laps), predicted race time in seconds, the next-best alternatives and the gap to them, and predicted pace by compound across the race.
     - [ ] **Limitations:** a short note on which results depend on items still open above.
     - [ ] Decide where this lives (a results section in `readme.txt` / `README.md`, or a separate `RESULTS.md`) and link it from both readmes.
+
+---
+
+## Things to explore
+
+Ideas that could make more data usable, not confirmed bugs. Each one changes the results, so check the effect before adopting it.
+
+Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 467 (164 / 221 / 82), and only 153 rows survive the next-lap target shift in `train_model.py`. Removed by `process_laps.py`: 275 pit-out laps, 7 invalid-sector or extreme lap times, 102 for "unrealistic speed", 34 IQR outliers and 372 non-push laps.
+
+- [ ] **Speed filter drops laps with a missing speed trap, not just slow ones**
+  - **Where:** `scripts/process_laps.py`: `df[(df[speed_cols] > MIN_SPEED_KMH).all(axis=1)]`.
+  - **Problem:** `NaN > MIN_SPEED_KMH` is False, so a lap missing any of `i1_speed` / `i2_speed` / `st_speed` is dropped as "unrealistic speed". The filter removes 102 laps (25 / 70 / 7). The non-pit-out raw laps with at least one missing speed number 24 / 71 / 7, so nearly all of the 102 are missing data, not slow laps.
+  - **Effect:** FP2, the session with the long runs, loses the most laps this way.
+  - **Idea:** drop a lap only when a speed is present and below the threshold, and let missing speeds fall through to the training medians. Or require only the speed columns the model actually uses. That would recover up to ~100 laps.
+
+- [ ] **Push-lap filter may be too strict for long runs**
+  - **Where:** `scripts/process_laps.py`: `apply_push_lap_filter()`, `PUSH_LAP_MAX_BEST_RATIO=1.15` in `.env` (#20).
+  - **Problem:** the cutoff is relative to the driver's best lap in the whole session, which is usually a low-fuel SOFT lap. Heavy-fuel long-run laps, which are what the race simulation needs, sit close to that cutoff.
+  - **Effect:** 372 laps (145 / 109 / 118) are removed, the largest single filter.
+  - **Idea:** try a looser ratio, or apply the ratio per stint (against the stint's best lap) so long runs are judged against themselves while cool-down laps are still removed.
+
+- [ ] **Next-lap target loses most rows**
+  - **Where:** `build_next_lap_target()` in `scripts/feature_config.py`; `train_model.py` logs "Rows after target shift drop: 153".
+  - **Problem:** the target needs the same driver's lap `lap_number + 1` in the same stint, and that lap must also survive cleaning. Practice runs alternate push and cool-down laps, so dropping the cool-downs breaks most consecutive pairs.
+  - **Effect:** 467 cleaned laps give only 153 training pairs, about 120 after the train/test split.
+  - **Idea:** allow the next *surviving* lap in the stint (lap *t+k*) as the target, with *k* as a feature, so the model learns pace k laps ahead. This is a bigger modelling change: the simulator's rollout would need to match, and every feature must still belong to lap *t* (no leakage).
