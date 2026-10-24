@@ -39,7 +39,7 @@ clean_laps_file = processed_dir / env_str("LAPS_CLEAN_FILE")
 if not cardata_files:
     raise FileNotFoundError(f"No {cardata_glob} files found at {cardata_dir}")
 
-# Per-file outputs are named by driver, which changes between weekends (diagnostic.md #24),
+# Per-file outputs are named by driver, which changes between weekends,
 # so a previous weekend's files are cleared first
 for stale in Path(RESULTS_DIR).glob(f"{SCRIPT_NAME}_cleaned_{cardata_glob}"):
     stale.unlink()
@@ -286,14 +286,14 @@ for file, df in samples_by_file.items():
     generated_files.append(cleaned_name)
     log(f"  → Saved cleaned file: {cleaned_name} ({len(df)} samples)")
 
-# Not scaled: the aggregates are model inputs and stay in physical units like the laps
-# (diagnostic.md #7, #16), so the simulator's median baseline is meaningful
+# Not scaled: the aggregates are model inputs and stay in physical units like the laps,
+# so the simulator's median baseline is meaningful
 combined_name = f"{SCRIPT_NAME}_per_lap.csv"
 combined.to_csv(f"{RESULTS_DIR}/{combined_name}", index=False)
 generated_files.append(combined_name)
 log(f"\nSaved per-lap dataset: {combined_name} ({len(combined)} laps)")
 
-# Hand-off for feature_engineer.py (merged on lap t as model inputs, diagnostic.md #16)
+# Hand-off for feature_engineer.py (merged on lap t as model inputs)
 handoff_path = processed_dir / env_str("CARDATA_CLEAN_FILE")
 combined.to_csv(handoff_path, index=False)
 log(f"Saved hand-off dataset: {handoff_path}")

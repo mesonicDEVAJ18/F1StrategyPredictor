@@ -34,9 +34,13 @@ All data is sourced from the [OpenF1 API](https://openf1.org/).
 ### Data Sources
 
 **1. Session Identification**
+
+Each weekend's meeting key, FP1-FP3 session keys and scheduled race laps are hardcoded in the `WEEKENDS` table in `scripts/race_weekend.py` (every non-sprint 2024 and 2025 weekend; sprint weekends have FP1 only and are rejected). The keys come from:
 ```
-GET https://api.openf1.org/v1/sessions?country_name=Bahrain&year=2025
+GET https://api.openf1.org/v1/sessions?year=<year>&session_type=Practice
 ```
+
+For the reference weekend, Bahrain 2025 (meeting 1257):
 
 | Session ID | Session Name | Date | Time (UTC) |
 |------------|-------------|------|------------|
@@ -46,7 +50,7 @@ GET https://api.openf1.org/v1/sessions?country_name=Bahrain&year=2025
 
 **2. Telemetry Data Downloads**
 
-`scripts/race_weekend.py` (step 0 of `master.py`) downloads these for the weekend in `RACE_YEAR` / `RACE_WEEKEND` (`.env`), for any non-sprint 2024 or 2025 weekend. Its `WEEKENDS` table hardcodes each weekend's meeting key, FP1-FP3 session keys and scheduled race laps. Each weekend is kept in `data/cache/<year>_<name>/` (gitignored, laid out like `data/raw/`). A weekend fetched before is loaded from there with no requests; otherwise the current `data/raw/` is moved into the cache and the missing files are downloaded, waiting `OPENF1_REQUEST_DELAY_S` between requests. The requests per weekend are:
+`scripts/race_weekend.py` (step 0 of `master.py`) downloads these for the weekend in `RACE_YEAR` / `RACE_WEEKEND` (`.env`), for any non-sprint 2024 or 2025 weekend. Its `WEEKENDS` table hardcodes each weekend's meeting key, FP1-FP3 session keys and scheduled race laps. Each weekend is kept in `data/cache/<year>_<name>/` (gitignored, laid out like `data/raw/`). A weekend fetched before is loaded from there with no requests; otherwise the current `data/raw/` is moved into the cache and the missing files are downloaded, waiting `OPENF1_REQUEST_DELAY_S` between requests and retrying HTTP 429/5xx and network errors (see [Weekend cache](#weekend-cache)). The requests per weekend are:
 
 ```
 GET https://api.openf1.org/v1/laps?session_key=<FP1|FP2|FP3>&csv=true        -> data/raw/laps/laps_p1-3.csv
@@ -56,17 +60,28 @@ GET https://api.openf1.org/v1/weather?meeting_key=<meeting>&csv=true         -> 
 GET https://api.openf1.org/v1/car_data?session_key=<s>&driver_number=<d>&csv=true -> data/raw/car_data/car_data_p<n>_<d>.csv
 ```
 
-Car data is requested for every driver in that session's downloaded laps file, so it follows each weekend's field (20 per session, 60 files, ~66 MB). The drivers files are the entry lists that `tyre_sets.py` uses to find stand-ins: the FP3 lineup is taken as the race cars, and an FP1/FP2 driver outside it counts toward the same team's driver who sat that session out (in Bahrain 2025, six FP1 stand-ins, e.g. driver 38 in Ferrari's #16).
+Car data is requested for every driver in that session's downloaded laps file, so it follows each weekend's field (for Bahrain 2025: 20 per session, 60 files, ~66 MB). The drivers files are the entry lists that `tyre_sets.py` uses to find stand-ins: the FP3 lineup is taken as the race cars, and an FP1/FP2 driver outside it counts toward the same team's driver who sat that session out (in Bahrain 2025, six FP1 stand-ins, e.g. driver 38 in Ferrari's #16).
 
-Laps and stints cover the whole field (~20 drivers per session), and the model is trained on all of them.
+Laps and stints cover the whole field (20 drivers per session in Bahrain 2025), and the model is trained on all of them.
+
+### Weekend cache
+
+- **Layout:** one folder per weekend, `data/cache/<year>_<name>/` (`CACHE_DIR`, e.g. `2025_bahrain`), with the same `laps/`, `stints/`, `drivers/`, `weather/` and `car_data/` subfolders as `data/raw/`. About 70 files and 67-69 MB per weekend. Gitignored.
+- **`data/raw/` is the active weekend only**, copied from its cache folder, so no other stage depends on which weekend is selected.
+- **Switching weekends:** `data/raw/` is moved into the cache folder of the weekend it holds (found from the `meeting_key` in `laps_p1.csv`; an unknown meeting goes to `meeting_<key>/`). Files the cache already has are kept there. The selected weekend's folder is completed from OpenF1 and copied into `data/raw/`. A weekend fetched before needs no requests.
+- **Interrupted downloads** are written to `<file>.part` and renamed when complete, so a re-run fetches only what is still missing.
+- **No car data:** a car-data request with no results (HTTP 404) leaves a `<file>.nodata` marker, so it isn't requested again; delete the marker to retry. Laps, stints, drivers or weather with no results stop the run.
+- **Force a re-download:** delete the file (or the weekend's folder) from `data/cache/`, and also from `data/raw/` if it is the active weekend (a complete `data/raw/` is left alone, and a file deleted from `data/raw/` only is restored from the cache).
+- **Run record:** `scripts/results/race_weekend/race_weekend_summary.csv` says where the run got its data (`data/raw (unchanged)`, `cache`, or `cache, N file(s) downloaded`), with file counts and any drivers without car data.
+- **Git:** `data/raw/`, `data/processed/` and `scripts/results/` are tracked, so running another weekend rewrites them. Switching back to 2025 `bahrain` restores the committed data from the cache.
 
 ### Dataset Descriptions
 
 #### **Laps Dataset**
 Key features for lap-level telemetry:
-- `lap_duration`: Total lap time (primary target variable)
+- `lap_duration`: Total lap time (the basis of fuel-corrected pace; the model's target is the next lap's fuel-corrected pace)
 - `duration_sector_1/2/3`: Individual sector times
-- `i1_speed`, `i2_speed`, `st_speed`: Speed measurements at key points
+- `i1_speed`, `i2_speed`, `st_speed`: Speeds at the two intermediates and the speed trap
 - `lap_number`: Sequential lap index
 - `is_pit_out_lap`: Flag for pit exit laps (excluded from analysis)
 
@@ -77,12 +92,16 @@ Tyre compound and usage information:
 - `stint_number`: Sequential stint identifier
 - `tyre_age_at_start`: Previous laps on this tyre set
 
+#### **Drivers Dataset**
+Per-session entry lists:
+- `driver_number`, `team_name`: used by `tyre_sets.py` to pair practice stand-ins with their team's race car
+
 #### **Weather Dataset**
 Environmental conditions:
 - `air_temperature`, `track_temperature`: Critical for tyre performance
 - `humidity`, `pressure`: Atmospheric conditions
 - `wind_speed`, `wind_direction`: Aerodynamic factors
-- `rainfall`: Wet vs dry condition indicator
+- `rainfall`: Rain flag (0/1)
 
 ---
 
@@ -93,12 +112,12 @@ Environmental conditions:
 - `process_stints.py`: Validates stint metadata
 - `tyre_sets.py`: Infers every car's tyre sets from the practice stints (chained by compound and `tyre_age_at_start`) and writes the sets left for the race
 - `process_weather.py`: Filters atmospheric anomalies
-- `process_cardata.py`: Drops no-input (brake/throttle = 104) and out-of-range telemetry samples, encodes brake/DRS as 0/1, aggregates the ~4 Hz samples per lap (speed, throttle, braking, rpm, gears, DRS), keeps only laps that survive `process_laps.py`, removes z-score outliers, and leaves the aggregates unscaled (physical units). They are merged into the engineered dataset as model inputs (diagnostic.md #16)
+- `process_cardata.py`: Drops no-input (brake/throttle = 104) and out-of-range telemetry samples, encodes brake/DRS as 0/1, aggregates the ~4 Hz samples per lap (speed, throttle, braking, rpm, gears, DRS), keeps only laps that survive `process_laps.py`, removes z-score outliers, and leaves the aggregates unscaled (physical units). They are merged into the engineered dataset as model inputs
 
 ### Data Cleaning Process
 
 **1. Redundancy Removal**
-- Removed session and meeting keys
+- Removed meeting keys; `session_key` is kept in laps, stints and car data (lap and stint numbers restart every session), and only weather drops it
 - Excluded pit-out laps (slow in-laps are caught by the non-push filter)
 
 **2. Outlier Detection & Removal**
@@ -108,7 +127,7 @@ Environmental conditions:
 - Unrealistic lap times (≤ 30s or ≥ 2× session median)
 - Aborted laps (`i1_speed`, `i2_speed` or `st_speed` ≤ 50 km/h)
 - Rolling median residual filtering: residual = lap time − 5-lap centred rolling median per driver; removed laps outside `[Q1 - 3×IQR, Q3 + 3×IQR]`
-- Non-push laps (cool-down, in- and traffic laps): slower than 1.15× the driver's best lap in the session (`PUSH_LAP_MAX_BEST_RATIO`), which leaves 467 laps (diagnostic.md #20)
+- Non-push laps (cool-down, in- and traffic laps): slower than 1.15× the driver's best lap in the session (`PUSH_LAP_MAX_BEST_RATIO`), which leaves 467 laps (Bahrain 2025)
 
 *Stints:*
 - Logical validation: `lap_start ≤ lap_end`
@@ -116,7 +135,7 @@ Environmental conditions:
 - Non-null compound values
 
 *Weather:*
-- Z-score filtering (|z| > 3) on all continuous variables
+- Practice sessions only; Z-score filtering (|z| > 3) on temperature, humidity, pressure, wind speed and rainfall (wind direction excluded, zero-variance columns skipped)
 
 **3. Encoding**
 - `driver_number`: Kept numerical as an identifier (with `session_key`) to build the per-driver next-lap target; not a model input (generalized model)
@@ -125,7 +144,7 @@ Environmental conditions:
 - `segments_sector_1/2/3`: List of mini-sector codes replaced by its length
 
 **4. Normalization**
-- **Laps**: Not scaled. Lap times, sector times and speeds stay in seconds and km/h. The models are unaffected by a global rescale, and per-session scaling erased each session's pace level and left predictions in z-scores
+- **Laps**: Not scaled. Lap times, sector times and speeds stay in seconds and km/h. The models are unaffected by a global rescale, a per-session scaler would remove each session's pace level and leave predictions in z-scores, and session offsets are handled by the session one-hot instead
 - **Car data**: Not scaled, like the laps, so the per-lap aggregates stay in km/h, %, rpm and shares
 - **Weather**: StandardScaler on temperature, humidity, pressure, wind speed, rainfall
 - **Wind direction**: Kept raw (circular variable)
@@ -141,7 +160,7 @@ Environmental conditions:
 | `tyre_age` | `tyre_age_at_start + laps_since_stint_start` | Real age of the set (laps on it including lap `t`), so used sets are told apart from new ones |
 | `session_FP1/2/3` | One-hot of the practice session | Separate session-level pace offsets |
 | `stint_avg_pace` | Mean lap time (s) of the stint's earlier laps (NaN on the first lap, filled with the median) | Capture stint-level performance without seeing lap `t+1` |
-| `fuel_corrected_pace` | `lap_duration − 0.035 × laps_remaining` in seconds (`laps_remaining = lap_end - lap_number + 1`, laps left in the stint counting this one) | Remove the fuel effect; practice fuel loads aren't recorded, so the stint's remaining laps stand in for fuel on board (assumption, diagnostic.md #19) |
+| `fuel_corrected_pace` | `lap_duration − 0.035 × laps_remaining` in seconds (`laps_remaining = lap_end - lap_number + 1`, laps left in the stint counting this one) | Remove the fuel effect; practice fuel loads aren't recorded, so the stint's remaining laps stand in for fuel on board (assumption) |
 
 > **Note**: Track evolution was excluded to avoid deriving dependent variables.
 
@@ -204,15 +223,15 @@ Built by `build_next_lap_target()` in `scripts/feature_config.py`: the same driv
 
 ### 1. Strategy Space Generation
 
-Enumerate strategies for a 57-lap race (16,206 in total):
+Enumerate strategies for the weekend's race length from `race_weekend.py` (Bahrain 2025: 57 laps, 16,206 strategies):
 - **Stop configurations**: 1-stop, 2-stop (0 stops can't use two compounds)
 - **Compound sequences**: Every SOFT/MEDIUM/HARD sequence that uses at least two different compounds (the dry-race rule)
 - **Pit windows**: Pit laps between lap 10 and lap 46 (Bahrain, 57 laps; the end of the window follows the weekend's race laps)
-- **Tyre sets**: the model is trained on the whole field, and the race is simulated for one car, `SIM_DRIVER` in `.env` (default 16). That car can only fit the sets it has left. `tyre_sets.py` infers them for every car from the practice stints, with each practice stand-in's running counted toward its race car (derived from the drivers files). OpenF1 has no set ID, so a stint that starts used is chained to the same-compound set that was left at that age. Allocation, returns after each session and the reserved race sets are `.env` assumptions. Each set is fitted at most once, and the fastest choice of sets is kept for each plan. Sequences needing more sets than the car has (e.g. two HARDs) are skipped, leaving 12,210 for car 16. Qualifying usage isn't tracked (diagnostic.md #21, #23).
+- **Tyre sets**: the model is trained on the whole field, and the race is simulated for one car, `SIM_DRIVER` in `.env` (default 16). That car can only fit the sets it has left. `tyre_sets.py` infers them for every car from the practice stints, with each practice stand-in's running counted toward its race car (derived from the drivers files). OpenF1 has no set ID, so a stint that starts used is chained to the same-compound set that was left at that age. Allocation, returns after each session and the reserved race sets are `.env` assumptions. Each set is fitted at most once, and the fastest choice of sets is kept for each plan. Sequences needing more sets than the car has (e.g. two HARDs) are skipped, leaving 12,210 for car 16 in Bahrain 2025. Qualifying usage isn't tracked.
 
 ### 2. Lap Time Prediction
 
-For each compound and set age a car has left, and every stint length L = 1–57, roll the stint forward from stint lap 1. Tyre age resets to the set's age at every stop.
+For each compound and set age a car has left, and every stint length L = 1 to the race length (57 in Bahrain 2025), roll the stint forward from stint lap 1. Tyre age resets to the set's age at every stop.
 1. **Seed:** lap 1 is a median lap: the training medians, the compound one-hot set, `tyre_age_at_start` = the set's age and `tyre_age` = set age + 1.
 2. **Predict:** XGBoost predicts the next lap's fuel-corrected pace from the current lap's inputs.
    - The race is not a practice session, so each lap is predicted under `session_FP1`, `session_FP2` and `session_FP3` and averaged, weighted by each session's share of training rows.
@@ -235,9 +254,9 @@ Current output for `SIM_DRIVER=16` (set age at the start of each stint in bracke
 
 Other cars give similar results from their own sets, e.g. car 44: SOFT(4)–HARD(0), stop on lap 14, 5840.39 s.
 
-Every race lap is summed once: "stop on lap p" means lap p is the in-lap and the next stint starts on lap p + 1, with the 22 s pit loss on top (diagnostic.md #11).
+Every race lap is summed once: "stop on lap p" means lap p is the in-lap and the next stint starts on lap p + 1, with the 22 s pit loss on top.
 
-None of this is tyre physics yet. 1 stop wins because every rollout is almost flat (about 101 s from stint lap 3 on, whatever the compound or set age), so an extra stop can't win back its 22 s. Neighbouring pit laps are within about 1 s and the compounds barely differ, so the pit lap and compound choice are close to arbitrary. The model is trained on only 153 rows, and its metrics still come from a shuffled split (#18), so this is not a valid recommendation yet.
+None of this is tyre physics yet. 1 stop wins because every rollout is almost flat (about 101 s from stint lap 3 on, whatever the compound or set age), so an extra stop can't win back its 22 s. Neighbouring pit laps are 0.24 s slower and the compounds barely differ, so the pit lap and compound choice are close to arbitrary. The model is trained on only 153 rows, and its metrics still come from a shuffled split (#18), so this is not a valid recommendation yet.
 
 ### 4. Optimization Engine
 
@@ -256,8 +275,8 @@ None of this is tyre physics yet. 1 stop wins because every rollout is almost fl
   - Expected top features: tyre age, compound, track temperature
 - **t-test**: Placeholder on random sample data
 - **Simulation stability** (logged by `strategy_simulator.py`): fcp at stint laps 1, 18 and 57 of a full-length rollout for each compound and set age, plus the largest lap-to-lap step.
-  - No runaway drift: every rollout stays within 97.15–101.70 s, and the largest lap-to-lap step is 2.2–2.5 s (stint laps 1–3).
-  - Smooth but nearly flat: about 99.5 s on stint lap 2 and 101 s on lap 3, then 100.5–101.7 s to lap 57. All compounds and set ages are within 0.3 s, so the model shows almost no tyre degradation yet.
+  - No runaway drift (car 16, Bahrain 2025): every rollout stays within 97.15–101.54 s, and the largest lap-to-lap step is 2.28–2.60 s (stint laps 1–3).
+  - Smooth but nearly flat: about 99.5 s on stint lap 2 and 101 s on lap 3, then 100.5–101.5 s to lap 57. All compounds and set ages are within about 0.4 s, so the model shows almost no tyre degradation yet.
 
 ### Strategy Validation *(planned, not implemented yet)*
 - Simulate multiple race conditions with variations
@@ -270,14 +289,14 @@ None of this is tyre physics yet. 1 stop wins because every rollout is almost fl
 ## 🚀 Getting Started
 
 ### Prerequisites
-Python 3.10. Dependencies are pinned in `requirements.txt` (UTF-16 encoded):
+Python 3.10. Dependencies are pinned in `requirements.txt` (the versions that produced the committed results):
 ```bash
-pip install pandas numpy scikit-learn xgboost scipy matplotlib seaborn joblib requests
+pip install -r requirements.txt
 ```
 
 ### Usage
 
-**1. Choose the weekend**: set `RACE_YEAR` and `RACE_WEEKEND` in [.env](.env) (default 2025 `bahrain`; the names are in `scripts/race_weekend.py`). `master.py` fetches its data (see [Data Sources](#data-sources)), or run `python race_weekend.py` on its own.
+**1. Choose the weekend**: set `RACE_YEAR` and `RACE_WEEKEND` in [.env](.env) (default 2025 `bahrain`; the names are in `scripts/race_weekend.py`). `master.py` fetches its data (see [Data Sources](#data-sources)), or run `python race_weekend.py` on its own. A weekend fetched before is loaded from `data/cache/` with no requests ([Weekend cache](#weekend-cache)).
 
 **2. Run the pipeline.** Scripts use relative paths, so run them from `scripts/`:
 ```bash
@@ -310,11 +329,13 @@ Detailed methodology: [readme.txt](readme.txt). Known bugs: [diagnostic.md](diag
 
 ## 📈 Key Insights
 
-### Physical Considerations Modeled
+### Physical Considerations the Model Is Meant to Capture
 - Tyre thermal degradation over stint length
 - Compound-specific grip vs durability trade-offs
 - Track temperature impact on tyre performance
 - Fuel load reduction over race distance
+
+So far only the fuel term is built in; the model has learnt almost none of the tyre effects from 153 training rows (see Simulation stability).
 
 ### Real-World Alignment
 This pipeline mirrors professional motorsport analytics:
@@ -351,7 +372,7 @@ Indraprastha Institute of Information Technology Delhi
 ## 🙏 Acknowledgments
 
 - [OpenF1 API](https://openf1.org/) for comprehensive F1 telemetry data
-- The data science community for XGBoost and SHAP tools
+- The data science community for pandas, scikit-learn and XGBoost
 - Formula 1 for being the ultimate testing ground for optimization problems
 
 ---

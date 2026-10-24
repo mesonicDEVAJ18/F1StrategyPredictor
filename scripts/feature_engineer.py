@@ -181,7 +181,7 @@ log("\nMerging per-lap car data (session_key, driver_number, lap_number)...")
 
 # Each row gets its own lap t's telemetry; the target is lap t+1, so nothing leaks.
 # Laps whose telemetry was dropped (low coverage, outliers) stay NaN and are filled
-# with the training medians in train_model.py (diagnostic.md #16)
+# with the training medians in train_model.py
 lap_keys = ["session_key", "driver_number", "lap_number"]
 rows_before = len(laps)
 laps = laps.merge(
@@ -220,12 +220,12 @@ laps["laps_since_stint_start"] = laps["lap_number"] - laps["lap_start"] + 1
 laps["laps_since_stint_start"] = laps["laps_since_stint_start"].clip(lower=1)
 
 # Real tyre age: laps on the set including lap t (1 on a new set's first lap), so a stint
-# on a used set is told apart from one on a new set (diagnostic.md #21)
+# on a used set is told apart from one on a new set
 laps["tyre_age"] = laps["tyre_age_at_start"] + laps["laps_since_stint_start"]
 log(f"  → tyre_age range: {laps['tyre_age'].min():.0f}-{laps['tyre_age'].max():.0f} laps")
 
 # Causal stint average pace (seconds): mean of the stint's earlier laps only, so the
-# target lap t+1 can't leak in (diagnostic.md #17). NaN on a stint's first lap; training
+# target lap t+1 can't leak in. NaN on a stint's first lap; training
 # fills it with the median, which is also the simulator's seed value.
 laps["stint_avg_pace"] = (
     laps.sort_values(["driver_number", "stint_number", "lap_number"])
@@ -236,7 +236,7 @@ log(f"  → stint_avg_pace NaN (first lap of a stint): {laps['stint_avg_pace'].i
 
 # fuel_corrected_pace (seconds; lap_duration is unscaled, k is s/lap): the fuel effect is
 # removed. Practice fuel loads aren't recorded, so the laps left in the stint, counting lap t,
-# stand in for the fuel on board at the start of lap t (assumption, diagnostic.md #19). The
+# stand in for the fuel on board at the start of lap t (assumption). The
 # simulator's race fuel term uses the same convention (laps left in the race, counting the lap).
 laps["laps_remaining"] = laps["lap_end"] - laps["lap_number"] + 1
 laps["fuel_corrected_pace"] = laps["lap_duration"] - FUEL_EFFECT_K * laps["laps_remaining"]

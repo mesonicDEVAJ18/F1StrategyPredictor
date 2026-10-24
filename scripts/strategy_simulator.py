@@ -52,8 +52,8 @@ log(f"Session weights for averaging predictions: {SESSION_WEIGHTS}")
 # ============================================================
 # LOAD TYRE SET INVENTORY
 # ============================================================
-# Sets each car has left for the race, inferred from practice by tyre_sets.py (diagnostic.md #21).
-# The race is simulated for one car, SIM_DRIVER; the model itself is trained on the whole field (#23)
+# Sets each car has left for the race, inferred from practice by tyre_sets.py.
+# The race is simulated for one car, SIM_DRIVER; the model itself is trained on the whole field
 SIM_DRIVER = env_int("SIM_DRIVER")
 all_inventory = pd.read_csv(os.path.join(env_str("DATA_DIR"), env_str("PROCESSED_DIR"), env_str("TYRE_SETS_FILE")))
 inventory = all_inventory[all_inventory["car_number"] == SIM_DRIVER]
@@ -69,7 +69,7 @@ log(f"Loaded tyre set inventory for car {SIM_DRIVER}: " + ", ".join(
 # ============================================================
 # CONSTANTS
 # ============================================================
-# Race settings come from .env and the race laps from the weekend table (diagnostic.md #24);
+# Race settings come from .env and the race laps from the weekend table;
 # COMPOUNDS and SECTOR_COLUMNS must match the model's columns
 COMPOUNDS = ["SOFT", "MEDIUM", "HARD"]
 PIT_LOSS = env_float("PIT_LOSS_S")                         # seconds
@@ -79,7 +79,7 @@ NUM_LAPS = WEEKEND["race_laps"]
 PIT_WINDOW_START_LAP = env_int("PIT_WINDOW_START_LAP")     # earliest pit lap
 PIT_WINDOW_END_BUFFER = env_int("PIT_WINDOW_END_BUFFER")   # no pit in the last laps
 STOP_COUNTS = env_list("STOP_COUNTS", cast=int)
-MIN_COMPOUNDS_USED = env_int("MIN_COMPOUNDS_USED")         # two-compound rule (diagnostic.md #8)
+MIN_COMPOUNDS_USED = env_int("MIN_COMPOUNDS_USED")         # two-compound rule
 SECTOR_COLUMNS = ["duration_sector_1", "duration_sector_2", "duration_sector_3"]
 SMOOTHNESS_AGES = env_list("SMOOTHNESS_CHECK_AGES", cast=int) + [NUM_LAPS]  # 18 is past the longest stint age in training
 

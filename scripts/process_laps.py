@@ -108,7 +108,7 @@ def apply_iqr_residual_filter(df, fname):
 
 def apply_push_lap_filter(df, fname):
     """Drop non-push laps: slower than PUSH_LAP_MAX_BEST_RATIO x the driver's best lap
-    in this session (diagnostic.md #20). Each file is one session."""
+    in this session. Each file is one session."""
     best_lap = df.groupby("driver_number")["lap_duration"].transform("min")
 
     before = len(df)
@@ -165,7 +165,7 @@ for file in laps_files:
     df = apply_push_lap_filter(df, file)
 
     # Lap times and speeds stay in physical units (s, km/h): the models are scale-invariant,
-    # and per-session scaling erased each session's pace level (diagnostic.md #7)
+    # and per-session scaling would erase each session's pace level
     log(f"[{file}] Kept lap_duration, sector times and speeds unscaled (s, km/h)")
 
     # Practice session label, one-hot encoded as a model input in feature_engineer.py

@@ -31,7 +31,8 @@ def main():
     run_step("race_weekend.py")
 
     # 1. Run all processing scripts
-    # (Order usually doesn't matter here, but they are run sequentially)
+    # (Order matters: tyre_sets.py needs process_stints.py's hand-off, and
+    # process_cardata.py keeps only the laps that survive process_laps.py)
     process_scripts = [
         "process_laps.py",
         "process_stints.py",

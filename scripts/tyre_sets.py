@@ -35,7 +35,7 @@ def env_pairs(key, key_cast=str, value_cast=int):
 # CONFIG
 # ============================================================
 # OpenF1 stints have no set ID, so sets are inferred by chaining: a stint that starts
-# used continues the same-compound set that earlier running left at that age (diagnostic.md #21)
+# used continues the same-compound set that earlier running left at that age
 COMPOUNDS = ["SOFT", "MEDIUM", "HARD"]
 
 processed_dir = os.path.join(env_str("DATA_DIR"), env_str("PROCESSED_DIR"))
@@ -52,7 +52,7 @@ TYRE_RACE_RESERVED = env_pairs("TYRE_RACE_RESERVED")              # compound -> 
 # PRACTICE STAND-INS
 # ============================================================
 def derive_stand_ins():
-    """Practice driver -> race car, from the FP1-FP3 entry lists (diagnostic.md #24).
+    """Practice driver -> race car, from the FP1-FP3 entry lists.
 
     The FP3 lineup is taken as the race cars. In each session, a driver missing from the FP3
     lineup is paired with the one driver of the same team who sat that session out, e.g. an FP1
@@ -88,7 +88,7 @@ stints["compound"] = (
     stints[[f"compound_{c}" for c in COMPOUNDS]].idxmax(axis=1).str.replace("compound_", "")
 )
 stints["car_number"] = stints["driver_number"].map(lambda d: FP_STAND_INS.get(d, d))
-# Every car in practice gets an inventory; strategy_simulator.py picks one with SIM_DRIVER (diagnostic.md #23)
+# Every car in practice gets an inventory; strategy_simulator.py picks one with SIM_DRIVER
 CARS = sorted(int(c) for c in stints["car_number"].unique())
 
 # Session keys increase FP1 -> FP3, as in feature_engineer.py

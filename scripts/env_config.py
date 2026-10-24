@@ -1,4 +1,4 @@
-# Pipeline settings from the repo-root .env (diagnostic.md #22).
+# Pipeline settings from the repo-root .env.
 # A variable already set in the environment overrides .env, e.g.
 #   $env:PIT_LOSS_S = "25"; python strategy_simulator.py
 # A missing key raises instead of falling back to a hidden default.

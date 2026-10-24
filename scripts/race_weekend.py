@@ -10,7 +10,7 @@ from pathlib import Path
 from env_config import env_str, env_int, env_float, env_list
 
 # Puts the race weekend chosen in .env (RACE_YEAR, RACE_WEEKEND) into data/raw/, from the weekend
-# cache in data/cache/ or, for anything missing there, from the OpenF1 API (diagnostic.md #24).
+# cache in data/cache/ or, for anything missing there, from the OpenF1 API.
 # Other scripts import selected_weekend() for the weekend's constants; importing has no side effects.
 SCRIPT_NAME = "race_weekend"
 RESULTS_DIR = f"{env_str('RESULTS_ROOT')}/{SCRIPT_NAME}"
