@@ -46,33 +46,17 @@ GET https://api.openf1.org/v1/sessions?country_name=Bahrain&year=2025
 
 **2. Telemetry Data Downloads**
 
-```bash
-mkdir -p data/raw/laps data/raw/stints data/raw/weather
+`scripts/race_weekend.py` (step 0 of `master.py`) downloads these for the weekend in `RACE_YEAR` / `RACE_WEEKEND` (`.env`), for any non-sprint 2024 or 2025 weekend. Its `WEEKENDS` table hardcodes each weekend's meeting key, FP1-FP3 session keys and scheduled race laps. Each weekend is kept in `data/cache/<year>_<name>/` (gitignored, laid out like `data/raw/`). A weekend fetched before is loaded from there with no requests; otherwise the current `data/raw/` is moved into the cache and the missing files are downloaded, waiting `OPENF1_REQUEST_DELAY_S` between requests. The requests per weekend are:
 
-# Lap data for all three sessions
-curl "https://api.openf1.org/v1/laps?session_key=10007&csv=true" -o data/raw/laps/laps_p1.csv
-curl "https://api.openf1.org/v1/laps?session_key=10008&csv=true" -o data/raw/laps/laps_p2.csv
-curl "https://api.openf1.org/v1/laps?session_key=10009&csv=true" -o data/raw/laps/laps_p3.csv
-
-# Stint data for all three sessions
-curl "https://api.openf1.org/v1/stints?session_key=10007&csv=true" -o data/raw/stints/stints_p1.csv
-curl "https://api.openf1.org/v1/stints?session_key=10008&csv=true" -o data/raw/stints/stints_p2.csv
-curl "https://api.openf1.org/v1/stints?session_key=10009&csv=true" -o data/raw/stints/stints_p3.csv
-
-# Weather data for the whole meeting (process_weather.py keeps the practice sessions)
-curl "https://api.openf1.org/v1/weather?meeting_key=1257&csv=true" -o data/raw/weather/weather.csv
-
-# Car data for every driver in each session (20 per session, 60 files), into data/raw/car_data/
-# Drivers are read from that session's laps file (in FP1, six stand-ins ran race cars, e.g. driver 38 in Ferrari's #16; see FP_STAND_INS in .env)
-mkdir -p data/raw/car_data
-for n in 1 2 3; do
-  key=$((10006 + n))
-  for d in $(python -c "import csv;print(*sorted({r['driver_number'] for r in csv.DictReader(open('data/raw/laps/laps_p$n.csv'))},key=int))"); do
-    curl "https://api.openf1.org/v1/car_data?session_key=$key&driver_number=$d&csv=true" -o data/raw/car_data/car_data_p${n}_${d}.csv
-    sleep 1.5   # stay under the free API's rate limit
-  done
-done
 ```
+GET https://api.openf1.org/v1/laps?session_key=<FP1|FP2|FP3>&csv=true        -> data/raw/laps/laps_p1-3.csv
+GET https://api.openf1.org/v1/stints?session_key=<FP1|FP2|FP3>&csv=true      -> data/raw/stints/stints_p1-3.csv
+GET https://api.openf1.org/v1/drivers?session_key=<FP1|FP2|FP3>&csv=true     -> data/raw/drivers/drivers_p1-3.csv
+GET https://api.openf1.org/v1/weather?meeting_key=<meeting>&csv=true         -> data/raw/weather/weather.csv (process_weather.py keeps the practice sessions)
+GET https://api.openf1.org/v1/car_data?session_key=<s>&driver_number=<d>&csv=true -> data/raw/car_data/car_data_p<n>_<d>.csv
+```
+
+Car data is requested for every driver in that session's downloaded laps file, so it follows each weekend's field (20 per session, 60 files, ~66 MB). The drivers files are the entry lists that `tyre_sets.py` uses to find stand-ins: the FP3 lineup is taken as the race cars, and an FP1/FP2 driver outside it counts toward the same team's driver who sat that session out (in Bahrain 2025, six FP1 stand-ins, e.g. driver 38 in Ferrari's #16).
 
 Laps and stints cover the whole field (~20 drivers per session), and the model is trained on all of them.
 
@@ -223,8 +207,8 @@ Built by `build_next_lap_target()` in `scripts/feature_config.py`: the same driv
 Enumerate strategies for a 57-lap race (16,206 in total):
 - **Stop configurations**: 1-stop, 2-stop (0 stops can't use two compounds)
 - **Compound sequences**: Every SOFT/MEDIUM/HARD sequence that uses at least two different compounds (the dry-race rule)
-- **Pit windows**: Pit laps between lap 10 and lap 46
-- **Tyre sets**: the model is trained on the whole field, and the race is simulated for one car, `SIM_DRIVER` in `.env` (default 16). That car can only fit the sets it has left. `tyre_sets.py` infers them for every car from the practice stints, with each FP1 stand-in's running counted toward its race car (`FP_STAND_INS`). OpenF1 has no set ID, so a stint that starts used is chained to the same-compound set that was left at that age. Allocation, returns after each session and the reserved race sets are `.env` assumptions. Each set is fitted at most once, and the fastest choice of sets is kept for each plan. Sequences needing more sets than the car has (e.g. two HARDs) are skipped, leaving 12,210 for car 16. Qualifying usage isn't tracked (diagnostic.md #21, #23).
+- **Pit windows**: Pit laps between lap 10 and lap 46 (Bahrain, 57 laps; the end of the window follows the weekend's race laps)
+- **Tyre sets**: the model is trained on the whole field, and the race is simulated for one car, `SIM_DRIVER` in `.env` (default 16). That car can only fit the sets it has left. `tyre_sets.py` infers them for every car from the practice stints, with each practice stand-in's running counted toward its race car (derived from the drivers files). OpenF1 has no set ID, so a stint that starts used is chained to the same-compound set that was left at that age. Allocation, returns after each session and the reserved race sets are `.env` assumptions. Each set is fitted at most once, and the fastest choice of sets is kept for each plan. Sequences needing more sets than the car has (e.g. two HARDs) are skipped, leaving 12,210 for car 16. Qualifying usage isn't tracked (diagnostic.md #21, #23).
 
 ### 2. Lap Time Prediction
 
@@ -293,7 +277,7 @@ pip install pandas numpy scikit-learn xgboost scipy matplotlib seaborn joblib re
 
 ### Usage
 
-**1. Data Collection**: download the CSVs into `data/raw/` (one folder per source) with the URLs under [Data Sources](#data-sources).
+**1. Choose the weekend**: set `RACE_YEAR` and `RACE_WEEKEND` in [.env](.env) (default 2025 `bahrain`; the names are in `scripts/race_weekend.py`). `master.py` fetches its data (see [Data Sources](#data-sources)), or run `python race_weekend.py` on its own.
 
 **2. Run the pipeline.** Scripts use relative paths, so run them from `scripts/`:
 ```bash
@@ -305,6 +289,7 @@ python master.py
 
 | Step | Script | Hands off |
 |------|--------|-----------|
+| 0 | `race_weekend.py` | `data/raw/` (the selected weekend, from `data/cache/` or OpenF1) |
 | 1 | `process_laps.py` | `data/processed/laps_combined_clean.csv` |
 | 2 | `process_stints.py` | `data/processed/stints_combined_clean.csv` |
 | 3 | `tyre_sets.py` | `data/processed/tyre_sets_race_inventory.csv` (each car's sets left for the race) |
@@ -317,7 +302,7 @@ python master.py
 
 Each script can also be run on its own, and writes its log and outputs to `scripts/results/<script_name>/`.
 
-**Settings** (paths, file names, cleaning thresholds, model hyperparameters, seeds, race length, pit loss, pit window, stop counts) are in [.env](.env) at the repo root, which `scripts/env_config.py` reads. An environment variable with the same name overrides the file for one run, e.g. `$env:PIT_LOSS_S="25"; python strategy_simulator.py` (PowerShell).
+**Settings** (race weekend, paths, file names, cleaning thresholds, model hyperparameters, seeds, pit loss, pit window, stop counts) are in [.env](.env) at the repo root, which `scripts/env_config.py` reads; the race length comes from the weekend table. An environment variable with the same name overrides the file for one run, e.g. `$env:PIT_LOSS_S="25"; python strategy_simulator.py`, or `$env:RACE_YEAR="2024"; $env:RACE_WEEKEND="saudi_arabia"; python master.py` (PowerShell).
 
 Detailed methodology: [readme.txt](readme.txt). Known bugs: [diagnostic.md](diagnostic.md).
 

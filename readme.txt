@@ -7,35 +7,51 @@ two compounds are supposed to be used (out of 3, hard, medium and soft).
 The problem statement limits us to the three practice sessions only, we can broaden our scope by going out of this limitation but for this project we wont.
 
 DATA COLLECTION
-This analysis has been done for Bahrain 2025, same pipeline is applicable across weekends. The model is trained on the whole field, and
+The reference analysis is Bahrain 2025, and the same pipeline runs on any non-sprint 2024 or 2025 weekend: set RACE_YEAR and
+RACE_WEEKEND in .env (e.g. 2024 and saudi_arabia; the names are in scripts/race_weekend.py). The model is trained on the whole field, and
 the race strategy is simulated for one car, SIM_DRIVER in .env (default 16, Ferrari), using that car's own tyre sets.
 Note: the laps, stints and car data cover the whole field (20 drivers per session), and the model is trained on all of them.
-All data has been collected from https://openf1.org/ and is stored in data/raw/ (laps/laps_p1-3.csv, stints/stints_p1-3.csv, weather/weather.csv, car_data/raw/car_data_p*_*.csv).
+All data comes from https://openf1.org/. data/raw/ holds the selected weekend (laps/laps_p1-3.csv, stints/stints_p1-3.csv,
+drivers/drivers_p1-3.csv, weather/weather.csv, car_data/car_data_p*_*.csv), and data/cache/<year>_<name>/ keeps every weekend fetched
+so far, laid out like data/raw/ (gitignored).
 
-1. Identify the 3 practice sessions ids. https://api.openf1.org/v1/sessions?country_name=Bahrain&year=2025 
+scripts/race_weekend.py is the first step of master.py, and does steps 1-6 below:
+- If data/raw/ already holds the complete selected weekend (found from the meeting_key in laps_p1.csv), it does nothing.
+- Otherwise it moves data/raw/ into that weekend's cache folder, downloads whatever the selected weekend's cache folder is missing
+  (OPENF1_REQUEST_DELAY_S between requests, retrying HTTP 429/5xx), and copies that folder into data/raw/. A weekend fetched before is
+  loaded from the cache with no requests.
+
+1. Identify the 3 practice sessions ids. They are hardcoded per weekend in race_weekend.py's WEEKENDS table, with the meeting_key and
+   the scheduled race laps (the simulator's race distance), from https://api.openf1.org/v1/sessions?year=<year>&session_type=Practice.
+   For Bahrain 2025 (meeting 1257):
 1	10007	Practice 1	Practice	2025-04-11 11:30	2025-04-11 12:30	1 hr	Friday FP1
 2	10008	Practice 2	Practice	2025-04-11 15:00	2025-04-11 16:00	1 hr	Friday FP2
 3	10009	Practice 3	Practice	2025-04-12 12:30	2025-04-12 13:30	1 hr	Saturday FP3
+Sprint weekends have FP1 only and are rejected.
 
-2. Download all laps' data for the sessions 
-https://api.openf1.org/v1/laps?session_key=10007&csv=true
-https://api.openf1.org/v1/laps?session_key=10008&csv=true
-https://api.openf1.org/v1/laps?session_key=10009&csv=true
+2. Download all laps' data for the sessions
+https://api.openf1.org/v1/laps?session_key=<session_key>&csv=true
 
 3. Download all stints's data for the sessions
-https://api.openf1.org/v1/stints?session_key=10007&csv=true
-https://api.openf1.org/v1/stints?session_key=10008&csv=true
-https://api.openf1.org/v1/stints?session_key=10009&csv=true
+https://api.openf1.org/v1/stints?session_key=<session_key>&csv=true
 
 4. Download the weekend's weather related data
-https://api.openf1.org/v1/weather?meeting_key=1257&csv=true
+https://api.openf1.org/v1/weather?meeting_key=<meeting_key>&csv=true
 This covers the whole meeting (practice, qualifying and race); process_weather.py keeps only the practice sessions.
 
-5. Download the car data for every driver in each session (the driver_numbers in that session's laps_p*.csv, 20 per session)
+5. Download each session's entry list (driver_number and team_name)
+https://api.openf1.org/v1/drivers?session_key=<session_key>&csv=true
+tyre_sets.py uses these to find stand-ins. The FP3 lineup is taken as the race cars, and in FP1 and FP2 a driver who is not in it is paired
+with the one driver of the same team who sat that session out, so their running counts toward that race car's tyre sets. In Bahrain 2025
+six stand-ins ran in FP1 (38 in #16, 34 in #14, 37 in #1, 46 in #55, 50 in #87, 72 in #63), so those six race drivers have no FP1 laps.
+The same rule covers a driver replaced before FP3 (Jeddah 2024: Bearman #38 took over Sainz's #55 car, so 55 counts toward 38).
+A team that can't be paired one-to-one is logged as a warning and its drivers keep their own numbers.
+
+6. Download the car data for every driver in each session (the driver_numbers in that session's laps_p*.csv, 20 per session)
 https://api.openf1.org/v1/car_data?session_key=<session_key>&driver_number=<driver>&csv=true
-Saved as data/raw/car_data/car_data_p<session>_<driver>.csv (60 files, ~66 MB; CARDATA_DIR in .env).
-In FP1 six stand-ins ran race cars (38 in #16, 34 in #14, 37 in #1, 46 in #55, 50 in #87, 72 in #63, from OpenF1's drivers endpoint),
-so those six race drivers have no FP1 laps. FP_STAND_INS in .env maps them for tyre_sets.py.
+The driver list is read from the laps files after they are downloaded, so it follows each weekend's field.
+Saved as data/raw/car_data/car_data_p<session>_<driver>.csv (60 files, ~66 MB; CARDATA_DIR in .env). A driver with no car data leaves a
+.nodata marker instead, so it isn't requested again.
 process_cardata.py cleans, encodes and aggregates the car data per lap (see Data Preparation), and feature_engineer.py merges it as model inputs.
 
 DATA UNDERSTANDING
@@ -120,12 +136,15 @@ All scripts live in scripts/ and use relative paths, so run them from inside scr
     cd scripts
     python master.py
 
-master.py runs process_laps.py -> process_stints.py -> tyre_sets.py -> process_weather.py -> process_cardata.py -> feature_engineer.py -> train_model.py
+master.py runs race_weekend.py -> process_laps.py -> process_stints.py -> tyre_sets.py -> process_weather.py -> process_cardata.py -> feature_engineer.py -> train_model.py
 -> strategy_simulator.py -> validate_strategy.py, and stops at the first script that fails.
 Every script writes a log, a manifest and its intermediate outputs to scripts/results/<script_name>/.
-Settings (paths, file names, cleaning thresholds, model hyperparameters, seeds and race parameters such as NUM_LAPS and PIT_LOSS_S)
-live in .env at the repo root and are read through scripts/env_config.py. An environment variable of the same name overrides .env.
+Settings (the race weekend, paths, file names, cleaning thresholds, model hyperparameters, seeds and race parameters such as PIT_LOSS_S)
+live in .env at the repo root and are read through scripts/env_config.py. An environment variable of the same name overrides .env, e.g.
+    $env:RACE_YEAR = "2024"; $env:RACE_WEEKEND = "saudi_arabia"; python master.py
+runs the whole pipeline on Jeddah 2024. The race laps come from the weekend table in race_weekend.py.
 Stages hand data to each other through CSVs in data/processed/:
+    race_weekend.py      -> data/raw/ (the selected weekend, from data/cache/ or OpenF1)
     process_laps.py      -> data/processed/laps_combined_clean.csv
     process_stints.py    -> data/processed/stints_combined_clean.csv
     tyre_sets.py         -> data/processed/tyre_sets_race_inventory.csv (read by the simulator)
@@ -360,8 +379,8 @@ Tyre sets (tyre_sets.py): the simulated car (SIM_DRIVER) can only fit the sets i
 every car in practice (20), and the simulator picks SIM_DRIVER's; a car number with no inventory raises an error. OpenF1's stints have no set ID, so the sets are inferred
 from practice by chaining. A stint with tyre_age_at_start = 0 takes a new set from the allocation. A stint that starts used continues the
 same-compound set that the car's earlier running left at exactly that age. A set's age after a stint is tyre_age_at_start + (lap_end -
-lap_start), which is how OpenF1 counts it (#44 runs HARD on laps 1-9 in FP1, and the next HARD stint starts at age 8). Each FP1 stand-in counts
-toward its race car (FP_STAND_INS, e.g. driver 38 toward car 16). After each practice session the most-worn sets are returned (TYRE_RETURNS_PER_SESSION = 1, 1, 2), but a
+lap_start), which is how OpenF1 counts it (#44 runs HARD on laps 1-9 in FP1, and the next HARD stint starts at age 8). Each practice stand-in counts
+toward its race car (derived from the drivers files, Data Collection step 5; e.g. driver 38 toward car 16). After each practice session the most-worn sets are returned (TYRE_RETURNS_PER_SESSION = 1, 1, 2), but a
 TYRE_RACE_RESERVED new HARD and MEDIUM are always kept. The allocation is TYRE_ALLOCATION = 8 SOFT, 3 MEDIUM, 2 HARD.
 All these rules are .env settings and assumptions; check them against the season's sporting regulations.
 Across the 20 cars' 275 practice stints, 143 take a new set, 108 match exactly one set, 16 are ambiguous (two sets share a compound and

@@ -41,17 +41,47 @@ COMPOUNDS = ["SOFT", "MEDIUM", "HARD"]
 processed_dir = os.path.join(env_str("DATA_DIR"), env_str("PROCESSED_DIR"))
 stints_file = os.path.join(processed_dir, env_str("STINTS_CLEAN_FILE"))
 inventory_file = os.path.join(processed_dir, env_str("TYRE_SETS_FILE"))
+drivers_files = [os.path.join(env_str("DATA_DIR"), env_str("DRIVERS_DIR"), f) for f in env_list("DRIVERS_FILES")]
 
-FP_STAND_INS = env_pairs("FP_STAND_INS", key_cast=int)           # practice driver -> race car
 TYRE_ALLOCATION = env_pairs("TYRE_ALLOCATION")                    # compound -> sets per weekend
 TYRE_RETURNS_PER_SESSION = env_list("TYRE_RETURNS_PER_SESSION", cast=int)
 TYRE_RACE_RESERVED = env_pairs("TYRE_RACE_RESERVED")              # compound -> new sets kept for the race
 
 
 # ============================================================
+# PRACTICE STAND-INS
+# ============================================================
+def derive_stand_ins():
+    """Practice driver -> race car, from the FP1-FP3 entry lists (diagnostic.md #24).
+
+    The FP3 lineup is taken as the race cars. In each session, a driver missing from the FP3
+    lineup is paired with the one driver of the same team who sat that session out, e.g. an FP1
+    rookie or a driver replaced before FP3 (Sainz #55 -> Bearman #38, Jeddah 2024).
+    """
+    sessions = [pd.read_csv(f, usecols=["driver_number", "team_name"]) for f in drivers_files]
+    race_lineup = sessions[-1]
+    stand_ins = {}
+    for n, entries in enumerate(sessions[:-1], start=1):
+        for team, team_entries in entries.groupby("team_name"):
+            ran = set(team_entries["driver_number"].astype(int))
+            race_cars = set(race_lineup.loc[race_lineup["team_name"] == team, "driver_number"].astype(int))
+            extra, absent = sorted(ran - race_cars), sorted(race_cars - ran)
+            if not extra:
+                continue
+            if len(extra) == 1 and len(absent) == 1:
+                if stand_ins.setdefault(extra[0], absent[0]) != absent[0]:
+                    log(f"WARNING: FP{n} {team}: #{extra[0]} already maps to #{stand_ins[extra[0]]}, not #{absent[0]}")
+            else:
+                log(f"WARNING: FP{n} {team}: can't pair {extra} with race cars {absent}; left as their own cars")
+    return stand_ins
+
+
+# ============================================================
 # LOAD STINTS
 # ============================================================
 log("\n--- TYRE SETS START ---\n")
+
+FP_STAND_INS = derive_stand_ins()                                 # practice driver -> race car
 
 stints = pd.read_csv(stints_file)
 stints["compound"] = (
@@ -67,7 +97,9 @@ session_names = {k: f"FP{i + 1}" for i, k in enumerate(session_keys)}
 
 log(f"Loaded {len(stints)} stints from {stints_file}")
 log(f"Sessions: {session_names}")
-log(f"Cars ({len(CARS)}): {CARS}, practice stand-ins: {FP_STAND_INS}")
+log(f"Practice stand-ins (driver: race car, from {[os.path.basename(f) for f in drivers_files]}): "
+    + ",".join(f"{d}:{c}" for d, c in FP_STAND_INS.items()))
+log(f"Cars ({len(CARS)}): {CARS}")
 log(f"Allocation: {TYRE_ALLOCATION}, returns per session: {TYRE_RETURNS_PER_SESSION}, "
     f"race-reserved new sets: {TYRE_RACE_RESERVED}")
 

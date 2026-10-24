@@ -338,6 +338,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
       - The allocation, the return counts, returning the most-worn sets and the reserved sets are assumptions in `.env`. They should be checked against the season's sporting regulations.
       - Chaining is a heuristic: it assumes OpenF1's `tyre_age_at_start` counts every lap on the set.
     - **Since #23:** `tyre_sets.py` builds an inventory for every car in practice, not just the Ferraris, and the simulator runs for the one car in `SIM_DRIVER`. `RACE_CARS` is removed.
+    - **Since #24:** `FP_STAND_INS` is removed; the stand-ins are derived from OpenF1's per-session entry lists.
 
 - [x] **#22 Settings are hardcoded across scripts**
   - **Where:** all 8 stage scripts and `scripts/feature_config.py`.
@@ -363,6 +364,39 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
       - Car 44: SOFT(4)–HARD(0), pit on lap 14, 5840.39 s.
       - Car 30: no MEDIUM left, so only 2,072 strategies are feasible; SOFT(3)–HARD(0), pit on lap 10, 5839.87 s.
       - Cars differ only through their sets, and the rollouts are almost flat, so the gaps are below 1 s. This is still **not** a valid recommendation (#18).
+    - **Since #24:** `FP_STAND_INS` is derived from `data/raw/drivers/` instead of set in `.env`; for Bahrain 2025 it gives the same six pairs.
+
+- [x] **#24 The race weekend is fixed to Bahrain 2025 and raw data is downloaded by hand**
+  - **Where:** `data/raw/` (filled with the curl commands in README.md), and the weekend constants in `.env`: `NUM_LAPS=57` and `FP_STAND_INS`.
+  - **Problem:** running another weekend meant looking up its session and meeting keys, re-downloading ~70 files by hand over the current ones, and editing the race length and stand-ins. Switching back meant downloading Bahrain again.
+  - **Fix:** choose the weekend in `.env` from a hardcoded table of 2024 and 2025 session keys, and have `master.py` fetch it, keeping every weekend fetched in a local cache.
+  - **readme.txt:** Data Collection; Running the Pipeline; Race Simulation, tyre sets.
+  - **Fixed:**
+    - **New stage `scripts/race_weekend.py`** (step 0 of `master.py`, before `process_laps.py`).
+      - `WEEKENDS` hardcodes every non-sprint 2024 and 2025 weekend (36): meeting key, FP1–FP3 session keys and scheduled race laps. The keys come from OpenF1 `/v1/sessions?session_type=Practice` and `/v1/meetings`. The race laps were checked against the highest race lap in OpenF1 and all match, except 2025 Austria, which ran 70 laps, so the table uses 70.
+      - The 12 sprint weekends (FP1 only) are listed in `SPRINT_WEEKENDS` and raise an error that says why. An unknown name raises with the valid names for that year.
+      - Session keys rise FP1 → FP3 on every weekend (2024 Abu Dhabi too: 9461, 9656, 9657), so `tyre_sets.py`'s sorted-key session order still holds.
+      - `selected_weekend()` is importable with no side effects; `strategy_simulator.py` takes its race laps from it.
+    - **Cache:** `data/cache/<year>_<name>/` mirrors `data/raw/` and is gitignored (~67 MB per weekend); `data/raw/` stays the active weekend, so no stage's paths changed.
+      - If raw already holds the complete selected weekend (`meeting_key` in `laps_p1.csv`), the stage does nothing.
+      - Otherwise raw is moved into its own weekend's cache folder (a file already cached is kept and the raw copy dropped), the selected weekend's folder is completed from OpenF1, and it is copied into raw.
+      - Downloads write to `.part` and rename, so an interrupted run resumes. They wait `OPENF1_REQUEST_DELAY_S` between requests and retry HTTP 429/5xx and network errors with backoff.
+      - Laps, stints, drivers and weather with no results raise. A car-data query with no results leaves a `.nodata` marker, so it isn't requested again.
+      - It uses `urllib` from the standard library: `requests` is pinned in requirements.txt but isn't installed in `.venv`.
+    - **Car numbers follow the weekend:** car data is requested for the drivers in each session's downloaded laps file, after the laps are in.
+    - **Stand-ins:** `tyre_sets.py` derives them from the new `data/raw/drivers/drivers_p1-3.csv` (OpenF1 `drivers` per session). The FP3 lineup is taken as the race cars. In FP1/FP2, a driver not in it is paired with the one driver of the same team who sat that session out; anything else is logged and left unmapped. This also covers drivers replaced before FP3.
+    - **`process_cardata.py`** clears its per-file `process_cardata_cleaned_car_data_*.csv` outputs first, since the driver numbers in their names change between weekends.
+    - **`.env`:**
+      - New keys: `RACE_YEAR=2025`, `RACE_WEEKEND=bahrain`, `OPENF1_BASE_URL`, `OPENF1_REQUEST_DELAY_S=2.0`, `OPENF1_MAX_RETRIES=5`, `OPENF1_TIMEOUT_S=120`, `RAW_DIR`, `DRIVERS_DIR`, `CACHE_DIR`, `DRIVERS_FILES` and `CARDATA_FILE_FORMAT`.
+      - Removed: `NUM_LAPS` and `FP_STAND_INS`.
+    - **Checks:**
+      - **First run on the committed Bahrain 2025 data:** it moved 67 files into the cache and downloaded only the 3 drivers files. Every other raw file is byte-identical (no git diff). A second run does nothing.
+      - **Stand-ins:** the derived stand-ins for Bahrain 2025 are exactly the old `38:16,34:14,37:1,46:55,50:87,72:63`, and the tyre-set inventory is unchanged.
+      - **Full pipeline, Bahrain 2025:** the same strategy as before, HARD(0)–SOFT(6), pit on lap 45, 5840.85 s. The only differences are log lines, the RandomForest's last digits and the unseeded t-test (#5).
+      - **`RACE_YEAR=2024 RACE_WEEKEND=saudi_arabia`:** downloads 70 files (all 60 car-data files present, ~290 s) and runs end to end. The field includes #2, #3, #11, #20, #24 and #77, with #38 in FP3 only. Derived stand-ins: `55:38` (Bearman for Sainz). 50 race laps. Car 16: SOFT(0)–MEDIUM(3), pit on lap 16, 4827.39 s.
+      - **Switching back to Bahrain 2025:** loaded from the cache with no requests, and the results match the Bahrain run above.
+      - `RACE_WEEKEND=miami`, `nowhere` and `RACE_YEAR=2023` each raise the expected error.
+    - **Still open:** the tyre allocation and return rules, `PIT_LOSS_S`, the fuel settings and the cleaning thresholds are the same for every weekend and were tuned on Bahrain 2025. Results on other weekends carry every open item above (#18 in particular).
 
 - [ ] **#15 Results documentation**
   - **Problem:** results currently exist only as raw files in `scripts/results/<script>/` and a few numbers in the readmes.

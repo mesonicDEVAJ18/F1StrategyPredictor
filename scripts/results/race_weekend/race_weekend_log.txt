@@ -1,0 +1,12 @@
+
+--- RACE WEEKEND START ---
+
+Selected weekend: 2025 Bahrain Grand Prix (2025_bahrain), meeting 1257, FP1-FP3 sessions [10007, 10008, 10009], 57 race laps
+data/raw/ holds: 2025_bahrain
+data/raw/ already holds the complete selected weekend; nothing to do.
+
+data/raw/ files: {'laps': 3, 'stints': 3, 'drivers': 3, 'weather': 1, 'car_data': 60}
+
+PROCESS COMPLETE. Files generated:
+  - race_weekend_summary.csv
+  - race_weekend_manifest.txt

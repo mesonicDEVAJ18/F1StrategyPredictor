@@ -4,6 +4,7 @@
 Loaded trained XGBoost model.
 Session weights for averaging predictions: {'session_FP1': 0.29411764705882354, 'session_FP2': 0.6601307189542484, 'session_FP3': 0.0457516339869281}
 Loaded tyre set inventory for car 16: SOFT [0, 0, 0, 0, 6, 6], MEDIUM [0, 0], HARD [0]
+Race weekend: 2025 Bahrain Grand Prix (2025_bahrain), 57 laps
 
 Rolling out 4 (compound, set age) pairs: [('SOFT', 0), ('SOFT', 6), ('MEDIUM', 0), ('HARD', 0)]
 Saved stint rollouts and stint totals.

@@ -10,6 +10,7 @@ from datetime import datetime
 
 from feature_config import MODEL_FEATURE_COLUMNS, SIM_FEATURE_COLUMNS, SESSION_COLUMNS, FUEL_EFFECT_K
 from env_config import env_str, env_int, env_float, env_list
+from race_weekend import selected_weekend
 
 warnings.filterwarnings("ignore")
 
@@ -59,7 +60,7 @@ inventory = all_inventory[all_inventory["car_number"] == SIM_DRIVER]
 if inventory.empty:
     raise ValueError(
         f"SIM_DRIVER={SIM_DRIVER} has no tyre set inventory. Cars available: "
-        f"{sorted(all_inventory['car_number'].unique().tolist())} (an FP1 stand-in counts as its race car, see FP_STAND_INS)")
+        f"{sorted(all_inventory['car_number'].unique().tolist())} (a practice stand-in counts as its race car, see tyre_sets.py)")
 
 log(f"Loaded tyre set inventory for car {SIM_DRIVER}: " + ", ".join(
     f"{c} {sorted(inventory.loc[inventory['compound'] == c, 'age'].tolist())}" for c in ["SOFT", "MEDIUM", "HARD"]))
@@ -68,17 +69,21 @@ log(f"Loaded tyre set inventory for car {SIM_DRIVER}: " + ", ".join(
 # ============================================================
 # CONSTANTS
 # ============================================================
-# Race settings come from .env; COMPOUNDS and SECTOR_COLUMNS must match the model's columns
+# Race settings come from .env and the race laps from the weekend table (diagnostic.md #24);
+# COMPOUNDS and SECTOR_COLUMNS must match the model's columns
 COMPOUNDS = ["SOFT", "MEDIUM", "HARD"]
 PIT_LOSS = env_float("PIT_LOSS_S")                         # seconds
 FUEL_PENALTY_PER_LAP = env_float("FUEL_PENALTY_PER_LAP")   # seconds per lap of fuel
-NUM_LAPS = env_int("NUM_LAPS")
+WEEKEND = selected_weekend()
+NUM_LAPS = WEEKEND["race_laps"]
 PIT_WINDOW_START_LAP = env_int("PIT_WINDOW_START_LAP")     # earliest pit lap
 PIT_WINDOW_END_BUFFER = env_int("PIT_WINDOW_END_BUFFER")   # no pit in the last laps
 STOP_COUNTS = env_list("STOP_COUNTS", cast=int)
 MIN_COMPOUNDS_USED = env_int("MIN_COMPOUNDS_USED")         # two-compound rule (diagnostic.md #8)
 SECTOR_COLUMNS = ["duration_sector_1", "duration_sector_2", "duration_sector_3"]
 SMOOTHNESS_AGES = env_list("SMOOTHNESS_CHECK_AGES", cast=int) + [NUM_LAPS]  # 18 is past the longest stint age in training
+
+log(f"Race weekend: {WEEKEND['year']} {WEEKEND['name']} ({WEEKEND['id']}), {NUM_LAPS} laps")
 
 
 # ============================================================

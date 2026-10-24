@@ -6,7 +6,8 @@ Guidance for AI coding agents working in the **F1 Race Strategy Optimiser** repo
 
 An end-to-end data-science pipeline that predicts the **optimal tyre strategy** for a
 non-sprint Formula 1 race using only data from the three practice sessions (FP1/FP2/FP3).
-The reference weekend is **Bahrain 2025**, but the same pipeline generalises to any weekend. The
+The reference weekend is **Bahrain 2025**; any non-sprint 2024 or 2025 weekend can be chosen with
+`RACE_YEAR` / `RACE_WEEKEND` in `.env` (names in `scripts/race_weekend.py`). The
 model is trained on the whole field; the race is simulated for one car, `SIM_DRIVER` in `.env`
 (default 16, Ferrari), using that car's tyre sets. All raw data comes from the free [OpenF1 API](https://openf1.org/).
 
@@ -25,6 +26,7 @@ code and this file disagree, trust the code; when the *reasoning* is unclear, tr
 ```
 scripts/            # ALL pipeline code lives here; run scripts FROM this directory
   master.py             # orchestrator — runs the whole pipeline in order
+  race_weekend.py       # weekend table (session keys, race laps); puts the selected weekend in data/raw/ (cache or OpenF1)
   env_config.py         # loads ../.env into os.environ; env_str/env_int/env_float/env_list getters
   feature_config.py     # shared column lists (MODEL_FEATURE_COLUMNS, SIM_FEATURE_COLUMNS, SESSION_COLUMNS)
   process_laps.py       # clean lap data (kept in s / km/h, not scaled), tag session_name FP1-3
@@ -38,11 +40,13 @@ scripts/            # ALL pipeline code lives here; run scripts FROM this direct
   validate_strategy.py  # cross-validation, residuals, strategy robustness
   results/<script>/     # per-script outputs (logs, intermediate CSVs, plots, model)
 data/
-  raw/                  # OpenF1 downloads, one folder per source (LAPS_DIR, STINTS_DIR, WEATHER_DIR, CARDATA_DIR)
+  raw/                  # the selected weekend's OpenF1 downloads (RAW_DIR), one folder per source (LAPS_DIR, STINTS_DIR, DRIVERS_DIR, WEATHER_DIR, CARDATA_DIR)
     laps/                 # laps_p1-3.csv
     stints/               # stints_p1-3.csv
+    drivers/              # drivers_p1-3.csv (entry lists; tyre_sets.py derives stand-ins from them)
     weather/              # weather.csv
     car_data/             # car telemetry, car_data_p<session>_<driver>.csv (every driver, 60 files)
+  cache/                # every weekend fetched so far, <year>_<name>/ laid out like raw/ (CACHE_DIR; gitignored)
   processed/            # pipeline hand-off CSVs (PROCESSED_DIR)
 results/            # stray: empty validate_strategy log from running a script outside scripts/
 .env                # pipeline settings (paths, thresholds, hyperparameters, race constants); committed, no secrets
@@ -65,7 +69,7 @@ python master.py            # run the full pipeline end-to-end
 python process_laps.py      # or run any single stage on its own
 ```
 
-`master.py` runs, in order: `process_laps` → `process_stints` → `tyre_sets` → `process_weather` →
+`master.py` runs, in order: `race_weekend` → `process_laps` → `process_stints` → `tyre_sets` → `process_weather` →
 `process_cardata`, then `feature_engineer` → `train_model` → `strategy_simulator` →
 `validate_strategy`. It aborts the whole run if any stage exits non-zero.
 
@@ -76,15 +80,23 @@ python process_laps.py      # or run any single stage on its own
 
 ## Data flow / hand-offs
 
-Scripts communicate through CSVs in `data/processed/`, not by importing each other. Raw downloads live in
+Scripts communicate through CSVs in `data/processed/`, not by importing each other (the exception is
+`selected_weekend()` from `race_weekend.py`, which has no side effects on import). Raw downloads live in
 `data/raw/<source>/`. Each stage writes its hand-off file to `data/processed/` in addition to its own `results/<name>/` copy:
 
+- `race_weekend.py`   → `data/raw/` holding the weekend in `RACE_YEAR` / `RACE_WEEKEND` (diagnostic.md #24). If raw already
+  holds it in full (found from `meeting_key` in `laps_p1.csv`), nothing happens. Otherwise raw is moved into
+  `data/cache/<its weekend>/`, whatever `data/cache/<selected>/` is missing is downloaded from OpenF1, and that folder is
+  copied into raw. Car data is requested for the drivers in each session's downloaded laps file, so it follows each
+  weekend's field. A car-data query with no results leaves a `.nodata` marker. The `WEEKENDS` table is hardcoded data
+  (meeting key, FP1-3 session keys, scheduled race laps); sprint weekends are rejected.
 - `process_laps.py`   → `data/processed/laps_combined_clean.csv`
 - `process_stints.py` → `data/processed/stints_combined_clean.csv`
 - `tyre_sets.py`      → `data/processed/tyre_sets_race_inventory.csv` (one row per set every car in practice has
   left for the race: compound and age in laps). OpenF1 has no set ID, so sets are chained by compound and
-  `tyre_age_at_start`; FP1 stand-ins count toward their race car (`FP_STAND_INS`), and allocation, returns and
-  race-reserved sets are `.env` settings (diagnostic.md #21, #23). Practice only: qualifying usage isn't tracked.
+  `tyre_age_at_start`; practice stand-ins count toward their race car, derived from `data/raw/drivers/` (the FP3
+  lineup is the race cars; a non-FP3 driver is paired with the same team's driver who sat that session out), and
+  allocation, returns and race-reserved sets are `.env` settings (diagnostic.md #21, #23, #24). Practice only: qualifying usage isn't tracked.
 - `process_weather.py`→ `data/processed/cleaned_weather.csv`
 - `process_cardata.py`→ `data/processed/cardata_per_lap_clean.csv` (reads `data/raw/car_data/` (`CARDATA_DIR`); keyed by
   `session_key`, `driver_number`, `lap_number`; lap windows come from the raw `data/raw/laps/laps_p*.csv`, and only laps in
@@ -156,7 +168,7 @@ Every pipeline script follows the same house style — match it when adding or e
 
 ## Working guidelines for agents
 
-- The whole pipeline is **for a single reference weekend**; the scope is intentionally limited to
+- The whole pipeline runs on **one weekend at a time** (`RACE_YEAR` / `RACE_WEEKEND`); the scope is intentionally limited to
   the three practice sessions. Don't broaden scope (extra sessions, race data) unless asked.
 - Guard against **target leakage** above all else — it's the central design constraint. Any new
   feature must belong to lap *t* when predicting lap *t+1*.

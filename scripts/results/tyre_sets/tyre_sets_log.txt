@@ -3,7 +3,8 @@
 
 Loaded 275 stints from ../data\processed\stints_combined_clean.csv
 Sessions: {10007: 'FP1', 10008: 'FP2', 10009: 'FP3'}
-Cars (20): [1, 4, 5, 6, 7, 10, 12, 14, 16, 18, 22, 23, 27, 30, 31, 44, 55, 63, 81, 87], practice stand-ins: {38: 16, 34: 14, 37: 1, 46: 55, 50: 87, 72: 63}
+Practice stand-ins (driver: race car, from ['drivers_p1.csv', 'drivers_p2.csv', 'drivers_p3.csv']): 34:14,38:16,50:87,72:63,37:1,46:55
+Cars (20): [1, 4, 5, 6, 7, 10, 12, 14, 16, 18, 22, 23, 27, 30, 31, 44, 55, 63, 81, 87]
 Allocation: {'SOFT': 8, 'MEDIUM': 3, 'HARD': 2}, returns per session: [1, 1, 2], race-reserved new sets: {'HARD': 1, 'MEDIUM': 1}
 
 Car 1: 12 practice stints (drivers [1, 37])

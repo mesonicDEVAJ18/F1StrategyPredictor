@@ -16,7 +16,7 @@ Generating residual plot...
 Residual plot saved.
 
 Running example t-test...
-T-test p-value: 3.2020114202320514e-140
+T-test p-value: 2.0217605886278784e-150
 
 Validation summary saved.
 

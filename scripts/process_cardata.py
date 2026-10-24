@@ -38,6 +38,11 @@ clean_laps_file = processed_dir / env_str("LAPS_CLEAN_FILE")
 
 if not cardata_files:
     raise FileNotFoundError(f"No {cardata_glob} files found at {cardata_dir}")
+
+# Per-file outputs are named by driver, which changes between weekends (diagnostic.md #24),
+# so a previous weekend's files are cleared first
+for stale in Path(RESULTS_DIR).glob(f"{SCRIPT_NAME}_cleaned_{cardata_glob}"):
+    stale.unlink()
 if not clean_laps_file.exists():
     raise FileNotFoundError(f"{clean_laps_file.name} not found at {processed_dir}, run process_laps.py first")
 

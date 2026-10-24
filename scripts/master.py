@@ -27,6 +27,9 @@ def run_step(script_name):
 def main():
     print("Starting Master Pipeline...\n")
 
+    # 0. Put the race weekend chosen in .env into data/raw/ (from the cache, or OpenF1)
+    run_step("race_weekend.py")
+
     # 1. Run all processing scripts
     # (Order usually doesn't matter here, but they are run sequentially)
     process_scripts = [
