@@ -1,33 +1,16 @@
 {
   "time_units": "seconds",
-  "cars": {
-    "16": {
-      "best_compound_sequence": [
-        "HARD",
-        "SOFT"
-      ],
-      "best_set_ages_at_start": [
-        0,
-        6
-      ],
-      "best_pit_laps": [
-        45
-      ],
-      "best_total_time": 5840.848606754482
-    },
-    "44": {
-      "best_compound_sequence": [
-        "SOFT",
-        "HARD"
-      ],
-      "best_set_ages_at_start": [
-        4,
-        0
-      ],
-      "best_pit_laps": [
-        14
-      ],
-      "best_total_time": 5840.385277314632
-    }
-  }
+  "car_number": 16,
+  "best_compound_sequence": [
+    "HARD",
+    "SOFT"
+  ],
+  "best_set_ages_at_start": [
+    0,
+    6
+  ],
+  "best_pit_laps": [
+    45
+  ],
+  "best_total_time": 5840.848606754482
 }

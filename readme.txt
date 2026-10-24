@@ -7,7 +7,8 @@ two compounds are supposed to be used (out of 3, hard, medium and soft).
 The problem statement limits us to the three practice sessions only, we can broaden our scope by going out of this limitation but for this project we wont.
 
 DATA COLLECTION
-This analysis has been done for Ferrari in Bahrain 2025, same pipeline is applicable across weekends.
+This analysis has been done for Bahrain 2025, same pipeline is applicable across weekends. The model is trained on the whole field, and
+the race strategy is simulated for one car, SIM_DRIVER in .env (default 16, Ferrari), using that car's own tyre sets.
 Note: the laps, stints and car data cover the whole field (20 drivers per session), and the model is trained on all of them.
 All data has been collected from https://openf1.org/ and is stored in data/raw/ (laps/laps_p1-3.csv, stints/stints_p1-3.csv, weather/weather.csv, car_data/raw/car_data_p*_*.csv).
 
@@ -33,7 +34,8 @@ This covers the whole meeting (practice, qualifying and race); process_weather.p
 5. Download the car data for every driver in each session (the driver_numbers in that session's laps_p*.csv, 20 per session)
 https://api.openf1.org/v1/car_data?session_key=<session_key>&driver_number=<driver>&csv=true
 Saved as data/raw/car_data/car_data_p<session>_<driver>.csv (60 files, ~66 MB; CARDATA_DIR in .env).
-In FP1 driver 38 ran Ferrari's #16 car, so car 16 has no FP1 laps.
+In FP1 six stand-ins ran race cars (38 in #16, 34 in #14, 37 in #1, 46 in #55, 50 in #87, 72 in #63, from OpenF1's drivers endpoint),
+so those six race drivers have no FP1 laps. FP_STAND_INS in .env maps them for tyre_sets.py.
 process_cardata.py cleans, encodes and aggregates the car data per lap (see Data Preparation), and feature_engineer.py merges it as model inputs.
 
 DATA UNDERSTANDING
@@ -354,15 +356,18 @@ Every combination of pit laps between lap 10 and lap 46
 This gives 16,206 candidate strategies (222 one-stop, 15,984 two-stop). The stop counts and the minimum number of compounds are
 STOP_COUNTS and MIN_COMPOUNDS_USED in .env.
 
-Tyre sets (tyre_sets.py): each car can only fit the sets it has left for the race. OpenF1's stints have no set ID, so the sets are inferred
+Tyre sets (tyre_sets.py): the simulated car (SIM_DRIVER) can only fit the sets it has left for the race. tyre_sets.py infers the sets of
+every car in practice (20), and the simulator picks SIM_DRIVER's; a car number with no inventory raises an error. OpenF1's stints have no set ID, so the sets are inferred
 from practice by chaining. A stint with tyre_age_at_start = 0 takes a new set from the allocation. A stint that starts used continues the
 same-compound set that the car's earlier running left at exactly that age. A set's age after a stint is tyre_age_at_start + (lap_end -
-lap_start), which is how OpenF1 counts it (#44 runs HARD on laps 1-9 in FP1, and the next HARD stint starts at age 8). FP1's driver 38 counts
-toward car 16 (FP_STAND_INS). After each practice session the most-worn sets are returned (TYRE_RETURNS_PER_SESSION = 1, 1, 2), but a
+lap_start), which is how OpenF1 counts it (#44 runs HARD on laps 1-9 in FP1, and the next HARD stint starts at age 8). Each FP1 stand-in counts
+toward its race car (FP_STAND_INS, e.g. driver 38 toward car 16). After each practice session the most-worn sets are returned (TYRE_RETURNS_PER_SESSION = 1, 1, 2), but a
 TYRE_RACE_RESERVED new HARD and MEDIUM are always kept. The allocation is TYRE_ALLOCATION = 8 SOFT, 3 MEDIUM, 2 HARD.
 All these rules are .env settings and assumptions; check them against the season's sporting regulations.
-On the current data every used-set stint of both cars matches exactly one set age, so no stint is unmatched. In one case two sets share a
-compound and age; the choice between them doesn't change the inventory. Race inventory (set ages in laps):
+Across the 20 cars' 275 practice stints, 143 take a new set, 108 match exactly one set, 16 are ambiguous (two sets share a compound and
+age, so the choice doesn't change the inventory) and 8 are unmatched (no set left at that age; they take a new set at that age, see the
+tyre_sets log). Five cars also run past the MEDIUM or HARD allocation, which adds a set with a warning. Car 30 has no MEDIUM left.
+Race inventory of the two Ferraris (set ages in laps):
 car 16: SOFT 0, 0, 0, 0, 6, 6 | MEDIUM 0, 0 | HARD 0
 car 44: SOFT 0, 0, 4, 5, 6    | MEDIUM 0, 0, 3 | HARD 0
 [Limitation, see diagnostic.md #21] Qualifying is not in the data, so sets used there are counted as still available.
@@ -403,15 +408,15 @@ the old stint, and the next stint starts on lap p + 1. The 22 s pit loss (PIT_LO
 top of the laps.
 
 4. Strategy optimisation
-This is run separately for each car in RACE_CARS (16 and 44). Strategies that need more sets of a compound than the car has left are skipped
-(3,996 per car: both cars have one HARD set, so e.g. HARD-HARD-SOFT is out), which leaves 12,210. Each set is fitted at most once. For each
+This is run for the one car in SIM_DRIVER (default 16). Strategies that need more sets of a compound than the car has left are skipped
+(3,996 for car 16: it has one HARD set, so e.g. HARD-HARD-SOFT is out), which leaves 12,210. Each set is fitted at most once. For each
 compound sequence and set of pit laps, the fastest choice of the car's sets is kept.
-Results: scripts/results/strategy_simulator/ (all_strategy_results.csv with car_number and set_ages, best_strategy.json per car,
-final_summary.txt).
-Current output (set ages at the start of each stint in brackets):
-car 16: HARD(0)-SOFT(6), pit on lap 45, 5840.85 s (ties with SOFT(6)-HARD(0), pit on lap 12: the same two stints in reverse order).
+Results: scripts/results/strategy_simulator/ (all_strategy_results.csv with car_number and set_ages, best_strategy.json, final_summary.txt).
+Current output for SIM_DRIVER = 16 (set ages at the start of each stint in brackets):
+HARD(0)-SOFT(6), pit on lap 45, 5840.85 s (ties with SOFT(6)-HARD(0), pit on lap 12: the same two stints in reverse order).
 Neighbouring pit laps are 0.24 s slower, and the best 2-stop (SOFT(0)-SOFT(0)-HARD(0), pits on 16 and 34) is 13.75 s slower.
-car 44: SOFT(4)-HARD(0), pit on lap 14, 5840.39 s (ties with the reverse, pit on lap 43). The best 2-stop is 13.38 s slower.
+Other cars differ only through their sets, e.g. car 44: SOFT(4)-HARD(0), pit on lap 14, 5840.39 s; car 30 (no MEDIUM left, 2,072
+strategies feasible): SOFT(3)-HARD(0), pit on lap 10, 5839.87 s.
 Every lap carries the same race fuel term whatever the strategy, so a total depends only on which stints (compound, set age, length) it uses.
 1 stop wins because the rollouts are almost flat (step 2), so an extra stop can't win back its 22 s. The top strategies are within
 about 0.3 s, and the compounds barely differ, so the pit lap and compound choice are close to arbitrary. Every new stint also starts with

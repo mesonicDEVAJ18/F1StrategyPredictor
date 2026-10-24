@@ -51,15 +51,18 @@ log(f"Session weights for averaging predictions: {SESSION_WEIGHTS}")
 # ============================================================
 # LOAD TYRE SET INVENTORY
 # ============================================================
-# Sets each car has left for the race, inferred from practice by tyre_sets.py (diagnostic.md #21)
-RACE_CARS = env_list("RACE_CARS", cast=int)
-inventory = pd.read_csv(os.path.join(env_str("DATA_DIR"), env_str("PROCESSED_DIR"), env_str("TYRE_SETS_FILE")))
-inventory = inventory[inventory["car_number"].isin(RACE_CARS)]
+# Sets each car has left for the race, inferred from practice by tyre_sets.py (diagnostic.md #21).
+# The race is simulated for one car, SIM_DRIVER; the model itself is trained on the whole field (#23)
+SIM_DRIVER = env_int("SIM_DRIVER")
+all_inventory = pd.read_csv(os.path.join(env_str("DATA_DIR"), env_str("PROCESSED_DIR"), env_str("TYRE_SETS_FILE")))
+inventory = all_inventory[all_inventory["car_number"] == SIM_DRIVER]
+if inventory.empty:
+    raise ValueError(
+        f"SIM_DRIVER={SIM_DRIVER} has no tyre set inventory. Cars available: "
+        f"{sorted(all_inventory['car_number'].unique().tolist())} (an FP1 stand-in counts as its race car, see FP_STAND_INS)")
 
-log(f"Loaded tyre set inventory for cars {RACE_CARS}:")
-for car, inv in inventory.groupby("car_number"):
-    log(f"  car {car}: " + ", ".join(
-        f"{c} {sorted(inv.loc[inv['compound'] == c, 'age'].tolist())}" for c in ["SOFT", "MEDIUM", "HARD"]))
+log(f"Loaded tyre set inventory for car {SIM_DRIVER}: " + ", ".join(
+    f"{c} {sorted(inventory.loc[inventory['compound'] == c, 'age'].tolist())}" for c in ["SOFT", "MEDIUM", "HARD"]))
 
 
 # ============================================================
@@ -308,61 +311,58 @@ def generate_strategies(total_laps):
 # OPTIMIZER
 # ============================================================
 def optimize_strategy(total_laps, base_features):
-    # One rollout per (compound, set age) any car can fit, shared between cars
+    # One rollout per (compound, set age) the car can fit
     set_types = sorted(set(zip(inventory["compound"], inventory["age"].astype(int))),
                        key=lambda t: (COMPOUNDS.index(t[0]), t[1]))
     log(f"\nRolling out {len(set_types)} (compound, set age) pairs: {set_types}")
     stint_totals, fuel_prefix = precompute_stint_rollouts(total_laps, base_features, set_types)
     strategies = generate_strategies(total_laps)
 
-    log(f"Total strategies to evaluate per car: {len(strategies)}")
+    log(f"Total strategies to evaluate: {len(strategies)}")
 
     rows = []
-    best = {}
+    ages_by_compound = {c: inventory.loc[inventory["compound"] == c, "age"].astype(int).tolist() for c in COMPOUNDS}
+    options_by_seq = {}
+    infeasible = 0
+    best_time = float("inf")
+    best_strategy = None
 
-    for car in RACE_CARS:
-        inv = inventory[inventory["car_number"] == car]
-        ages_by_compound = {c: inv.loc[inv["compound"] == c, "age"].astype(int).tolist() for c in COMPOUNDS}
-        options_by_seq = {}
-        infeasible = 0
-        best_time = float("inf")
-        best_strategy = None
+    for compounds, pit_laps in strategies:
+        if compounds not in options_by_seq:
+            options_by_seq[compounds] = set_age_options(ages_by_compound, compounds)
+        options = options_by_seq[compounds]
+        if not options:
+            infeasible += 1
+            continue
 
-        for compounds, pit_laps in strategies:
-            if compounds not in options_by_seq:
-                options_by_seq[compounds] = set_age_options(ages_by_compound, compounds)
-            options = options_by_seq[compounds]
-            if not options:
-                infeasible += 1
-                continue
+        # The car fits whichever of its sets makes this plan fastest
+        t, set_ages = min(
+            (simulate_strategy_fast(stint_totals, fuel_prefix, total_laps, compounds, ages, pit_laps), ages)
+            for ages in options
+        )
+        rows.append({
+            "car_number": SIM_DRIVER,
+            "compound_sequence": compounds,
+            "set_ages": set_ages,
+            "pit_laps": pit_laps,
+            "total_time": t
+        })
 
-            # The car fits whichever of its sets makes this plan fastest
-            t, set_ages = min(
-                (simulate_strategy_fast(stint_totals, fuel_prefix, total_laps, compounds, ages, pit_laps), ages)
-                for ages in options
-            )
-            rows.append({
-                "car_number": car,
-                "compound_sequence": compounds,
-                "set_ages": set_ages,
-                "pit_laps": pit_laps,
-                "total_time": t
-            })
+        if t < best_time:
+            best_time = t
+            best_strategy = (compounds, set_ages, pit_laps)
 
-            if t < best_time:
-                best_time = t
-                best_strategy = (compounds, set_ages, pit_laps)
+    log(f"\nCar {SIM_DRIVER}: {infeasible} strategies skipped (not enough sets of a compound), "
+        f"{len(strategies) - infeasible} evaluated")
 
-        log(f"\nCar {car}: {infeasible} strategies skipped (not enough sets of a compound), "
-            f"{len(strategies) - infeasible} evaluated")
-
-        best[car] = {
-            "best_compound_sequence": best_strategy[0],
-            "best_set_ages_at_start": best_strategy[1],
-            "best_pit_laps": best_strategy[2],
-            "best_total_time": float(best_time),
-        }
-        log(f"Car {car} best strategy: {best[car]}")
+    best = {
+        "car_number": SIM_DRIVER,
+        "best_compound_sequence": best_strategy[0],
+        "best_set_ages_at_start": best_strategy[1],
+        "best_pit_laps": best_strategy[2],
+        "best_total_time": float(best_time),
+    }
+    log(f"Car {SIM_DRIVER} best strategy: {best}")
 
     # Save all evaluated strategies
     strategies_df = pd.DataFrame(rows)
@@ -371,10 +371,7 @@ def optimize_strategy(total_laps, base_features):
     generated_files.append(strat_file)
 
     # Save best strategy summary
-    best_summary = {
-        "time_units": "seconds",
-        "cars": {str(car): b for car, b in best.items()}
-    }
+    best_summary = {"time_units": "seconds", **best}
 
     best_json_file = f"{SCRIPT_NAME}_best_strategy.json"
     with open(f"{RESULTS_DIR}/{best_json_file}", "w") as f:
@@ -403,16 +400,14 @@ if __name__ == "__main__":
     best = optimize_strategy(NUM_LAPS, start_features)
 
     log("\nOPTIMIZATION COMPLETE")
-    lines = []
-    for car, b in best.items():
-        lines.append(f"Car {car}: {b['best_compound_sequence']}, set ages {b['best_set_ages_at_start']}, "
-                     f"pits {b['best_pit_laps']}, time {b['best_total_time']:.2f} s")
-        log(lines[-1])
+    line = (f"Car {best['car_number']}: {best['best_compound_sequence']}, set ages {best['best_set_ages_at_start']}, "
+            f"pits {best['best_pit_laps']}, time {best['best_total_time']:.2f} s")
+    log(line)
 
     # Save final summary
     final_txt = f"{SCRIPT_NAME}_final_summary.txt"
     with open(f"{RESULTS_DIR}/{final_txt}", "w") as f:
-        f.write("\n".join(lines) + "\n")
+        f.write(line + "\n")
 
     generated_files.append(final_txt)
 

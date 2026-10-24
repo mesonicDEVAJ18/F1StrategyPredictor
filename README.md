@@ -63,7 +63,7 @@ curl "https://api.openf1.org/v1/stints?session_key=10009&csv=true" -o data/raw/s
 curl "https://api.openf1.org/v1/weather?meeting_key=1257&csv=true" -o data/raw/weather/weather.csv
 
 # Car data for every driver in each session (20 per session, 60 files), into data/raw/car_data/
-# Drivers are read from that session's laps file (in FP1, driver 38 ran Ferrari's #16 car)
+# Drivers are read from that session's laps file (in FP1, six stand-ins ran race cars, e.g. driver 38 in Ferrari's #16; see FP_STAND_INS in .env)
 mkdir -p data/raw/car_data
 for n in 1 2 3; do
   key=$((10006 + n))
@@ -107,7 +107,7 @@ Environmental conditions:
 ### Cleaning Scripts
 - `process_laps.py`: Removes outliers and invalid laps
 - `process_stints.py`: Validates stint metadata
-- `tyre_sets.py`: Infers each Ferrari's tyre sets from the practice stints (chained by compound and `tyre_age_at_start`) and writes the sets left for the race
+- `tyre_sets.py`: Infers every car's tyre sets from the practice stints (chained by compound and `tyre_age_at_start`) and writes the sets left for the race
 - `process_weather.py`: Filters atmospheric anomalies
 - `process_cardata.py`: Drops no-input (brake/throttle = 104) and out-of-range telemetry samples, encodes brake/DRS as 0/1, aggregates the ~4 Hz samples per lap (speed, throttle, braking, rpm, gears, DRS), keeps only laps that survive `process_laps.py`, removes z-score outliers, and leaves the aggregates unscaled (physical units). They are merged into the engineered dataset as model inputs (diagnostic.md #16)
 
@@ -224,7 +224,7 @@ Enumerate strategies for a 57-lap race (16,206 in total):
 - **Stop configurations**: 1-stop, 2-stop (0 stops can't use two compounds)
 - **Compound sequences**: Every SOFT/MEDIUM/HARD sequence that uses at least two different compounds (the dry-race rule)
 - **Pit windows**: Pit laps between lap 10 and lap 46
-- **Tyre sets**: each Ferrari (`RACE_CARS`: 16, 44) can only fit the sets it has left. `tyre_sets.py` infers them from the practice stints. OpenF1 has no set ID, so a stint that starts used is chained to the same-compound set that was left at that age. Allocation, returns after each session and the reserved race sets are `.env` assumptions. Each set is fitted at most once, and the fastest choice of sets is kept for each plan. Sequences needing more sets than the car has (e.g. two HARDs) are skipped, leaving 12,210 per car. Qualifying usage isn't tracked (diagnostic.md #21).
+- **Tyre sets**: the model is trained on the whole field, and the race is simulated for one car, `SIM_DRIVER` in `.env` (default 16). That car can only fit the sets it has left. `tyre_sets.py` infers them for every car from the practice stints, with each FP1 stand-in's running counted toward its race car (`FP_STAND_INS`). OpenF1 has no set ID, so a stint that starts used is chained to the same-compound set that was left at that age. Allocation, returns after each session and the reserved race sets are `.env` assumptions. Each set is fitted at most once, and the fastest choice of sets is kept for each plan. Sequences needing more sets than the car has (e.g. two HARDs) are skipped, leaving 12,210 for car 16. Qualifying usage isn't tracked (diagnostic.md #21, #23).
 
 ### 2. Lap Time Prediction
 
@@ -246,9 +246,10 @@ For each compound and set age a car has left, and every stint length L = 1–57,
 Minimize: Total Race Time (s) = Σ(stint lap times) + 22 s × number of pit stops
 ```
 
-Current output (set age at the start of each stint in brackets):
-- car 16: HARD(0)–SOFT(6), stop on lap 45, 5840.85 s (ties with SOFT(6)–HARD(0), stop on lap 12); best 2-stop 13.75 s slower
-- car 44: SOFT(4)–HARD(0), stop on lap 14, 5840.39 s (ties with the reverse, stop on lap 43); best 2-stop 13.38 s slower
+Current output for `SIM_DRIVER=16` (set age at the start of each stint in brackets):
+- HARD(0)–SOFT(6), stop on lap 45, 5840.85 s (ties with SOFT(6)–HARD(0), stop on lap 12); best 2-stop 13.75 s slower
+
+Other cars give similar results from their own sets, e.g. car 44: SOFT(4)–HARD(0), stop on lap 14, 5840.39 s.
 
 Every race lap is summed once: "stop on lap p" means lap p is the in-lap and the next stint starts on lap p + 1, with the 22 s pit loss on top (diagnostic.md #11).
 
@@ -311,7 +312,7 @@ python master.py
 | 5 | `process_cardata.py` | `data/processed/cardata_per_lap_clean.csv` (merged by `feature_engineer.py`) |
 | 6 | `feature_engineer.py` | `data/processed/final_engineered_dataset.csv` |
 | 7 | `train_model.py` | `scripts/results/train_model/train_model_xgb_model.pkl` |
-| 8 | `strategy_simulator.py` | best strategy per car |
+| 8 | `strategy_simulator.py` | best strategy for `SIM_DRIVER` |
 | 9 | `validate_strategy.py` | CV metrics, residual plot |
 
 Each script can also be run on its own, and writes its log and outputs to `scripts/results/<script_name>/`.

@@ -3,8 +3,94 @@
 
 Loaded 275 stints from ../data\processed\stints_combined_clean.csv
 Sessions: {10007: 'FP1', 10008: 'FP2', 10009: 'FP3'}
-Race cars: [16, 44], practice stand-ins: {38: 16}
+Cars (20): [1, 4, 5, 6, 7, 10, 12, 14, 16, 18, 22, 23, 27, 30, 31, 44, 55, 63, 81, 87], practice stand-ins: {38: 16, 34: 14, 37: 1, 46: 55, 50: 87, 72: 63}
 Allocation: {'SOFT': 8, 'MEDIUM': 3, 'HARD': 2}, returns per session: [1, 1, 2], race-reserved new sets: {'HARD': 1, 'MEDIUM': 1}
+
+Car 1: 12 practice stints (drivers [1, 37])
+  [car 1] Returned after FP1: M1 (MEDIUM, age 13)
+  [car 1] Returned after FP2: S2 (SOFT, age 20)
+  [car 1] Returned after FP3: M2 (MEDIUM, age 6)
+  [car 1] Returned after FP3: S1 (SOFT, age 6)
+  [car 1] Stints: {'new': 6, 'matched': 6, 'ambiguous': 0, 'unmatched': 0}
+  [car 1] Race SOFT sets (age in laps): [0, 0, 0, 0, 6, 6]
+  [car 1] Race MEDIUM sets (age in laps): [0]
+  [car 1] Race HARD sets (age in laps): [0, 0]
+
+Car 4: 12 practice stints (drivers [4])
+  [car 4] Returned after FP1: S1 (SOFT, age 12)
+  [car 4] Returned after FP2: S2 (SOFT, age 18)
+  [car 4] No SOFT set at age 5 for FP3 stint 5; using a new set at that age
+  [car 4] Returned after FP3: M1 (MEDIUM, age 10)
+  [car 4] Returned after FP3: S3 (SOFT, age 10)
+  [car 4] Stints: {'new': 7, 'matched': 4, 'ambiguous': 0, 'unmatched': 1}
+  [car 4] Race SOFT sets (age in laps): [0, 0, 2, 3, 7]
+  [car 4] Race MEDIUM sets (age in laps): [0, 0]
+  [car 4] Race HARD sets (age in laps): [0, 9]
+
+Car 5: 16 practice stints (drivers [5])
+  [car 5] Returned after FP1: S1 (SOFT, age 14)
+  [car 5] No SOFT set at age 4 for FP2 stint 5; using a new set at that age
+  [car 5] Returned after FP2: M1 (MEDIUM, age 17)
+  [car 5] Returned after FP3: H1 (HARD, age 8)
+  [car 5] Returned after FP3: S4 (SOFT, age 7)
+  [car 5] Stints: {'new': 9, 'matched': 4, 'ambiguous': 2, 'unmatched': 1}
+  [car 5] Race SOFT sets (age in laps): [1, 1, 2, 3, 5, 7]
+  [car 5] Race MEDIUM sets (age in laps): [0, 0]
+  [car 5] Race HARD sets (age in laps): [0]
+
+Car 6: 18 practice stints (drivers [6])
+  [car 6] Returned after FP1: H1 (HARD, age 15)
+  [car 6] Returned after FP2: M1 (MEDIUM, age 18)
+  [car 6] WARNING: no new MEDIUM set left in the allocation, adding one
+  [car 6] Returned after FP3: S1 (SOFT, age 6)
+  [car 6] Returned after FP3: M3 (MEDIUM, age 6)
+  [car 6] Stints: {'new': 9, 'matched': 9, 'ambiguous': 0, 'unmatched': 0}
+  [car 6] Race SOFT sets (age in laps): [0, 0, 0, 0, 2, 3, 4]
+  [car 6] Race MEDIUM sets (age in laps): [1, 2]
+  [car 6] Race HARD sets (age in laps): [0]
+
+Car 7: 17 practice stints (drivers [7])
+  [car 7] Returned after FP1: H1 (HARD, age 16)
+  [car 7] Returned after FP2: M1 (MEDIUM, age 20)
+  [car 7] Returned after FP3: M2 (MEDIUM, age 9)
+  [car 7] Returned after FP3: S3 (SOFT, age 8)
+  [car 7] Stints: {'new': 6, 'matched': 10, 'ambiguous': 1, 'unmatched': 0}
+  [car 7] Race SOFT sets (age in laps): [0, 0, 0, 0, 0, 6, 6]
+  [car 7] Race MEDIUM sets (age in laps): [0]
+  [car 7] Race HARD sets (age in laps): [0]
+
+Car 10: 16 practice stints (drivers [10])
+  [car 10] Returned after FP1: S1 (SOFT, age 12)
+  [car 10] Returned after FP2: H1 (HARD, age 18)
+  [car 10] WARNING: no new MEDIUM set left in the allocation, adding one
+  [car 10] No MEDIUM set at age 6 for FP3 stint 3; using a new set at that age
+  [car 10] Returned after FP3: M1 (MEDIUM, age 10)
+  [car 10] Returned after FP3: Mx14 (MEDIUM, age 9)
+  [car 10] Stints: {'new': 7, 'matched': 8, 'ambiguous': 0, 'unmatched': 1}
+  [car 10] Race SOFT sets (age in laps): [0, 0, 0, 0, 0, 8, 8]
+  [car 10] Race MEDIUM sets (age in laps): [3, 3]
+  [car 10] Race HARD sets (age in laps): [0]
+
+Car 12: 10 practice stints (drivers [12])
+  [car 12] Returned after FP1: H1 (HARD, age 2)
+  [car 12] No SOFT set at age 7 for FP2 stint 5; using a new set at that age
+  [car 12] Returned after FP2: S3 (SOFT, age 17)
+  [car 12] Returned after FP3: S4 (SOFT, age 9)
+  [car 12] Returned after FP3: M1 (MEDIUM, age 6)
+  [car 12] Stints: {'new': 6, 'matched': 1, 'ambiguous': 2, 'unmatched': 1}
+  [car 12] Race SOFT sets (age in laps): [0, 0, 0, 3, 4, 5]
+  [car 12] Race MEDIUM sets (age in laps): [0, 0]
+  [car 12] Race HARD sets (age in laps): [0]
+
+Car 14: 12 practice stints (drivers [14, 34])
+  [car 14] Returned after FP1: H1 (HARD, age 13)
+  [car 14] Returned after FP2: S3 (SOFT, age 12)
+  [car 14] Returned after FP3: S4 (SOFT, age 9)
+  [car 14] Returned after FP3: S5 (SOFT, age 8)
+  [car 14] Stints: {'new': 7, 'matched': 3, 'ambiguous': 2, 'unmatched': 0}
+  [car 14] Race SOFT sets (age in laps): [0, 0, 0, 2, 3]
+  [car 14] Race MEDIUM sets (age in laps): [0, 0, 6]
+  [car 14] Race HARD sets (age in laps): [0]
 
 Car 16: 13 practice stints (drivers [16, 38])
   [car 16] Returned after FP1: H1 (HARD, age 12)
@@ -16,6 +102,71 @@ Car 16: 13 practice stints (drivers [16, 38])
   [car 16] Race MEDIUM sets (age in laps): [0, 0]
   [car 16] Race HARD sets (age in laps): [0]
 
+Car 18: 11 practice stints (drivers [18])
+  [car 18] Returned after FP1: H1 (HARD, age 12)
+  [car 18] No SOFT set at age 7 for FP2 stint 3; using a new set at that age
+  [car 18] Returned after FP2: S3 (SOFT, age 20)
+  [car 18] Returned after FP3: S1 (SOFT, age 10)
+  [car 18] Returned after FP3: M1 (MEDIUM, age 7)
+  [car 18] Stints: {'new': 7, 'matched': 3, 'ambiguous': 0, 'unmatched': 1}
+  [car 18] Race SOFT sets (age in laps): [0, 0, 3, 6, 6, 6]
+  [car 18] Race MEDIUM sets (age in laps): [0, 0]
+  [car 18] Race HARD sets (age in laps): [0]
+
+Car 22: 13 practice stints (drivers [22])
+  [car 22] No MEDIUM set at age 10 for FP1 stint 4; using a new set at that age
+  [car 22] Returned after FP1: M3 (MEDIUM, age 17)
+  [car 22] WARNING: no new MEDIUM set left in the allocation, adding one
+  [car 22] Returned after FP2: Mx14 (MEDIUM, age 20)
+  [car 22] Returned after FP3: H1 (HARD, age 11)
+  [car 22] Returned after FP3: M1 (MEDIUM, age 8)
+  [car 22] Stints: {'new': 7, 'matched': 5, 'ambiguous': 0, 'unmatched': 1}
+  [car 22] Race SOFT sets (age in laps): [0, 0, 0, 0, 0, 3, 4, 5]
+  [car 22] Race MEDIUM sets (age in laps): [2]
+  [car 22] Race HARD sets (age in laps): [0]
+
+Car 23: 15 practice stints (drivers [23])
+  [car 23] Returned after FP1: M1 (MEDIUM, age 17)
+  [car 23] Returned after FP2: M2 (MEDIUM, age 14)
+  [car 23] WARNING: no new HARD set left in the allocation, adding one
+  [car 23] No HARD set at age 5 for FP3 stint 3; using a new set at that age
+  [car 23] Returned after FP3: S2 (SOFT, age 14)
+  [car 23] Returned after FP3: Hx14 (HARD, age 8)
+  [car 23] Stints: {'new': 7, 'matched': 7, 'ambiguous': 0, 'unmatched': 1}
+  [car 23] Race SOFT sets (age in laps): [0, 0, 0, 0, 0, 6, 7]
+  [car 23] Race MEDIUM sets (age in laps): [0]
+  [car 23] Race HARD sets (age in laps): [2, 3]
+
+Car 27: 12 practice stints (drivers [27])
+  [car 27] Returned after FP1: H1 (HARD, age 18)
+  [car 27] Returned after FP2: S3 (SOFT, age 16)
+  [car 27] Returned after FP3: M1 (MEDIUM, age 7)
+  [car 27] Returned after FP3: S4 (SOFT, age 6)
+  [car 27] Stints: {'new': 6, 'matched': 4, 'ambiguous': 2, 'unmatched': 0}
+  [car 27] Race SOFT sets (age in laps): [0, 0, 0, 0, 2, 3]
+  [car 27] Race MEDIUM sets (age in laps): [0, 0]
+  [car 27] Race HARD sets (age in laps): [0]
+
+Car 30: 16 practice stints (drivers [30])
+  [car 30] Returned after FP1: H1 (HARD, age 12)
+  [car 30] Returned after FP2: M2 (MEDIUM, age 14)
+  [car 30] Returned after FP3: M3 (MEDIUM, age 7)
+  [car 30] Returned after FP3: M1 (MEDIUM, age 6)
+  [car 30] Stints: {'new': 11, 'matched': 4, 'ambiguous': 1, 'unmatched': 0}
+  [car 30] Race SOFT sets (age in laps): [0, 2, 2, 3, 3, 3, 3, 4]
+  [car 30] Race MEDIUM sets (age in laps): []
+  [car 30] Race HARD sets (age in laps): [0]
+
+Car 31: 12 practice stints (drivers [31])
+  [car 31] Returned after FP1: M1 (MEDIUM, age 13)
+  [car 31] Returned after FP2: M2 (MEDIUM, age 20)
+  [car 31] Returned after FP3: H1 (HARD, age 13)
+  [car 31] Returned after FP3: S2 (SOFT, age 6)
+  [car 31] Stints: {'new': 6, 'matched': 6, 'ambiguous': 0, 'unmatched': 0}
+  [car 31] Race SOFT sets (age in laps): [0, 0, 0, 0, 0, 3, 5]
+  [car 31] Race MEDIUM sets (age in laps): [0]
+  [car 31] Race HARD sets (age in laps): [0]
+
 Car 44: 13 practice stints (drivers [44])
   [car 44] Returned after FP1: H1 (HARD, age 16)
   [car 44] Returned after FP2: S2 (SOFT, age 12)
@@ -25,6 +176,50 @@ Car 44: 13 practice stints (drivers [44])
   [car 44] Race SOFT sets (age in laps): [0, 0, 4, 5, 6]
   [car 44] Race MEDIUM sets (age in laps): [0, 0, 3]
   [car 44] Race HARD sets (age in laps): [0]
+
+Car 55: 19 practice stints (drivers [46, 55])
+  [car 55] No MEDIUM set at age 11 for FP1 stint 7; using a new set at that age
+  [car 55] Returned after FP1: M3 (MEDIUM, age 13)
+  [car 55] WARNING: no new MEDIUM set left in the allocation, adding one
+  [car 55] Returned after FP2: Mx14 (MEDIUM, age 19)
+  [car 55] Returned after FP3: M1 (MEDIUM, age 9)
+  [car 55] Returned after FP3: S2 (SOFT, age 8)
+  [car 55] Stints: {'new': 7, 'matched': 10, 'ambiguous': 1, 'unmatched': 1}
+  [car 55] Race SOFT sets (age in laps): [0, 0, 0, 0, 0, 6, 6]
+  [car 55] Race MEDIUM sets (age in laps): [2]
+  [car 55] Race HARD sets (age in laps): [0, 8]
+
+Car 63: 12 practice stints (drivers [63, 72])
+  [car 63] Returned after FP1: M1 (MEDIUM, age 16)
+  [car 63] Returned after FP2: S2 (SOFT, age 16)
+  [car 63] Returned after FP3: H1 (HARD, age 9)
+  [car 63] Returned after FP3: S1 (SOFT, age 8)
+  [car 63] Stints: {'new': 7, 'matched': 5, 'ambiguous': 0, 'unmatched': 0}
+  [car 63] Race SOFT sets (age in laps): [0, 0, 0, 0, 2, 3]
+  [car 63] Race MEDIUM sets (age in laps): [0, 7]
+  [car 63] Race HARD sets (age in laps): [0]
+
+Car 81: 13 practice stints (drivers [81])
+  [car 81] Returned after FP1: M1 (MEDIUM, age 18)
+  [car 81] Returned after FP2: H1 (HARD, age 18)
+  [car 81] Returned after FP3: S3 (SOFT, age 10)
+  [car 81] Returned after FP3: S4 (SOFT, age 7)
+  [car 81] Stints: {'new': 7, 'matched': 3, 'ambiguous': 3, 'unmatched': 0}
+  [car 81] Race SOFT sets (age in laps): [0, 0, 0, 3, 3, 5]
+  [car 81] Race MEDIUM sets (age in laps): [0, 0]
+  [car 81] Race HARD sets (age in laps): [0]
+
+Car 87: 13 practice stints (drivers [50, 87])
+  [car 87] Returned after FP1: M1 (MEDIUM, age 13)
+  [car 87] Returned after FP2: S3 (SOFT, age 17)
+  [car 87] Returned after FP3: H1 (HARD, age 14)
+  [car 87] Returned after FP3: M2 (MEDIUM, age 9)
+  [car 87] Stints: {'new': 7, 'matched': 5, 'ambiguous': 1, 'unmatched': 0}
+  [car 87] Race SOFT sets (age in laps): [0, 0, 0, 0, 3, 3, 3]
+  [car 87] Race MEDIUM sets (age in laps): [0]
+  [car 87] Race HARD sets (age in laps): [0]
+
+Stints across all 20 cars: {'new': 143, 'matched': 108, 'ambiguous': 16, 'unmatched': 8}
 
 Saved hand-off dataset: ../data\processed\tyre_sets_race_inventory.csv
 

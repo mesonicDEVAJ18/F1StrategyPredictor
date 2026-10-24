@@ -1,4 +1,78 @@
 car_number,set_id,compound,age,history
+1,S3,SOFT,6,FP3 #1 laps 1-3; FP3 #1 laps 3-7
+1,S4,SOFT,6,FP3 #1 laps 7-10; FP3 #1 laps 10-13
+1,S5,SOFT,0,new
+1,S6,SOFT,0,new
+1,S7,SOFT,0,new
+1,S8,SOFT,0,new
+1,M3,MEDIUM,0,new
+1,H1,HARD,0,new
+1,H2,HARD,0,new
+4,S4,SOFT,2,FP3 #4 laps 11-13
+4,S5,SOFT,3,FP3 #4 laps 13-16
+4,S6,SOFT,7,FP3 #4 laps 16-18
+4,S7,SOFT,0,new
+4,S8,SOFT,0,new
+4,M2,MEDIUM,0,new
+4,M3,MEDIUM,0,new
+4,H1,HARD,9,FP2 #4 laps 1-8; FP2 #4 laps 26-28
+4,H2,HARD,0,new
+5,S2,SOFT,3,FP2 #5 laps 7-10
+5,S3,SOFT,1,FP2 #5 laps 10-11
+5,S5,SOFT,7,FP3 #5 laps 1-4; FP3 #5 laps 4-7; FP3 #5 laps 12-13
+5,S6,SOFT,5,FP3 #5 laps 7-10; FP3 #5 laps 10-12
+5,S7,SOFT,1,FP3 #5 laps 13-14
+5,S8,SOFT,2,FP3 #5 laps 14-16
+5,M2,MEDIUM,0,new
+5,M3,MEDIUM,0,new
+5,H2,HARD,0,new
+6,S2,SOFT,2,FP2 #6 laps 22-24
+6,S3,SOFT,4,FP3 #6 laps 8-11; FP3 #6 laps 11-12
+6,S4,SOFT,3,FP3 #6 laps 12-15
+6,S5,SOFT,0,new
+6,S6,SOFT,0,new
+6,S7,SOFT,0,new
+6,S8,SOFT,0,new
+6,M2,MEDIUM,2,FP2 #6 laps 7-9
+6,H2,HARD,0,new
+6,Mx14,MEDIUM,1,FP3 #6 laps 7-8
+7,S1,SOFT,6,FP1 #7 laps 11-14; FP1 #7 laps 14-17
+7,S2,SOFT,6,FP2 #7 laps 9-12; FP2 #7 laps 12-15
+7,S4,SOFT,0,new
+7,S5,SOFT,0,new
+7,S6,SOFT,0,new
+7,S7,SOFT,0,new
+7,S8,SOFT,0,new
+7,M3,MEDIUM,0,new
+7,H2,HARD,0,new
+10,S2,SOFT,8,FP2 #10 laps 9-12; FP2 #10 laps 12-15; FP2 #10 laps 15-17
+10,S3,SOFT,8,FP3 #10 laps 10-13; FP3 #10 laps 13-18
+10,S4,SOFT,0,new
+10,S5,SOFT,0,new
+10,S6,SOFT,0,new
+10,S7,SOFT,0,new
+10,S8,SOFT,0,new
+10,M2,MEDIUM,3,FP3 #10 laps 1-4
+10,M3,MEDIUM,3,FP3 #10 laps 4-7
+10,H2,HARD,0,new
+12,S1,SOFT,3,FP2 #12 laps 1-4
+12,S2,SOFT,4,FP2 #12 laps 4-8
+12,S5,SOFT,5,FP3 #12 laps 7-10; FP3 #12 laps 10-12
+12,S6,SOFT,0,new
+12,S7,SOFT,0,new
+12,S8,SOFT,0,new
+12,M2,MEDIUM,0,new
+12,M3,MEDIUM,0,new
+12,H2,HARD,0,new
+14,S1,SOFT,3,FP1 #34 laps 14-17
+14,S2,SOFT,2,FP1 #34 laps 17-19
+14,S6,SOFT,0,new
+14,S7,SOFT,0,new
+14,S8,SOFT,0,new
+14,M1,MEDIUM,6,FP2 #14 laps 1-3; FP2 #14 laps 3-7
+14,M2,MEDIUM,0,new
+14,M3,MEDIUM,0,new
+14,H2,HARD,0,new
 16,S2,SOFT,6,FP2 #16 laps 7-10; FP2 #16 laps 10-13
 16,S4,SOFT,6,FP3 #16 laps 13-16; FP3 #16 laps 16-19
 16,S5,SOFT,0,new
@@ -8,6 +82,62 @@ car_number,set_id,compound,age,history
 16,M2,MEDIUM,0,new
 16,M3,MEDIUM,0,new
 16,H2,HARD,0,new
+18,S2,SOFT,6,FP2 #18 laps 8-14
+18,S4,SOFT,3,FP3 #18 laps 1-4
+18,S5,SOFT,6,FP3 #18 laps 4-10
+18,S6,SOFT,6,FP3 #18 laps 10-12; FP3 #18 laps 12-16
+18,S7,SOFT,0,new
+18,S8,SOFT,0,new
+18,M2,MEDIUM,0,new
+18,M3,MEDIUM,0,new
+18,H2,HARD,0,new
+22,S1,SOFT,5,FP1 #22 laps 11-16
+22,S2,SOFT,4,FP2 #22 laps 8-12
+22,S3,SOFT,3,FP3 #22 laps 8-11
+22,S4,SOFT,0,new
+22,S5,SOFT,0,new
+22,S6,SOFT,0,new
+22,S7,SOFT,0,new
+22,S8,SOFT,0,new
+22,M2,MEDIUM,2,FP1 #22 laps 9-11
+22,H2,HARD,0,new
+23,S1,SOFT,6,FP1 #23 laps 13-16; FP1 #23 laps 16-19
+23,S3,SOFT,7,FP3 #23 laps 9-12; FP3 #23 laps 12-16
+23,S4,SOFT,0,new
+23,S5,SOFT,0,new
+23,S6,SOFT,0,new
+23,S7,SOFT,0,new
+23,S8,SOFT,0,new
+23,M3,MEDIUM,0,new
+23,H1,HARD,3,FP3 #23 laps 1-4
+23,H2,HARD,2,FP3 #23 laps 4-6
+27,S1,SOFT,3,FP1 #27 laps 11-14
+27,S2,SOFT,2,FP1 #27 laps 14-16
+27,S5,SOFT,0,new
+27,S6,SOFT,0,new
+27,S7,SOFT,0,new
+27,S8,SOFT,0,new
+27,M2,MEDIUM,0,new
+27,M3,MEDIUM,0,new
+27,H2,HARD,0,new
+30,S1,SOFT,3,FP1 #30 laps 13-16
+30,S2,SOFT,3,FP1 #30 laps 16-19
+30,S3,SOFT,4,FP1 #30 laps 19-23
+30,S4,SOFT,2,FP2 #30 laps 7-9
+30,S5,SOFT,2,FP2 #30 laps 10-12
+30,S6,SOFT,3,FP3 #30 laps 8-11
+30,S7,SOFT,3,FP3 #30 laps 11-14
+30,S8,SOFT,0,new
+30,H2,HARD,0,new
+31,S1,SOFT,5,FP1 #31 laps 9-12; FP1 #31 laps 12-14
+31,S3,SOFT,3,FP3 #31 laps 12-15
+31,S4,SOFT,0,new
+31,S5,SOFT,0,new
+31,S6,SOFT,0,new
+31,S7,SOFT,0,new
+31,S8,SOFT,0,new
+31,M3,MEDIUM,0,new
+31,H2,HARD,0,new
 44,S1,SOFT,6,FP1 #44 laps 17-23
 44,S4,SOFT,4,FP2 #44 laps 19-23
 44,S6,SOFT,5,FP3 #44 laps 13-16; FP3 #44 laps 16-18
@@ -17,3 +147,40 @@ car_number,set_id,compound,age,history
 44,M2,MEDIUM,0,new
 44,M3,MEDIUM,0,new
 44,H2,HARD,0,new
+55,S1,SOFT,6,FP1 #46 laps 14-20
+55,S3,SOFT,6,FP3 #55 laps 9-12; FP3 #55 laps 12-15
+55,S4,SOFT,0,new
+55,S5,SOFT,0,new
+55,S6,SOFT,0,new
+55,S7,SOFT,0,new
+55,S8,SOFT,0,new
+55,M2,MEDIUM,2,FP1 #46 laps 10-12
+55,H1,HARD,8,FP3 #55 laps 1-4; FP3 #55 laps 4-6; FP3 #55 laps 6-9
+55,H2,HARD,0,new
+63,S3,SOFT,3,FP3 #63 laps 8-11
+63,S4,SOFT,2,FP3 #63 laps 11-13
+63,S5,SOFT,0,new
+63,S6,SOFT,0,new
+63,S7,SOFT,0,new
+63,S8,SOFT,0,new
+63,M2,MEDIUM,7,FP3 #63 laps 1-6; FP3 #63 laps 6-8
+63,M3,MEDIUM,0,new
+63,H2,HARD,0,new
+81,S1,SOFT,3,FP1 #81 laps 9-12
+81,S2,SOFT,3,FP1 #81 laps 22-25
+81,S5,SOFT,5,FP3 #81 laps 8-11; FP3 #81 laps 11-13
+81,S6,SOFT,0,new
+81,S7,SOFT,0,new
+81,S8,SOFT,0,new
+81,M2,MEDIUM,0,new
+81,M3,MEDIUM,0,new
+81,H2,HARD,0,new
+87,S1,SOFT,3,FP1 #50 laps 9-12
+87,S2,SOFT,3,FP1 #50 laps 12-15
+87,S4,SOFT,3,FP3 #87 laps 13-16
+87,S5,SOFT,0,new
+87,S6,SOFT,0,new
+87,S7,SOFT,0,new
+87,S8,SOFT,0,new
+87,M3,MEDIUM,0,new
+87,H2,HARD,0,new

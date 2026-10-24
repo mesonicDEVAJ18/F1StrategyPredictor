@@ -6,8 +6,9 @@ Guidance for AI coding agents working in the **F1 Race Strategy Optimiser** repo
 
 An end-to-end data-science pipeline that predicts the **optimal tyre strategy** for a
 non-sprint Formula 1 race using only data from the three practice sessions (FP1/FP2/FP3).
-The reference weekend is **Ferrari, Bahrain 2025**, but the same pipeline generalises to any
-weekend. All raw data comes from the free [OpenF1 API](https://openf1.org/).
+The reference weekend is **Bahrain 2025**, but the same pipeline generalises to any weekend. The
+model is trained on the whole field; the race is simulated for one car, `SIM_DRIVER` in `.env`
+(default 16, Ferrari), using that car's tyre sets. All raw data comes from the free [OpenF1 API](https://openf1.org/).
 
 The core idea: rather than labelling a "degradation rate" directly (circular and leak-prone),
 an XGBoost model is trained to predict the **next lap's fuel-corrected pace**. Degradation then
@@ -28,7 +29,7 @@ scripts/            # ALL pipeline code lives here; run scripts FROM this direct
   feature_config.py     # shared column lists (MODEL_FEATURE_COLUMNS, SIM_FEATURE_COLUMNS, SESSION_COLUMNS)
   process_laps.py       # clean lap data (kept in s / km/h, not scaled), tag session_name FP1-3
   process_stints.py     # clean stints, one-hot encode compound
-  tyre_sets.py          # infer each race car's tyre sets from practice stints -> race inventory
+  tyre_sets.py          # infer every car's tyre sets from practice stints -> race inventory
   process_weather.py    # clean + scale weather
   process_cardata.py    # clean car telemetry (whole field), aggregate per lap, unscaled; model inputs
   feature_engineer.py   # merge laps+stints+weather, build engineered features
@@ -80,10 +81,10 @@ Scripts communicate through CSVs in `data/processed/`, not by importing each oth
 
 - `process_laps.py`   → `data/processed/laps_combined_clean.csv`
 - `process_stints.py` → `data/processed/stints_combined_clean.csv`
-- `tyre_sets.py`      → `data/processed/tyre_sets_race_inventory.csv` (one row per set each car in `RACE_CARS` has
+- `tyre_sets.py`      → `data/processed/tyre_sets_race_inventory.csv` (one row per set every car in practice has
   left for the race: compound and age in laps). OpenF1 has no set ID, so sets are chained by compound and
-  `tyre_age_at_start`; allocation, returns and race-reserved sets are `.env` settings (diagnostic.md #21).
-  Practice only: qualifying usage isn't tracked.
+  `tyre_age_at_start`; FP1 stand-ins count toward their race car (`FP_STAND_INS`), and allocation, returns and
+  race-reserved sets are `.env` settings (diagnostic.md #21, #23). Practice only: qualifying usage isn't tracked.
 - `process_weather.py`→ `data/processed/cleaned_weather.csv`
 - `process_cardata.py`→ `data/processed/cardata_per_lap_clean.csv` (reads `data/raw/car_data/` (`CARDATA_DIR`); keyed by
   `session_key`, `driver_number`, `lap_number`; lap windows come from the raw `data/raw/laps/laps_p*.csv`, and only laps in
@@ -105,8 +106,9 @@ Scripts communicate through CSVs in `data/processed/`, not by importing each oth
   rolled out autoregressively from stint lap 1, once per (compound, set age at start, stint length), with
   `tyre_age` = set age + stint lap: every predicted fcp is turned back into a raw lap time with
   `FUEL_EFFECT_K` (feature_config.py) and fed into the next lap's sector times and running `stint_avg_pace`.
-  Strategies are optimised per car in `RACE_CARS` from its tyre-set inventory: each set is fitted at most
-  once, and the fastest choice of sets is kept for each compound sequence and pit-lap plan.
+  Strategies are optimised for the one car in `SIM_DRIVER` from its tyre-set inventory (an unknown car number
+  raises): each set is fitted at most once, and the fastest choice of sets is kept for each compound sequence
+  and pit-lap plan.
 
 The **model target** is next-lap `fuel_corrected_pace`: the same driver's lap `lap_number + 1` in the
 same stint, built by `build_next_lap_target()` in `feature_config.py` (shared by `train_model.py` and

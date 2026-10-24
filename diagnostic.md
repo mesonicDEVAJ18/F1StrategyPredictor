@@ -337,6 +337,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
       - Qualifying stints aren't used (scope kept to FP1–FP3), so sets used in qualifying are counted as available.
       - The allocation, the return counts, returning the most-worn sets and the reserved sets are assumptions in `.env`. They should be checked against the season's sporting regulations.
       - Chaining is a heuristic: it assumes OpenF1's `tyre_age_at_start` counts every lap on the set.
+    - **Since #23:** `tyre_sets.py` builds an inventory for every car in practice, not just the Ferraris, and the simulator runs for the one car in `SIM_DRIVER`. `RACE_CARS` is removed.
 
 - [x] **#22 Settings are hardcoded across scripts**
   - **Where:** all 8 stage scripts and `scripts/feature_config.py`.
@@ -346,6 +347,22 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - **Kept in code** (schema or format, not settings): the column lists and `COMPOUNDS`, the throttle 0–100 / brake {0, 100} encodings, the XGBoost objective, `n_jobs`, plot cosmetics, the t-test placeholder (#5) and the dead `compound_HARD = 1` start setting (#12).
     - **Checks:** the full pipeline was run before and after. All 69 output CSV/JSON/TXT files are identical (CSVs to rtol 1e-9; the RandomForest RMSE differs only in the last digit between runs anyway). The exceptions are the unseeded t-test samples and p-value (#5) and one log line now reading "within 5min". The best strategy is unchanged (SOFT–SOFT–SOFT, pits 12 and 13, 5695.12 s). With `PIT_LOSS_S=30` it becomes 5711.12 s, which is 2 stops × 8 s more, as expected.
   - **readme.txt:** Running the Pipeline.
+
+- [x] **#23 Strategy is only produced for the two Ferraris**
+  - **Where:** `RACE_CARS=16,44` in `.env`, read by `scripts/tyre_sets.py` and `scripts/strategy_simulator.py`.
+  - **Problem:** the model is trained on the whole field and has no driver input, but `tyre_sets.py` built set inventories for the two Ferraris only, and the simulator looped over both. Each car could fit only its own sets, so every run declared two results, and no other car could be simulated.
+  - **Fix:** run the race for one chosen car, with inventories available for every car.
+  - **readme.txt:** intro; Data Collection step 5 (stand-ins); Race Simulation, tyre sets and step 4.
+  - **Fixed:**
+    - **`.env`:** `RACE_CARS` is replaced by `SIM_DRIVER=16`, the race car the strategy is simulated for. `FP_STAND_INS` now maps all six FP1 stand-ins to their race cars: `38:16,34:14,37:1,46:55,50:87,72:63`. This comes from OpenF1's `drivers` endpoint, FP1 (session 10007) against FP2 (10008); each team ran exactly one stand-in. OpenF1 lists #38 as Dino Beganovic, not Bearman as the old comment said.
+    - **`tyre_sets.py`:** loops over every car in the practice stints after the stand-in mapping (20 cars), with no logic change, and logs the field-wide match counts. Of 275 stints, 143 are new, 108 matched, 16 ambiguous and 8 unmatched (cars 4, 5, 10, 12, 18, 22, 23, 55: no set left at that age, so they take a new set at that age). Cars 6, 10, 22 and 55 run past the MEDIUM allocation and car 23 past the HARD one, which adds a set with a warning. Car 30 has no MEDIUM left for the race.
+    - **`strategy_simulator.py`:** filters the inventory to `SIM_DRIVER`. An unknown number raises `ValueError` listing the available cars. The per-car loop is gone; set choice, infeasible-sequence skipping and the rollouts are unchanged. `best_strategy.json` is flat (`time_units`, `car_number`, `best_compound_sequence`, `best_set_ages_at_start`, `best_pit_laps`, `best_total_time`), and `final_summary.txt` has one line. Only the chosen car's (compound, set age) pairs are rolled out (4 for car 16, was 7 for both cars).
+    - **Checks:** the inventory rows for cars 16 and 44 are identical to before. The train and CV metrics are unchanged (the RandomForest RMSE differs only in the last digits between runs anyway). `SIM_DRIVER=16` reproduces the previous car-16 result exactly, and `SIM_DRIVER=44` the car-44 one. `SIM_DRIVER=99` raises with the list of 20 cars.
+    - **Effect on strategy:** for car 16 (default), HARD(0)–SOFT(6), pit on lap 45, 5840.85 s, from 12,210 feasible strategies (3,996 skipped). Other cars, e.g.:
+      - Car 1: same result as car 16.
+      - Car 44: SOFT(4)–HARD(0), pit on lap 14, 5840.39 s.
+      - Car 30: no MEDIUM left, so only 2,072 strategies are feasible; SOFT(3)–HARD(0), pit on lap 10, 5839.87 s.
+      - Cars differ only through their sets, and the rollouts are almost flat, so the gaps are below 1 s. This is still **not** a valid recommendation (#18).
 
 - [ ] **#15 Results documentation**
   - **Problem:** results currently exist only as raw files in `scripts/results/<script>/` and a few numbers in the readmes.

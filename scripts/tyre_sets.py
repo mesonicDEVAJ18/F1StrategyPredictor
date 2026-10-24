@@ -42,7 +42,6 @@ processed_dir = os.path.join(env_str("DATA_DIR"), env_str("PROCESSED_DIR"))
 stints_file = os.path.join(processed_dir, env_str("STINTS_CLEAN_FILE"))
 inventory_file = os.path.join(processed_dir, env_str("TYRE_SETS_FILE"))
 
-RACE_CARS = env_list("RACE_CARS", cast=int)
 FP_STAND_INS = env_pairs("FP_STAND_INS", key_cast=int)           # practice driver -> race car
 TYRE_ALLOCATION = env_pairs("TYRE_ALLOCATION")                    # compound -> sets per weekend
 TYRE_RETURNS_PER_SESSION = env_list("TYRE_RETURNS_PER_SESSION", cast=int)
@@ -59,6 +58,8 @@ stints["compound"] = (
     stints[[f"compound_{c}" for c in COMPOUNDS]].idxmax(axis=1).str.replace("compound_", "")
 )
 stints["car_number"] = stints["driver_number"].map(lambda d: FP_STAND_INS.get(d, d))
+# Every car in practice gets an inventory; strategy_simulator.py picks one with SIM_DRIVER (diagnostic.md #23)
+CARS = sorted(int(c) for c in stints["car_number"].unique())
 
 # Session keys increase FP1 -> FP3, as in feature_engineer.py
 session_keys = sorted(int(k) for k in stints["session_key"].unique())
@@ -66,7 +67,7 @@ session_names = {k: f"FP{i + 1}" for i, k in enumerate(session_keys)}
 
 log(f"Loaded {len(stints)} stints from {stints_file}")
 log(f"Sessions: {session_names}")
-log(f"Race cars: {RACE_CARS}, practice stand-ins: {FP_STAND_INS}")
+log(f"Cars ({len(CARS)}): {CARS}, practice stand-ins: {FP_STAND_INS}")
 log(f"Allocation: {TYRE_ALLOCATION}, returns per session: {TYRE_RETURNS_PER_SESSION}, "
     f"race-reserved new sets: {TYRE_RACE_RESERVED}")
 
@@ -156,6 +157,8 @@ def infer_car_sets(car, car_stints, assignment_rows, returned_rows):
         return_sets(sets, n_return, session, car, returned_rows)
 
     log(f"  [car {car}] Stints: {counts}")
+    for k, n in counts.items():
+        match_totals[k] += n
     return sets
 
 
@@ -165,8 +168,9 @@ def infer_car_sets(car, car_stints, assignment_rows, returned_rows):
 assignment_rows = []
 returned_rows = []
 inventory_rows = []
+match_totals = {"new": 0, "matched": 0, "ambiguous": 0, "unmatched": 0}
 
-for car in RACE_CARS:
+for car in CARS:
     car_stints = (
         stints[stints["car_number"] == car]
         .sort_values(["session_key", "stint_number"])
@@ -185,6 +189,8 @@ for car in RACE_CARS:
     for c in COMPOUNDS:
         ages = sorted(r["age"] for r in left if r["compound"] == c)
         log(f"  [car {car}] Race {c} sets (age in laps): {ages}")
+
+log(f"\nStints across all {len(CARS)} cars: {match_totals}")
 
 
 # ============================================================
