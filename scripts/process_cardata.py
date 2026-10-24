@@ -29,15 +29,17 @@ def log(msg: str):
 # ============================================================
 data_dir = Path(env_str("DATA_DIR"))
 cardata_dir = data_dir / env_str("CARDATA_DIR")
+laps_dir = data_dir / env_str("LAPS_DIR")
+processed_dir = data_dir / env_str("PROCESSED_DIR")
 cardata_glob = env_str("CARDATA_GLOB")
 cardata_files = sorted(cardata_dir.glob(cardata_glob))
-laps_files = sorted(data_dir.glob(env_str("LAPS_GLOB")))
-clean_laps_file = data_dir / env_str("LAPS_CLEAN_FILE")
+laps_files = sorted(laps_dir.glob(env_str("LAPS_GLOB")))
+clean_laps_file = processed_dir / env_str("LAPS_CLEAN_FILE")
 
 if not cardata_files:
     raise FileNotFoundError(f"No {cardata_glob} files found at {cardata_dir}")
 if not clean_laps_file.exists():
-    raise FileNotFoundError(f"{clean_laps_file.name} not found at {data_dir}, run process_laps.py first")
+    raise FileNotFoundError(f"{clean_laps_file.name} not found at {processed_dir}, run process_laps.py first")
 
 removed_rows_summary = []
 
@@ -287,7 +289,7 @@ generated_files.append(combined_name)
 log(f"\nSaved per-lap dataset: {combined_name} ({len(combined)} laps)")
 
 # Hand-off for feature_engineer.py (merged on lap t as model inputs, diagnostic.md #16)
-handoff_path = data_dir / env_str("CARDATA_CLEAN_FILE")
+handoff_path = processed_dir / env_str("CARDATA_CLEAN_FILE")
 combined.to_csv(handoff_path, index=False)
 log(f"Saved hand-off dataset: {handoff_path}")
 

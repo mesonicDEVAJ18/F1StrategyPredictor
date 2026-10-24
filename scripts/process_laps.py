@@ -29,6 +29,8 @@ def log(msg: str):
 # INPUT FILE CONFIG
 # ============================================================
 data_dir = env_str("DATA_DIR")
+laps_dir = os.path.join(data_dir, env_str("LAPS_DIR"))
+processed_dir = os.path.join(data_dir, env_str("PROCESSED_DIR"))
 laps_files = env_list("LAPS_FILES")
 cleaned_dfs = []
 
@@ -131,7 +133,7 @@ def session_name_from_file(file):
 # ============================================================
 
 for file in laps_files:
-    file_path = os.path.join(data_dir, file)
+    file_path = os.path.join(laps_dir, file)
     df = pd.read_csv(file_path)
     fname = file.replace(".csv", "")
     log(f"\nLoaded {file} with {len(df)} rows")
@@ -188,7 +190,7 @@ generated_files.append(combined_name)
 log(f"\nSaved combined dataset: {combined_name}")
 
 # Hand-off for feature_engineer.py
-handoff_path = os.path.join(data_dir, env_str("LAPS_CLEAN_FILE"))
+handoff_path = os.path.join(processed_dir, env_str("LAPS_CLEAN_FILE"))
 combined.to_csv(handoff_path, index=False)
 log(f"Saved hand-off dataset: {handoff_path}")
 

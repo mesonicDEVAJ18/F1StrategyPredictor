@@ -29,13 +29,16 @@ def log(msg: str):
 # INPUT FILES
 # ============================================================
 data_dir = Path(env_str("DATA_DIR"))
-input_file = data_dir / env_str("WEATHER_FILE")
+weather_dir = data_dir / env_str("WEATHER_DIR")
+laps_dir = data_dir / env_str("LAPS_DIR")
+processed_dir = data_dir / env_str("PROCESSED_DIR")
+input_file = weather_dir / env_str("WEATHER_FILE")
 
 # Weather rows with |z| above this are dropped
 ZSCORE_THRESHOLD = env_float("WEATHER_ZSCORE_THRESHOLD")
 
 if not input_file.exists():
-    raise FileNotFoundError(f"{input_file.name} not found at {data_dir}")
+    raise FileNotFoundError(f"{input_file.name} not found at {weather_dir}")
 
 weather = pd.read_csv(input_file)
 log(f"Loaded {input_file.name} with {len(weather)} rows")
@@ -47,7 +50,7 @@ log(f"Loaded {input_file.name} with {len(weather)} rows")
 # weather.csv covers the whole meeting (practice, qualifying, race); keep only
 # the sessions the lap data comes from so filtering/scaling reflect practice.
 practice_sessions = pd.concat(
-    pd.read_csv(f, usecols=["session_key"]) for f in sorted(data_dir.glob(env_str("LAPS_GLOB")))
+    pd.read_csv(f, usecols=["session_key"]) for f in sorted(laps_dir.glob(env_str("LAPS_GLOB")))
 )["session_key"].dropna().astype(int).unique()
 
 before = len(weather)
@@ -141,7 +144,7 @@ generated_files.append(cleaned_name)
 log(f"Saved cleaned weather file: {cleaned_name}")
 
 # Hand-off for feature_engineer.py
-handoff_path = data_dir / env_str("WEATHER_CLEAN_FILE")
+handoff_path = processed_dir / env_str("WEATHER_CLEAN_FILE")
 weather.to_csv(handoff_path, index=False)
 log(f"Saved hand-off dataset: {handoff_path}")
 

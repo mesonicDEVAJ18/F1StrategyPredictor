@@ -1,7 +1,7 @@
 
 --- TYRE SETS START ---
 
-Loaded 275 stints from ../data\stints_combined_clean.csv
+Loaded 275 stints from ../data\processed\stints_combined_clean.csv
 Sessions: {10007: 'FP1', 10008: 'FP2', 10009: 'FP3'}
 Race cars: [16, 44], practice stand-ins: {38: 16}
 Allocation: {'SOFT': 8, 'MEDIUM': 3, 'HARD': 2}, returns per session: [1, 1, 2], race-reserved new sets: {'HARD': 1, 'MEDIUM': 1}
@@ -26,7 +26,7 @@ Car 44: 13 practice stints (drivers [44])
   [car 44] Race MEDIUM sets (age in laps): [0, 0, 3]
   [car 44] Race HARD sets (age in laps): [0]
 
-Saved hand-off dataset: ../data\tyre_sets_race_inventory.csv
+Saved hand-off dataset: ../data\processed\tyre_sets_race_inventory.csv
 
 PROCESS COMPLETE. Files generated:
   - tyre_sets_stint_set_assignment.csv

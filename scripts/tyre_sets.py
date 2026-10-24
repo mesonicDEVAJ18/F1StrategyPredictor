@@ -38,9 +38,9 @@ def env_pairs(key, key_cast=str, value_cast=int):
 # used continues the same-compound set that earlier running left at that age (diagnostic.md #21)
 COMPOUNDS = ["SOFT", "MEDIUM", "HARD"]
 
-data_dir = env_str("DATA_DIR")
-stints_file = os.path.join(data_dir, env_str("STINTS_CLEAN_FILE"))
-inventory_file = os.path.join(data_dir, env_str("TYRE_SETS_FILE"))
+processed_dir = os.path.join(env_str("DATA_DIR"), env_str("PROCESSED_DIR"))
+stints_file = os.path.join(processed_dir, env_str("STINTS_CLEAN_FILE"))
+inventory_file = os.path.join(processed_dir, env_str("TYRE_SETS_FILE"))
 
 RACE_CARS = env_list("RACE_CARS", cast=int)
 FP_STAND_INS = env_pairs("FP_STAND_INS", key_cast=int)           # practice driver -> race car

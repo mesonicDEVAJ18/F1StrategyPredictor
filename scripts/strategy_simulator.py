@@ -53,7 +53,7 @@ log(f"Session weights for averaging predictions: {SESSION_WEIGHTS}")
 # ============================================================
 # Sets each car has left for the race, inferred from practice by tyre_sets.py (diagnostic.md #21)
 RACE_CARS = env_list("RACE_CARS", cast=int)
-inventory = pd.read_csv(os.path.join(env_str("DATA_DIR"), env_str("TYRE_SETS_FILE")))
+inventory = pd.read_csv(os.path.join(env_str("DATA_DIR"), env_str("PROCESSED_DIR"), env_str("TYRE_SETS_FILE")))
 inventory = inventory[inventory["car_number"].isin(RACE_CARS)]
 
 log(f"Loaded tyre set inventory for cars {RACE_CARS}:")

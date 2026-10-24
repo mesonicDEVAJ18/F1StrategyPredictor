@@ -29,12 +29,12 @@ def log(msg: str):
 # CONFIG
 # ============================================================
 BASE_DIR = Path(__file__).resolve().parent
-data_dir = (BASE_DIR / env_str("DATA_DIR")).resolve()
+processed_dir = (BASE_DIR / env_str("DATA_DIR") / env_str("PROCESSED_DIR")).resolve()
 
-laps_file = data_dir / env_str("LAPS_CLEAN_FILE")
-stints_file = data_dir / env_str("STINTS_CLEAN_FILE")
-weather_file = data_dir / env_str("WEATHER_CLEAN_FILE")
-cardata_file = data_dir / env_str("CARDATA_CLEAN_FILE")
+laps_file = processed_dir / env_str("LAPS_CLEAN_FILE")
+stints_file = processed_dir / env_str("STINTS_CLEAN_FILE")
+weather_file = processed_dir / env_str("WEATHER_CLEAN_FILE")
+cardata_file = processed_dir / env_str("CARDATA_CLEAN_FILE")
 
 # Max gap between a lap's start and its nearest weather sample
 WEATHER_MERGE_TOLERANCE = env_str("WEATHER_MERGE_TOLERANCE")
@@ -263,7 +263,7 @@ generated_files.append(final_output_file.split("/")[-1])
 log(f"\n✅ Final engineered dataset saved as {final_output_file}")
 
 # Hand-off for train_model.py / validate_strategy.py
-handoff_path = data_dir / env_str("ENGINEERED_FILE")
+handoff_path = processed_dir / env_str("ENGINEERED_FILE")
 laps.to_csv(handoff_path, index=False)
 log(f"Saved hand-off dataset: {handoff_path}")
 

@@ -15,7 +15,7 @@ Loaded stints_p3.csv with 96 rows
   → Saved cleaned stint file: process_stints_cleaned_stints_p3.csv
 
 Saved combined stints dataset: process_stints_combined_cleaned.csv
-Saved hand-off dataset: ../data\stints_combined_clean.csv
+Saved hand-off dataset: ../data\processed\stints_combined_clean.csv
 
 PROCESS COMPLETE. Files generated:
   - process_stints_cleaned_stints_p1.csv

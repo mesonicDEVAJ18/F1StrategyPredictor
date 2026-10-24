@@ -14,12 +14,12 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
 ## P1: results are invalid until fixed
 
 - [x] **#1 Weather comes from a different event**
-  - **Where:** `data/weather.csv`, and the download URL in `readme.txt` / `README.md`.
+  - **Where:** `data/raw/weather/weather.csv`, and the download URL in `readme.txt` / `README.md`.
   - **Problem:** the weather was downloaded with `meeting_key=1253`, which is Bahrain pre-season testing (sessions 9683–9685, 26–28 Feb 2025). The laps, stints and car data are from `meeting_key=1257`, the Grand Prix weekend (11–12 Apr 2025).
   - **Effect:** the weather features describe a different week. The timestamps can't line up, so `feature_engineer.py` spreads the weather rows evenly over the lap numbers ("pseudo time"). Each lap's weather is therefore effectively arbitrary.
   - **Fix:** download `https://api.openf1.org/v1/weather?meeting_key=1257&csv=true`, then merge per session on timestamps (`date_start` against `date`).
   - **readme.txt:** Data Collection step 4; Feature Engineering, pseudo time alignment.
-  - **Fixed:** `data/weather.csv` re-downloaded for `meeting_key=1257`. `process_weather.py` keeps only the practice sessions (the `session_key`s in `laps_p*.csv`), dropping qualifying and race. `feature_engineer.py` replaces pseudo time with `merge_asof` on `date_start` ~ `date` (nearest, 5 min tolerance); all 839 laps match, within 30 s. Held-out R² went from 0.306/0.232/0.102 to 0.425/0.474/0.419 (LR/RF/XGB).
+  - **Fixed:** `data/raw/weather/weather.csv` re-downloaded for `meeting_key=1257`. `process_weather.py` keeps only the practice sessions (the `session_key`s in `laps_p*.csv`), dropping qualifying and race. `feature_engineer.py` replaces pseudo time with `merge_asof` on `date_start` ~ `date` (nearest, 5 min tolerance); all 839 laps match, within 30 s. Held-out R² went from 0.306/0.232/0.102 to 0.425/0.474/0.419 (LR/RF/XGB).
 
 - [x] **#2 Stint merge joins on the wrong stint number**
   - **Where:** `scripts/feature_engineer.py`: `assign_stint_numbers()` and the `laps.merge(stints[...], on=["driver_number", "stint_number"])` that follows it.
@@ -39,7 +39,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **Fix:** keep `session_key` through cleaning and include it in the mask.
   - **Depends on:** shares a fix with #2.
   - **readme.txt:** Data Preparation step 1 (session keys removed); Feature Engineering, stint number.
-  - **Fixed:** `process_laps.py` and `process_stints.py` now drop only `meeting_key`, so `session_key` reaches `data/laps_combined_clean.csv` and `data/stints_combined_clean.csv`. `assign_stint_numbers()` adds `session_key` to the mask. It also numbers the global stints in order of `(driver_number, session_key, stint_number)` rather than `lap_start`, which interleaved the sessions. `feature_engineer.py` drops `session_key` from the final dataset along with `driver_number`, so the engineered dataset's schema is unchanged. #4 decides which id to keep there.
+  - **Fixed:** `process_laps.py` and `process_stints.py` now drop only `meeting_key`, so `session_key` reaches `data/processed/laps_combined_clean.csv` and `data/processed/stints_combined_clean.csv`. `assign_stint_numbers()` adds `session_key` to the mask. It also numbers the global stints in order of `(driver_number, session_key, stint_number)` rather than `lap_start`, which interleaved the sessions. `feature_engineer.py` drops `session_key` from the final dataset along with `driver_number`, so the engineered dataset's schema is unchanged. #4 decides which id to keep there.
 
 - [x] **#4 The "next lap" target can come from another driver**
   - **Where:** `df.groupby("stint_number")["fuel_corrected_pace"].shift(-1)` in both `scripts/train_model.py` and `scripts/validate_strategy.py`.
@@ -161,8 +161,8 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - **Driver's best, not per compound:** the compound only reaches the laps in `feature_engineer.py` (from the stints). The gap between compounds (about 1 s, ~1%) is well inside the 15% margin.
     - **Rows:** 839 → 467 cleaned laps (145 / 109 / 118 removed in FP1 / FP2 / FP3, leaving 164 / 221 / 82). Median 98.1 / 98.8 / 94.9 s, mean 98.4 / 97.8 / 95.7 s and 90th percentile 101.8 / 101.3 / 99.9 s.
     - **Target rows:** 514 → 153 (223 are a stint's last lap, 91 have a gap to the next lap). Practice runs alternate push and cool-down laps, so dropping the cool-down lap breaks most lap + 1 pairs. 50 stints remain (SOFT 64, MEDIUM 63, HARD 26 rows), and FP3 has only 7 rows: session weights are now FP1 0.294, FP2 0.660, FP3 0.046. In training, `laps_since_stint_start` runs 2–13 and `tyre_age` 2–18.
-    - **Car data:** 90 → 55 laps (5–14 per driver and session), since `process_cardata.py` keeps only the laps in `data/laps_combined_clean.csv`.
-    - **Checks:** every lap in `data/laps_combined_clean.csv` is within 1.15× its driver's session best (max 1.1475). The removed counts add up: 839 − 372 = 467.
+    - **Car data:** 90 → 55 laps (5–14 per driver and session), since `process_cardata.py` keeps only the laps in `data/processed/laps_combined_clean.csv`.
+    - **Checks:** every lap in `data/processed/laps_combined_clean.csv` is within 1.15× its driver's session best (max 1.1475). The removed counts add up: 839 − 372 = 467.
     - **Effect on metrics:** held-out MAE 1.67 / 1.13 / 1.03 s, RMSE 2.10 / 1.61 / 1.46 s and R² 0.157 / 0.505 / 0.590 (LR/RF/XGB; was 16.64 / 12.42 / 12.19 s and R² 0.374 / 0.568 / 0.615). XGBoost 5-fold CV MAE 1.19 s, RMSE 1.67 s (was 11.92 / 16.36 s).
       - The errors are about 10× smaller because the slow laps are gone.
       - R² fell because there is much less variance left to explain.
@@ -254,16 +254,16 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - **Per-lap aggregation:** each sample is assigned to its lap window `[date_start, date_start + lap_duration)` from the raw `laps_p*.csv` with `merge_asof` by `(session_key, driver_number)`. Samples are then aggregated per lap: speed, throttle, full-throttle share, braking share, rpm, gear, gear changes and DRS-open share.
     - **Lap filters:**
       - laps with less than half the expected samples are dropped
-      - laps not in `data/laps_combined_clean.csv` are dropped (pit-out, invalid and outlier laps), so car data covers the same laps as the lap data
+      - laps not in `data/processed/laps_combined_clean.csv` are dropped (pit-out, invalid and outlier laps), so car data covers the same laps as the lap data
       - per-session |z| > 3 outliers on the aggregates are dropped
     - **Normalization:** per-session `StandardScaler`, the same scheme as the laps.
-    - **Output:** 90 laps (11–19 per driver-session) in `data/cardata_per_lap_clean.csv`. Also written: an unscaled copy, and the cleaned samples per input file in `scripts/results/process_cardata/`.
+    - **Output:** 90 laps (11–19 per driver-session) in `data/processed/cardata_per_lap_clean.csv`. Also written: an unscaled copy, and the cleaned samples per input file in `scripts/results/process_cardata/`.
     - **Pipeline:** wired into `master.py` after `process_weather.py`. It is not a model input yet, see #16.
-    - **Since #16:** the data is full-field (60 files in `data/car_data/`, 448 laps), the per-session scaling is removed, and the aggregates are model inputs.
+    - **Since #16:** the data is full-field (60 files in `data/raw/car_data/`, 448 laps), the per-session scaling is removed, and the aggregates are model inputs.
     - **Data fix:** `car_data_p1_1.csv` was driver #7 (Alpine). It was re-downloaded for #38, who ran Ferrari's #16 car in FP1.
 
 - [x] **#16 Car data is not a model input yet**
-  - **Where:** `scripts/feature_engineer.py` and `scripts/feature_config.py`, reading `data/cardata_per_lap_clean.csv` (written by `scripts/process_cardata.py`).
+  - **Where:** `scripts/feature_engineer.py` and `scripts/feature_config.py`, reading `data/processed/cardata_per_lap_clean.csv` (written by `scripts/process_cardata.py`).
   - **Problem:**
     - The car data is cleaned, aggregated per lap and scaled, but nothing reads it.
     - It covers only the two Ferrari cars per session (2 of ~20 drivers), and the model is trained on the whole field. Adding it as a feature as-is would leave about 90% of training rows empty.
@@ -277,7 +277,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - #9 (fixed): the simulator rolls a lap-*t* feature vector forward. Car-data features would need a seed value and a rule for how they evolve, or they stay at their medians like the speeds.
   - **readme.txt:** Data Collection step 5; Data Preparation, CarData.
   - **Fixed** (car data for the whole field, all 10 aggregates as lap-*t* inputs):
-    - **Download:** car data for every driver in each practice session's `laps_p*.csv` (20 per session, 60 files, ~66 MB). The files are now in `data/car_data/` as `car_data_p<session>_<driver>.csv` (new `.env` key `CARDATA_DIR`; `CARDATA_GLOB` is unchanged). The six re-downloaded Ferrari files are identical to the old `car_data_p*_{1,2}.csv`, which are removed.
+    - **Download:** car data for every driver in each practice session's `laps_p*.csv` (20 per session, 60 files, ~66 MB). The files are now in `data/raw/car_data/` as `car_data_p<session>_<driver>.csv` (new `.env` key `CARDATA_DIR`; `CARDATA_GLOB` is unchanged). The six re-downloaded Ferrari files are identical to the old `car_data_p*_{1,2}.csv`, which are removed.
     - **Unscaled:** `process_cardata.py` no longer scales the aggregates (#7), so they are in physical units, as the laps are. The `_per_lap_unscaled.csv` copy and `_scaling_summary.csv` are gone, and `_per_lap.csv` and the hand-off are the unscaled table. Medians: `mean_speed` 195 km/h, `mean_rpm` 9978, `full_throttle_pct` 0.46.
     - **Columns:** `CARDATA_FEATURE_COLUMNS` in `feature_config.py` lists `mean_speed`, `max_speed`, `mean_throttle`, `full_throttle_pct`, `brake_pct`, `mean_rpm`, `max_rpm`, `mean_gear`, `gear_changes` and `drs_open_pct`. They are spliced into `MODEL_FEATURE_COLUMNS` after the weather, which gives 36 inputs. `process_cardata.py` takes its z-score columns from the same list.
     - **Car-data laps:** 448 (all 20 drivers in every session, 1–15 per driver and session). Of the laps assigned, 129 are dropped for low coverage, 596 for not being in the cleaned lap data and 19 as z-score outliers (now judged per session across the whole field).
@@ -306,7 +306,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - Let `generate_strategies()` choose from the sets left, and start each stint at its set's age.
   - **readme.txt:** Race Simulation step 2.
   - **Fixed** (practice only, both Ferraris; the real tyre age is also a model input now):
-    - **New stage `scripts/tyre_sets.py`** (in `master.py` after `process_stints.py`) chains each race car's practice stints into sets. It writes the sets left for the race to `data/tyre_sets_race_inventory.csv`.
+    - **New stage `scripts/tyre_sets.py`** (in `master.py` after `process_stints.py`) chains each race car's practice stints into sets. It writes the sets left for the race to `data/processed/tyre_sets_race_inventory.csv`.
       - A stint at `tyre_age_at_start` 0 takes a new set from the allocation.
       - A used-set stint continues the same-compound set left at exactly that age, preferring the most recently used. If none matches, it is logged and takes a new set at that age.
       - A set's age after a stint is `tyre_age_at_start + (lap_end − lap_start)`, which is how OpenF1 counts it.

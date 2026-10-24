@@ -36,7 +36,7 @@ def log(msg: str):
 # ============================================================
 # CONFIG
 # ============================================================
-DATASET_PATH = os.path.join(env_str("DATA_DIR"), env_str("ENGINEERED_FILE"))
+DATASET_PATH = os.path.join(env_str("DATA_DIR"), env_str("PROCESSED_DIR"), env_str("ENGINEERED_FILE"))
 MODEL_BUNDLE_PATH = env_str("MODEL_BUNDLE_PATH")
 CV_FOLDS = env_int("CV_FOLDS")
 RANDOM_STATE = env_int("RANDOM_STATE")

@@ -38,7 +38,7 @@ def log(msg: str):
 # ======================================================
 # CONFIG
 # ======================================================
-DATASET_PATH = os.path.join(env_str("DATA_DIR"), env_str("ENGINEERED_FILE"))
+DATASET_PATH = os.path.join(env_str("DATA_DIR"), env_str("PROCESSED_DIR"), env_str("ENGINEERED_FILE"))
 MODEL_BUNDLE_PATH = env_str("MODEL_BUNDLE_PATH")
 RANDOM_STATE = env_int("RANDOM_STATE")
 TEST_SIZE = env_float("TEST_SIZE")

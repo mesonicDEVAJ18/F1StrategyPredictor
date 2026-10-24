@@ -36,8 +36,13 @@ scripts/            # ALL pipeline code lives here; run scripts FROM this direct
   strategy_simulator.py # enumerate + simulate strategies, pick best
   validate_strategy.py  # cross-validation, residuals, strategy robustness
   results/<script>/     # per-script outputs (logs, intermediate CSVs, plots, model)
-data/               # raw + cleaned CSVs (OpenF1 downloads and pipeline hand-offs)
-  car_data/             # raw car telemetry, car_data_p<session>_<driver>.csv (every driver, 60 files)
+data/
+  raw/                  # OpenF1 downloads, one folder per source (LAPS_DIR, STINTS_DIR, WEATHER_DIR, CARDATA_DIR)
+    laps/                 # laps_p1-3.csv
+    stints/               # stints_p1-3.csv
+    weather/              # weather.csv
+    car_data/             # car telemetry, car_data_p<session>_<driver>.csv (every driver, 60 files)
+  processed/            # pipeline hand-off CSVs (PROCESSED_DIR)
 results/            # stray: empty validate_strategy log from running a script outside scripts/
 .env                # pipeline settings (paths, thresholds, hyperparameters, race constants); committed, no secrets
 requirements.txt    # pinned deps (NOTE: UTF-16 encoded — see below)
@@ -70,21 +75,21 @@ python process_laps.py      # or run any single stage on its own
 
 ## Data flow / hand-offs
 
-Scripts communicate through CSVs in `data/`, not by importing each other. Each stage writes its
-hand-off file to `data/` in addition to its own `results/<name>/` copy:
+Scripts communicate through CSVs in `data/processed/`, not by importing each other. Raw downloads live in
+`data/raw/<source>/`. Each stage writes its hand-off file to `data/processed/` in addition to its own `results/<name>/` copy:
 
-- `process_laps.py`   → `data/laps_combined_clean.csv`
-- `process_stints.py` → `data/stints_combined_clean.csv`
-- `tyre_sets.py`      → `data/tyre_sets_race_inventory.csv` (one row per set each car in `RACE_CARS` has
+- `process_laps.py`   → `data/processed/laps_combined_clean.csv`
+- `process_stints.py` → `data/processed/stints_combined_clean.csv`
+- `tyre_sets.py`      → `data/processed/tyre_sets_race_inventory.csv` (one row per set each car in `RACE_CARS` has
   left for the race: compound and age in laps). OpenF1 has no set ID, so sets are chained by compound and
   `tyre_age_at_start`; allocation, returns and race-reserved sets are `.env` settings (diagnostic.md #21).
   Practice only: qualifying usage isn't tracked.
-- `process_weather.py`→ `data/cleaned_weather.csv`
-- `process_cardata.py`→ `data/cardata_per_lap_clean.csv` (reads `data/car_data/` (`CARDATA_DIR`); keyed by
-  `session_key`, `driver_number`, `lap_number`; lap windows come from the raw `laps_p*.csv`, and only laps in
-  `data/laps_combined_clean.csv` are kept, so it must run after `process_laps.py`; the aggregates are left
+- `process_weather.py`→ `data/processed/cleaned_weather.csv`
+- `process_cardata.py`→ `data/processed/cardata_per_lap_clean.csv` (reads `data/raw/car_data/` (`CARDATA_DIR`); keyed by
+  `session_key`, `driver_number`, `lap_number`; lap windows come from the raw `data/raw/laps/laps_p*.csv`, and only laps in
+  `data/processed/laps_combined_clean.csv` are kept, so it must run after `process_laps.py`; the aggregates are left
   unscaled, in physical units)
-- `feature_engineer.py` reads the laps, stints, weather and car data above → `data/final_engineered_dataset.csv`
+- `feature_engineer.py` reads the laps, stints, weather and car data above → `data/processed/final_engineered_dataset.csv`
   (and a copy under `results/feature_engineer/`). It keeps `session_key` and `driver_number` as
   identifiers only; they are not in `MODEL_FEATURE_COLUMNS`. The session reaches the model only as the
   `session_FP1/FP2/FP3` one-hot, built from `process_laps.py`'s `session_name`. The car-data aggregates

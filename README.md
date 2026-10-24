@@ -47,26 +47,28 @@ GET https://api.openf1.org/v1/sessions?country_name=Bahrain&year=2025
 **2. Telemetry Data Downloads**
 
 ```bash
+mkdir -p data/raw/laps data/raw/stints data/raw/weather
+
 # Lap data for all three sessions
-curl "https://api.openf1.org/v1/laps?session_key=10007&csv=true" -o data/laps_p1.csv
-curl "https://api.openf1.org/v1/laps?session_key=10008&csv=true" -o data/laps_p2.csv
-curl "https://api.openf1.org/v1/laps?session_key=10009&csv=true" -o data/laps_p3.csv
+curl "https://api.openf1.org/v1/laps?session_key=10007&csv=true" -o data/raw/laps/laps_p1.csv
+curl "https://api.openf1.org/v1/laps?session_key=10008&csv=true" -o data/raw/laps/laps_p2.csv
+curl "https://api.openf1.org/v1/laps?session_key=10009&csv=true" -o data/raw/laps/laps_p3.csv
 
 # Stint data for all three sessions
-curl "https://api.openf1.org/v1/stints?session_key=10007&csv=true" -o data/stints_p1.csv
-curl "https://api.openf1.org/v1/stints?session_key=10008&csv=true" -o data/stints_p2.csv
-curl "https://api.openf1.org/v1/stints?session_key=10009&csv=true" -o data/stints_p3.csv
+curl "https://api.openf1.org/v1/stints?session_key=10007&csv=true" -o data/raw/stints/stints_p1.csv
+curl "https://api.openf1.org/v1/stints?session_key=10008&csv=true" -o data/raw/stints/stints_p2.csv
+curl "https://api.openf1.org/v1/stints?session_key=10009&csv=true" -o data/raw/stints/stints_p3.csv
 
 # Weather data for the whole meeting (process_weather.py keeps the practice sessions)
-curl "https://api.openf1.org/v1/weather?meeting_key=1257&csv=true" -o data/weather.csv
+curl "https://api.openf1.org/v1/weather?meeting_key=1257&csv=true" -o data/raw/weather/weather.csv
 
-# Car data for every driver in each session (20 per session, 60 files), into data/car_data/
+# Car data for every driver in each session (20 per session, 60 files), into data/raw/car_data/
 # Drivers are read from that session's laps file (in FP1, driver 38 ran Ferrari's #16 car)
-mkdir -p data/car_data
+mkdir -p data/raw/car_data
 for n in 1 2 3; do
   key=$((10006 + n))
-  for d in $(python -c "import csv;print(*sorted({r['driver_number'] for r in csv.DictReader(open('data/laps_p$n.csv'))},key=int))"); do
-    curl "https://api.openf1.org/v1/car_data?session_key=$key&driver_number=$d&csv=true" -o data/car_data/car_data_p${n}_${d}.csv
+  for d in $(python -c "import csv;print(*sorted({r['driver_number'] for r in csv.DictReader(open('data/raw/laps/laps_p$n.csv'))},key=int))"); do
+    curl "https://api.openf1.org/v1/car_data?session_key=$key&driver_number=$d&csv=true" -o data/raw/car_data/car_data_p${n}_${d}.csv
     sleep 1.5   # stay under the free API's rate limit
   done
 done
@@ -290,7 +292,7 @@ pip install pandas numpy scikit-learn xgboost scipy matplotlib seaborn joblib re
 
 ### Usage
 
-**1. Data Collection**: download the CSVs into `data/` with the URLs under [Data Sources](#data-sources).
+**1. Data Collection**: download the CSVs into `data/raw/` (one folder per source) with the URLs under [Data Sources](#data-sources).
 
 **2. Run the pipeline.** Scripts use relative paths, so run them from `scripts/`:
 ```bash
@@ -302,12 +304,12 @@ python master.py
 
 | Step | Script | Hands off |
 |------|--------|-----------|
-| 1 | `process_laps.py` | `data/laps_combined_clean.csv` |
-| 2 | `process_stints.py` | `data/stints_combined_clean.csv` |
-| 3 | `tyre_sets.py` | `data/tyre_sets_race_inventory.csv` (each car's sets left for the race) |
-| 4 | `process_weather.py` | `data/cleaned_weather.csv` |
-| 5 | `process_cardata.py` | `data/cardata_per_lap_clean.csv` (merged by `feature_engineer.py`) |
-| 6 | `feature_engineer.py` | `data/final_engineered_dataset.csv` |
+| 1 | `process_laps.py` | `data/processed/laps_combined_clean.csv` |
+| 2 | `process_stints.py` | `data/processed/stints_combined_clean.csv` |
+| 3 | `tyre_sets.py` | `data/processed/tyre_sets_race_inventory.csv` (each car's sets left for the race) |
+| 4 | `process_weather.py` | `data/processed/cleaned_weather.csv` |
+| 5 | `process_cardata.py` | `data/processed/cardata_per_lap_clean.csv` (merged by `feature_engineer.py`) |
+| 6 | `feature_engineer.py` | `data/processed/final_engineered_dataset.csv` |
 | 7 | `train_model.py` | `scripts/results/train_model/train_model_xgb_model.pkl` |
 | 8 | `strategy_simulator.py` | best strategy per car |
 | 9 | `validate_strategy.py` | CV metrics, residual plot |

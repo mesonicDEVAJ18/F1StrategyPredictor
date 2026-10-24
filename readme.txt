@@ -9,7 +9,7 @@ The problem statement limits us to the three practice sessions only, we can broa
 DATA COLLECTION
 This analysis has been done for Ferrari in Bahrain 2025, same pipeline is applicable across weekends.
 Note: the laps, stints and car data cover the whole field (20 drivers per session), and the model is trained on all of them.
-All data has been collected from https://openf1.org/ and is stored in data/ (laps_p1-3.csv, stints_p1-3.csv, weather.csv, car_data/car_data_p*_*.csv).
+All data has been collected from https://openf1.org/ and is stored in data/raw/ (laps/laps_p1-3.csv, stints/stints_p1-3.csv, weather/weather.csv, car_data/raw/car_data_p*_*.csv).
 
 1. Identify the 3 practice sessions ids. https://api.openf1.org/v1/sessions?country_name=Bahrain&year=2025 
 1	10007	Practice 1	Practice	2025-04-11 11:30	2025-04-11 12:30	1 hr	Friday FP1
@@ -32,7 +32,7 @@ This covers the whole meeting (practice, qualifying and race); process_weather.p
 
 5. Download the car data for every driver in each session (the driver_numbers in that session's laps_p*.csv, 20 per session)
 https://api.openf1.org/v1/car_data?session_key=<session_key>&driver_number=<driver>&csv=true
-Saved as data/car_data/car_data_p<session>_<driver>.csv (60 files, ~66 MB; CARDATA_DIR in .env).
+Saved as data/raw/car_data/car_data_p<session>_<driver>.csv (60 files, ~66 MB; CARDATA_DIR in .env).
 In FP1 driver 38 ran Ferrari's #16 car, so car 16 has no FP1 laps.
 process_cardata.py cleans, encodes and aggregates the car data per lap (see Data Preparation), and feature_engineer.py merges it as model inputs.
 
@@ -123,13 +123,13 @@ master.py runs process_laps.py -> process_stints.py -> tyre_sets.py -> process_w
 Every script writes a log, a manifest and its intermediate outputs to scripts/results/<script_name>/.
 Settings (paths, file names, cleaning thresholds, model hyperparameters, seeds and race parameters such as NUM_LAPS and PIT_LOSS_S)
 live in .env at the repo root and are read through scripts/env_config.py. An environment variable of the same name overrides .env.
-Stages hand data to each other through CSVs in data/:
-    process_laps.py      -> data/laps_combined_clean.csv
-    process_stints.py    -> data/stints_combined_clean.csv
-    tyre_sets.py         -> data/tyre_sets_race_inventory.csv (read by the simulator)
-    process_weather.py   -> data/cleaned_weather.csv
-    process_cardata.py   -> data/cardata_per_lap_clean.csv
-    feature_engineer.py  -> data/final_engineered_dataset.csv
+Stages hand data to each other through CSVs in data/processed/:
+    process_laps.py      -> data/processed/laps_combined_clean.csv
+    process_stints.py    -> data/processed/stints_combined_clean.csv
+    tyre_sets.py         -> data/processed/tyre_sets_race_inventory.csv (read by the simulator)
+    process_weather.py   -> data/processed/cleaned_weather.csv
+    process_cardata.py   -> data/processed/cardata_per_lap_clean.csv
+    feature_engineer.py  -> data/processed/final_engineered_dataset.csv
     train_model.py       -> scripts/results/train_model/train_model_xgb_model.pkl (read by the simulator and validation)
 
 DATA PREPARATION
@@ -176,11 +176,11 @@ The samples of each lap are aggregated to mean/max speed, mean throttle, share o
 mean/max rpm, mean gear, gear changes and share with DRS open.
 Lap-level filters, in order:
 - Laps with fewer than half the expected samples (lap_duration x sample rate) are dropped, so gappy telemetry doesn't give misleading means.
-- Only laps that survive process_laps.py are kept (matched on driver_number + date_start against data/laps_combined_clean.csv). This removes
+- Only laps that survive process_laps.py are kept (matched on driver_number + date_start against data/processed/laps_combined_clean.csv). This removes
   pit-out, invalid and outlier laps, so the car data describes the same laps as the lap data.
 - Z-score filtering (|z| > 3, per session) on the aggregates, except DRS share, which is mostly 0, so any DRS use would look like an outlier.
 The cleaned samples of the kept laps are saved per input file (scripts/results/process_cardata/process_cardata_cleaned_car_data_p*_*.csv).
-The output has 448 laps (all 20 drivers in every session, 1-15 per driver and session), saved to data/cardata_per_lap_clean.csv with
+The output has 448 laps (all 20 drivers in every session, 1-15 per driver and session), saved to data/processed/cardata_per_lap_clean.csv with
 session_key, driver_number and lap_number as join keys. lap_duration is dropped from it, because it is the dependent variable.
 
 3. Encoding
@@ -262,7 +262,7 @@ run fuelled for its own length). The race fuel term in the simulator uses the sa
 race fuel is added once, in the simulator only (diagnostic.md #19).
 The current lap's fuel_corrected_pace is not a model input; the NEXT lap's value is the model's target.
 
-Finally date_start, date, lap_duration and laps_remaining are dropped, and the result is saved as data/final_engineered_dataset.csv.
+Finally date_start, date, lap_duration and laps_remaining are dropped, and the result is saved as data/processed/final_engineered_dataset.csv.
 session_key and driver_number stay in it as identifiers for building the target; the models only read the columns listed in feature_config.py.
 
 track evolution was not chosen as an engineered parameter, as it would've been a derived dependant value that would not have contributed to the model.
