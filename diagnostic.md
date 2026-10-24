@@ -227,7 +227,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
 
 - [ ] **#13 The saved model is the weakest of the three on the test split**
   - **Where:** `scripts/train_model.py` always saves XGBoost.
-  - **Problem:** `readme.txt` justifies XGBoost on qualitative grounds. Before #4 was fixed, the held-out R² was 0.043 for Linear Regression, 0.060 for Random Forest and −0.039 for XGBoost. After #4, XGBoost is now the best of the three: 0.534 for LR, 0.625 for RF and 0.652 for XGB. After #7 (seconds, 25 inputs with the session one-hot), it is 0.586 / 0.640 / 0.656, with MAE 12.12 / 10.65 / 10.51 s. After #17 (causal `stint_avg_pace`), it is 0.373 / 0.565 / 0.620, with MAE 16.62 / 12.54 / 12.06 s: XGBoost's lead over Random Forest grew, but it still comes from one shuffled split. After #21 and #19 (fuel term subtracted), it is 0.374 / 0.568 / 0.615, with MAE 16.64 / 12.42 / 12.19 s. After #20 (non-push laps dropped, 153 target rows), it is 0.157 / 0.505 / 0.590, with MAE 1.67 / 1.13 / 1.03 s.
+  - **Problem:** `readme.txt` justifies XGBoost on qualitative grounds. Before #4 was fixed, the held-out R² was 0.043 for Linear Regression, 0.060 for Random Forest and −0.039 for XGBoost. After #4, XGBoost is now the best of the three: 0.534 for LR, 0.625 for RF and 0.652 for XGB. After #7 (seconds, 25 inputs with the session one-hot), it is 0.586 / 0.640 / 0.656, with MAE 12.12 / 10.65 / 10.51 s. After #17 (causal `stint_avg_pace`), it is 0.373 / 0.565 / 0.620, with MAE 16.62 / 12.54 / 12.06 s: XGBoost's lead over Random Forest grew, but it still comes from one shuffled split. After #21 and #19 (fuel term subtracted), it is 0.374 / 0.568 / 0.615, with MAE 16.64 / 12.42 / 12.19 s. After #20 (non-push laps dropped, 153 target rows), it is 0.157 / 0.505 / 0.590, with MAE 1.67 / 1.13 / 1.03 s. After #16 (10 car-data inputs, 36 in all), it is 0.308 / 0.460 / 0.510, with MAE 1.44 / 1.20 / 1.07 s.
   - **Fix:** re-run the comparison once #18 is fixed. Then either keep XGBoost with metrics that support it, or save the best model and update the reasoning.
   - **Depends on:** #18 (#2, #3, #4 and #17 are fixed).
   - **readme.txt:** ML Modelling step 3, results table.
@@ -259,9 +259,10 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - **Normalization:** per-session `StandardScaler`, the same scheme as the laps.
     - **Output:** 90 laps (11–19 per driver-session) in `data/cardata_per_lap_clean.csv`. Also written: an unscaled copy, and the cleaned samples per input file in `scripts/results/process_cardata/`.
     - **Pipeline:** wired into `master.py` after `process_weather.py`. It is not a model input yet, see #16.
+    - **Since #16:** the data is full-field (60 files in `data/car_data/`, 448 laps), the per-session scaling is removed, and the aggregates are model inputs.
     - **Data fix:** `car_data_p1_1.csv` was driver #7 (Alpine). It was re-downloaded for #38, who ran Ferrari's #16 car in FP1.
 
-- [ ] **#16 Car data is not a model input yet**
+- [x] **#16 Car data is not a model input yet**
   - **Where:** `scripts/feature_engineer.py` and `scripts/feature_config.py`, reading `data/cardata_per_lap_clean.csv` (written by `scripts/process_cardata.py`).
   - **Problem:**
     - The car data is cleaned, aggregated per lap and scaled, but nothing reads it.
@@ -275,6 +276,21 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - #7 (fixed): the laps are no longer scaled, but the car-data aggregates still are (per session). Leave them unscaled too before merging, so the inputs are physical units throughout and the simulator's median baseline stays meaningful.
     - #9 (fixed): the simulator rolls a lap-*t* feature vector forward. Car-data features would need a seed value and a rule for how they evolve, or they stay at their medians like the speeds.
   - **readme.txt:** Data Collection step 5; Data Preparation, CarData.
+  - **Fixed** (car data for the whole field, all 10 aggregates as lap-*t* inputs):
+    - **Download:** car data for every driver in each practice session's `laps_p*.csv` (20 per session, 60 files, ~66 MB). The files are now in `data/car_data/` as `car_data_p<session>_<driver>.csv` (new `.env` key `CARDATA_DIR`; `CARDATA_GLOB` is unchanged). The six re-downloaded Ferrari files are identical to the old `car_data_p*_{1,2}.csv`, which are removed.
+    - **Unscaled:** `process_cardata.py` no longer scales the aggregates (#7), so they are in physical units, as the laps are. The `_per_lap_unscaled.csv` copy and `_scaling_summary.csv` are gone, and `_per_lap.csv` and the hand-off are the unscaled table. Medians: `mean_speed` 195 km/h, `mean_rpm` 9978, `full_throttle_pct` 0.46.
+    - **Columns:** `CARDATA_FEATURE_COLUMNS` in `feature_config.py` lists `mean_speed`, `max_speed`, `mean_throttle`, `full_throttle_pct`, `brake_pct`, `mean_rpm`, `max_rpm`, `mean_gear`, `gear_changes` and `drs_open_pct`. They are spliced into `MODEL_FEATURE_COLUMNS` after the weather, which gives 36 inputs. `process_cardata.py` takes its z-score columns from the same list.
+    - **Car-data laps:** 448 (all 20 drivers in every session, 1–15 per driver and session). Of the laps assigned, 129 are dropped for low coverage, 596 for not being in the cleaned lap data and 19 as z-score outliers (now judged per session across the whole field).
+    - **Merge:** `feature_engineer.py` left-merges the car data on `(session_key, driver_number, lap_number)` with `validate="one_to_one"`, after the weather. Each row gets its own lap *t*'s telemetry and the target is lap *t+1*, so nothing leaks. 467 rows before and after. 19 laps have no car data (dropped as outliers). `train_model.py` fills those with the training medians, as it does for other missing inputs. Of the 153 target rows, 148 have car data (was 19). Spot-checked: engineered rows match `process_cardata_per_lap.csv` for the same key and lap.
+    - **Simulator:** no logic change. The car-data inputs start at the training medians and stay there for the whole rollout, like the speed traps. That makes them a constant offset in the race, not a driving-style or tyre effect. A seed per car, or a rule for how they evolve, would be a separate change.
+    - **Effect on metrics:** held-out MAE 1.44 / 1.20 / 1.07 s, RMSE 1.90 / 1.68 / 1.60 s and R² 0.308 / 0.460 / 0.510 (LR/RF/XGB; was 1.67 / 1.13 / 1.03 s and R² 0.157 / 0.505 / 0.590). XGBoost 5-fold CV MAE 1.13 s, RMSE 1.60 s (was 1.19 / 1.67 s).
+      - Linear Regression gains the most. On the 31-row held-out split, RF and XGB are slightly worse, while CV (all 153 rows) is slightly better. With 36 inputs and 153 rows, both changes are within noise, and both splits still shuffle laps (#18).
+    - **Feature importance:** together the car-data inputs carry 0.249 of XGB's importance and 0.241 of RF's. XGB's top five are `stint_avg_pace` 0.145, `i2_speed` 0.100, `mean_gear` 0.080, `duration_sector_2` 0.066 and `air_temperature` 0.051, with `mean_speed` 6th (0.047). `tyre_age` is 7th (0.039) and `track_temperature` 21st. RF is led by `duration_sector_2` 0.201, `i2_speed` 0.153, `duration_sector_1` 0.096, `stint_avg_pace` 0.087 and `mean_gear` 0.075.
+    - **Rollout behaviour** (57-lap stint, fcp in s): the seed is unchanged (97.15 s fcp). Every compound and set age predicts 99.3–99.8 s on stint lap 2 and 101.1–101.4 s on lap 3, then stays within 100.55–101.53 s. The largest lap-to-lap step is 2.1–2.6 s. Still almost flat, and compounds and set ages are within ~0.4 s of each other.
+    - **Effect on strategy:** both cars still pick 1 stop, now on HARD and SOFT.
+      - **Car 16:** HARD(0)–SOFT(6), pit on lap 45, 5840.85 s (ties with SOFT(6)–HARD(0), pit on lap 12). Neighbouring pit laps are +0.24 s. The best 2-stop is SOFT(0)–SOFT(0)–HARD(0), pits on laps 16 and 34, +13.75 s. Was SOFT(6)–MEDIUM(0), pit on lap 46, 5838.86 s.
+      - **Car 44:** SOFT(4)–HARD(0), pit on lap 14, 5840.39 s (ties with the reverse, pit on lap 43). The best 2-stop is HARD(0)–SOFT(4)–SOFT(0), pits on laps 24 and 39, +13.38 s. Was SOFT(6)–MEDIUM(3), pit on lap 46, 5838.15 s.
+      - The top strategies are within ~0.3 s, so the compound and pit-lap choice are still close to arbitrary. This is still **not** a valid recommendation (#18).
 
 - [x] **#21 Race stints always start on a new tyre set**
   - **Where:** `RACE_TYRE_AGE_AT_START` in `scripts/strategy_simulator.py`.

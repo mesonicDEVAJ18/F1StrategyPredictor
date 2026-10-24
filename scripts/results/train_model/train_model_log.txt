@@ -14,9 +14,9 @@ Training XGBoost...
 
 Test metrics (MAE/RMSE in seconds):
                      MAE    RMSE      R2
-LinearRegression  1.6744  2.0963  0.1573
-RandomForest      1.1305  1.6075  0.5045
-XGBoost           1.0319  1.4618  0.5902
+LinearRegression  1.4421  1.9002  0.3076
+RandomForest      1.1979  1.6775  0.4604
+XGBoost           1.0666  1.5987  0.5099
 Saved model metrics table.
 Saved feature importance CSVs.
 Saved trained XGB model.

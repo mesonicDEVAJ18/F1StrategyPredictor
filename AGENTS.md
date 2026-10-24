@@ -30,13 +30,14 @@ scripts/            # ALL pipeline code lives here; run scripts FROM this direct
   process_stints.py     # clean stints, one-hot encode compound
   tyre_sets.py          # infer each race car's tyre sets from practice stints -> race inventory
   process_weather.py    # clean + scale weather
-  process_cardata.py    # clean car telemetry, aggregate per lap (not a model input yet)
+  process_cardata.py    # clean car telemetry (whole field), aggregate per lap, unscaled; model inputs
   feature_engineer.py   # merge laps+stints+weather, build engineered features
   train_model.py        # train/compare models, persist XGBoost bundle
   strategy_simulator.py # enumerate + simulate strategies, pick best
   validate_strategy.py  # cross-validation, residuals, strategy robustness
   results/<script>/     # per-script outputs (logs, intermediate CSVs, plots, model)
 data/               # raw + cleaned CSVs (OpenF1 downloads and pipeline hand-offs)
+  car_data/             # raw car telemetry, car_data_p<session>_<driver>.csv (every driver, 60 files)
 results/            # stray: empty validate_strategy log from running a script outside scripts/
 .env                # pipeline settings (paths, thresholds, hyperparameters, race constants); committed, no secrets
 requirements.txt    # pinned deps (NOTE: UTF-16 encoded — see below)
@@ -63,9 +64,6 @@ python process_laps.py      # or run any single stage on its own
 `validate_strategy`. It aborts the whole run if any stage exits non-zero.
 
 **Known gaps (don't "fix" silently — confirm intent first):**
-- Car data is cleaned, encoded, aggregated per lap and scaled, but it is **not** merged into
-  the engineered dataset or used as a model feature (diagnostic.md #16). It only covers the two
-  Ferrari cars, while the model trains on the whole field.
 - Known modelling bugs (cross-driver targets, mixed units in the simulator, illegal strategies,
   etc.) are listed in [diagnostic.md](diagnostic.md). Fixing them changes
   results, so confirm before fixing, and update diagnostic.md when one is resolved.
@@ -82,14 +80,16 @@ hand-off file to `data/` in addition to its own `results/<name>/` copy:
   `tyre_age_at_start`; allocation, returns and race-reserved sets are `.env` settings (diagnostic.md #21).
   Practice only: qualifying usage isn't tracked.
 - `process_weather.py`→ `data/cleaned_weather.csv`
-- `process_cardata.py`→ `data/cardata_per_lap_clean.csv` (keyed by `session_key`,
-  `driver_number`, `lap_number`; lap windows come from the raw `laps_p*.csv`, and only laps in
-  `data/laps_combined_clean.csv` are kept, so it must run after `process_laps.py`; not read
-  downstream yet)
-- `feature_engineer.py` reads the three above → `data/final_engineered_dataset.csv`
+- `process_cardata.py`→ `data/cardata_per_lap_clean.csv` (reads `data/car_data/` (`CARDATA_DIR`); keyed by
+  `session_key`, `driver_number`, `lap_number`; lap windows come from the raw `laps_p*.csv`, and only laps in
+  `data/laps_combined_clean.csv` are kept, so it must run after `process_laps.py`; the aggregates are left
+  unscaled, in physical units)
+- `feature_engineer.py` reads the laps, stints, weather and car data above → `data/final_engineered_dataset.csv`
   (and a copy under `results/feature_engineer/`). It keeps `session_key` and `driver_number` as
   identifiers only; they are not in `MODEL_FEATURE_COLUMNS`. The session reaches the model only as the
-  `session_FP1/FP2/FP3` one-hot, built from `process_laps.py`'s `session_name`.
+  `session_FP1/FP2/FP3` one-hot, built from `process_laps.py`'s `session_name`. The car-data aggregates
+  (`CARDATA_FEATURE_COLUMNS`) are left-merged on lap *t*'s keys. Laps without telemetry stay NaN and get the
+  training medians, and the simulator holds them at those medians (diagnostic.md #16).
 - `train_model.py` reads the engineered dataset → `results/train_model/train_model_xgb_model.pkl`
   (a joblib bundle: `{"model": ..., "features": [...], "medians": {...}, "session_weights": {...}}`;
   `medians` are the training medians used for `fillna`, and `session_weights` is each session's share of
@@ -108,7 +108,7 @@ same stint, built by `build_next_lap_target()` in `feature_config.py` (shared by
 `validate_strategy.py`, so the target can't diverge between them). `lap_duration` and `laps_remaining` are
 dependent variables and are deliberately excluded from model inputs to avoid leakage.
 The target, every prediction, the simulator's totals and the error metrics are in **seconds**: lap times
-are not scaled (diagnostic.md #7). Don't reintroduce a per-session scaler on lap columns.
+are not scaled (diagnostic.md #7). Don't reintroduce a per-session scaler on lap or car-data columns.
 
 ## Conventions to follow
 

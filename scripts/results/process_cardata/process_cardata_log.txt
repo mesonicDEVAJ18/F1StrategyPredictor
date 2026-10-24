@@ -1,101 +1,853 @@
 Loaded 1192 lap windows from ['laps_p1.csv', 'laps_p2.csv', 'laps_p3.csv']
 
-Loaded car_data_p1_1.csv with 18006 rows (drivers [38], session [10007])
-[car_data_p1_1.csv] Median sample rate: 4.17 Hz
-[car_data_p1_1.csv] Removed 0 duplicate-timestamp samples
-[car_data_p1_1.csv] Removed 8071 no-input samples (brake/throttle = 104)
-[car_data_p1_1.csv] Removed 0 out-of-range samples
-[car_data_p1_1.csv] Encoded brake -> braking, drs -> drs_open
-[car_data_p1_1.csv] Removed 1752 samples outside any lap window
-[car_data_p1_1.csv] Removed 2 laps with coverage < 0.5
-[car_data_p1_1.csv] Removed 7 laps not in the cleaned lap data
-[car_data_p1_1.csv] 10 laps aggregated
+Loaded car_data_p1_10.csv with 18016 rows (drivers [10], session [10007])
+[car_data_p1_10.csv] Median sample rate: 4.17 Hz
+[car_data_p1_10.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_10.csv] Removed 6089 no-input samples (brake/throttle = 104)
+[car_data_p1_10.csv] Removed 0 out-of-range samples
+[car_data_p1_10.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_10.csv] Removed 1707 samples outside any lap window
+[car_data_p1_10.csv] Removed 2 laps with coverage < 0.5
+[car_data_p1_10.csv] Removed 12 laps not in the cleaned lap data
+[car_data_p1_10.csv] 8 laps aggregated
 
-Loaded car_data_p1_2.csv with 18006 rows (drivers [44], session [10007])
-[car_data_p1_2.csv] Median sample rate: 4.17 Hz
-[car_data_p1_2.csv] Removed 0 duplicate-timestamp samples
-[car_data_p1_2.csv] Removed 6549 no-input samples (brake/throttle = 104)
-[car_data_p1_2.csv] Removed 0 out-of-range samples
-[car_data_p1_2.csv] Encoded brake -> braking, drs -> drs_open
-[car_data_p1_2.csv] Removed 1686 samples outside any lap window
-[car_data_p1_2.csv] Removed 2 laps with coverage < 0.5
-[car_data_p1_2.csv] Removed 11 laps not in the cleaned lap data
-[car_data_p1_2.csv] 9 laps aggregated
+Loaded car_data_p1_12.csv with 18016 rows (drivers [12], session [10007])
+[car_data_p1_12.csv] Median sample rate: 4.17 Hz
+[car_data_p1_12.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_12.csv] Removed 15949 no-input samples (brake/throttle = 104)
+[car_data_p1_12.csv] Removed 0 out-of-range samples
+[car_data_p1_12.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_12.csv] Removed 977 samples outside any lap window
+[car_data_p1_12.csv] Removed 0 laps with coverage < 0.5
+[car_data_p1_12.csv] Removed 1 laps not in the cleaned lap data
+[car_data_p1_12.csv] 1 laps aggregated
 
-Loaded car_data_p2_1.csv with 17760 rows (drivers [16], session [10008])
+Loaded car_data_p1_18.csv with 18016 rows (drivers [18], session [10007])
+[car_data_p1_18.csv] Median sample rate: 4.17 Hz
+[car_data_p1_18.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_18.csv] Removed 5811 no-input samples (brake/throttle = 104)
+[car_data_p1_18.csv] Removed 0 out-of-range samples
+[car_data_p1_18.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_18.csv] Removed 1800 samples outside any lap window
+[car_data_p1_18.csv] Removed 2 laps with coverage < 0.5
+[car_data_p1_18.csv] Removed 11 laps not in the cleaned lap data
+[car_data_p1_18.csv] 9 laps aggregated
+
+Loaded car_data_p1_22.csv with 18016 rows (drivers [22], session [10007])
+[car_data_p1_22.csv] Median sample rate: 4.17 Hz
+[car_data_p1_22.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_22.csv] Removed 4703 no-input samples (brake/throttle = 104)
+[car_data_p1_22.csv] Removed 0 out-of-range samples
+[car_data_p1_22.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_22.csv] Removed 3026 samples outside any lap window
+[car_data_p1_22.csv] Removed 2 laps with coverage < 0.5
+[car_data_p1_22.csv] Removed 10 laps not in the cleaned lap data
+[car_data_p1_22.csv] 10 laps aggregated
+
+Loaded car_data_p1_23.csv with 18016 rows (drivers [23], session [10007])
+[car_data_p1_23.csv] Median sample rate: 4.17 Hz
+[car_data_p1_23.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_23.csv] Removed 5016 no-input samples (brake/throttle = 104)
+[car_data_p1_23.csv] Removed 0 out-of-range samples
+[car_data_p1_23.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_23.csv] Removed 1926 samples outside any lap window
+[car_data_p1_23.csv] Removed 2 laps with coverage < 0.5
+[car_data_p1_23.csv] Removed 13 laps not in the cleaned lap data
+[car_data_p1_23.csv] 8 laps aggregated
+
+Loaded car_data_p1_27.csv with 18016 rows (drivers [27], session [10007])
+[car_data_p1_27.csv] Median sample rate: 4.17 Hz
+[car_data_p1_27.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_27.csv] Removed 3140 no-input samples (brake/throttle = 104)
+[car_data_p1_27.csv] Removed 0 out-of-range samples
+[car_data_p1_27.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_27.csv] Removed 4692 samples outside any lap window
+[car_data_p1_27.csv] Removed 2 laps with coverage < 0.5
+[car_data_p1_27.csv] Removed 11 laps not in the cleaned lap data
+[car_data_p1_27.csv] 10 laps aggregated
+
+Loaded car_data_p1_30.csv with 18016 rows (drivers [30], session [10007])
+[car_data_p1_30.csv] Median sample rate: 4.17 Hz
+[car_data_p1_30.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_30.csv] Removed 2562 no-input samples (brake/throttle = 104)
+[car_data_p1_30.csv] Removed 0 out-of-range samples
+[car_data_p1_30.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_30.csv] Removed 4894 samples outside any lap window
+[car_data_p1_30.csv] Removed 3 laps with coverage < 0.5
+[car_data_p1_30.csv] Removed 11 laps not in the cleaned lap data
+[car_data_p1_30.csv] 8 laps aggregated
+
+Loaded car_data_p1_31.csv with 18016 rows (drivers [31], session [10007])
+[car_data_p1_31.csv] Median sample rate: 4.17 Hz
+[car_data_p1_31.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_31.csv] Removed 7347 no-input samples (brake/throttle = 104)
+[car_data_p1_31.csv] Removed 0 out-of-range samples
+[car_data_p1_31.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_31.csv] Removed 2177 samples outside any lap window
+[car_data_p1_31.csv] Removed 2 laps with coverage < 0.5
+[car_data_p1_31.csv] Removed 13 laps not in the cleaned lap data
+[car_data_p1_31.csv] 3 laps aggregated
+
+Loaded car_data_p1_34.csv with 18006 rows (drivers [34], session [10007])
+[car_data_p1_34.csv] Median sample rate: 4.17 Hz
+[car_data_p1_34.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_34.csv] Removed 7589 no-input samples (brake/throttle = 104)
+[car_data_p1_34.csv] Removed 0 out-of-range samples
+[car_data_p1_34.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_34.csv] Removed 1815 samples outside any lap window
+[car_data_p1_34.csv] Removed 2 laps with coverage < 0.5
+[car_data_p1_34.csv] Removed 9 laps not in the cleaned lap data
+[car_data_p1_34.csv] 7 laps aggregated
+
+Loaded car_data_p1_37.csv with 18006 rows (drivers [37], session [10007])
+[car_data_p1_37.csv] Median sample rate: 4.17 Hz
+[car_data_p1_37.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_37.csv] Removed 6164 no-input samples (brake/throttle = 104)
+[car_data_p1_37.csv] Removed 0 out-of-range samples
+[car_data_p1_37.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_37.csv] Removed 3033 samples outside any lap window
+[car_data_p1_37.csv] Removed 2 laps with coverage < 0.5
+[car_data_p1_37.csv] Removed 10 laps not in the cleaned lap data
+[car_data_p1_37.csv] 7 laps aggregated
+
+Loaded car_data_p1_38.csv with 18006 rows (drivers [38], session [10007])
+[car_data_p1_38.csv] Median sample rate: 4.17 Hz
+[car_data_p1_38.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_38.csv] Removed 8071 no-input samples (brake/throttle = 104)
+[car_data_p1_38.csv] Removed 0 out-of-range samples
+[car_data_p1_38.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_38.csv] Removed 1752 samples outside any lap window
+[car_data_p1_38.csv] Removed 2 laps with coverage < 0.5
+[car_data_p1_38.csv] Removed 7 laps not in the cleaned lap data
+[car_data_p1_38.csv] 10 laps aggregated
+
+Loaded car_data_p1_4.csv with 18016 rows (drivers [4], session [10007])
+[car_data_p1_4.csv] Median sample rate: 4.17 Hz
+[car_data_p1_4.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_4.csv] Removed 6979 no-input samples (brake/throttle = 104)
+[car_data_p1_4.csv] Removed 0 out-of-range samples
+[car_data_p1_4.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_4.csv] Removed 1673 samples outside any lap window
+[car_data_p1_4.csv] Removed 2 laps with coverage < 0.5
+[car_data_p1_4.csv] Removed 8 laps not in the cleaned lap data
+[car_data_p1_4.csv] 12 laps aggregated
+
+Loaded car_data_p1_44.csv with 18006 rows (drivers [44], session [10007])
+[car_data_p1_44.csv] Median sample rate: 4.17 Hz
+[car_data_p1_44.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_44.csv] Removed 6549 no-input samples (brake/throttle = 104)
+[car_data_p1_44.csv] Removed 0 out-of-range samples
+[car_data_p1_44.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_44.csv] Removed 1686 samples outside any lap window
+[car_data_p1_44.csv] Removed 2 laps with coverage < 0.5
+[car_data_p1_44.csv] Removed 11 laps not in the cleaned lap data
+[car_data_p1_44.csv] 9 laps aggregated
+
+Loaded car_data_p1_46.csv with 18006 rows (drivers [46], session [10007])
+[car_data_p1_46.csv] Median sample rate: 4.17 Hz
+[car_data_p1_46.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_46.csv] Removed 5963 no-input samples (brake/throttle = 104)
+[car_data_p1_46.csv] Removed 0 out-of-range samples
+[car_data_p1_46.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_46.csv] Removed 3048 samples outside any lap window
+[car_data_p1_46.csv] Removed 4 laps with coverage < 0.5
+[car_data_p1_46.csv] Removed 11 laps not in the cleaned lap data
+[car_data_p1_46.csv] 4 laps aggregated
+
+Loaded car_data_p1_5.csv with 18016 rows (drivers [5], session [10007])
+[car_data_p1_5.csv] Median sample rate: 4.17 Hz
+[car_data_p1_5.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_5.csv] Removed 3684 no-input samples (brake/throttle = 104)
+[car_data_p1_5.csv] Removed 0 out-of-range samples
+[car_data_p1_5.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_5.csv] Removed 4456 samples outside any lap window
+[car_data_p1_5.csv] Removed 2 laps with coverage < 0.5
+[car_data_p1_5.csv] Removed 10 laps not in the cleaned lap data
+[car_data_p1_5.csv] 10 laps aggregated
+
+Loaded car_data_p1_50.csv with 18006 rows (drivers [50], session [10007])
+[car_data_p1_50.csv] Median sample rate: 4.17 Hz
+[car_data_p1_50.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_50.csv] Removed 7415 no-input samples (brake/throttle = 104)
+[car_data_p1_50.csv] Removed 0 out-of-range samples
+[car_data_p1_50.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_50.csv] Removed 2080 samples outside any lap window
+[car_data_p1_50.csv] Removed 2 laps with coverage < 0.5
+[car_data_p1_50.csv] Removed 7 laps not in the cleaned lap data
+[car_data_p1_50.csv] 10 laps aggregated
+
+Loaded car_data_p1_6.csv with 18016 rows (drivers [6], session [10007])
+[car_data_p1_6.csv] Median sample rate: 4.17 Hz
+[car_data_p1_6.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_6.csv] Removed 3018 no-input samples (brake/throttle = 104)
+[car_data_p1_6.csv] Removed 0 out-of-range samples
+[car_data_p1_6.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_6.csv] Removed 5495 samples outside any lap window
+[car_data_p1_6.csv] Removed 4 laps with coverage < 0.5
+[car_data_p1_6.csv] Removed 8 laps not in the cleaned lap data
+[car_data_p1_6.csv] 9 laps aggregated
+
+Loaded car_data_p1_7.csv with 18016 rows (drivers [7], session [10007])
+[car_data_p1_7.csv] Median sample rate: 4.17 Hz
+[car_data_p1_7.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_7.csv] Removed 5756 no-input samples (brake/throttle = 104)
+[car_data_p1_7.csv] Removed 0 out-of-range samples
+[car_data_p1_7.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_7.csv] Removed 1938 samples outside any lap window
+[car_data_p1_7.csv] Removed 2 laps with coverage < 0.5
+[car_data_p1_7.csv] Removed 14 laps not in the cleaned lap data
+[car_data_p1_7.csv] 6 laps aggregated
+
+Loaded car_data_p1_72.csv with 18006 rows (drivers [72], session [10007])
+[car_data_p1_72.csv] Median sample rate: 4.17 Hz
+[car_data_p1_72.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_72.csv] Removed 5010 no-input samples (brake/throttle = 104)
+[car_data_p1_72.csv] Removed 0 out-of-range samples
+[car_data_p1_72.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_72.csv] Removed 1579 samples outside any lap window
+[car_data_p1_72.csv] Removed 2 laps with coverage < 0.5
+[car_data_p1_72.csv] Removed 12 laps not in the cleaned lap data
+[car_data_p1_72.csv] 11 laps aggregated
+
+Loaded car_data_p1_81.csv with 18006 rows (drivers [81], session [10007])
+[car_data_p1_81.csv] Median sample rate: 4.17 Hz
+[car_data_p1_81.csv] Removed 0 duplicate-timestamp samples
+[car_data_p1_81.csv] Removed 6120 no-input samples (brake/throttle = 104)
+[car_data_p1_81.csv] Removed 0 out-of-range samples
+[car_data_p1_81.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p1_81.csv] Removed 1677 samples outside any lap window
+[car_data_p1_81.csv] Removed 2 laps with coverage < 0.5
+[car_data_p1_81.csv] Removed 10 laps not in the cleaned lap data
+[car_data_p1_81.csv] 12 laps aggregated
+
+Loaded car_data_p2_1.csv with 17760 rows (drivers [1], session [10008])
 [car_data_p2_1.csv] Median sample rate: 4.17 Hz
 [car_data_p2_1.csv] Removed 0 duplicate-timestamp samples
-[car_data_p2_1.csv] Removed 4312 no-input samples (brake/throttle = 104)
+[car_data_p2_1.csv] Removed 2925 no-input samples (brake/throttle = 104)
 [car_data_p2_1.csv] Removed 0 out-of-range samples
 [car_data_p2_1.csv] Encoded brake -> braking, drs -> drs_open
-[car_data_p2_1.csv] Removed 2248 samples outside any lap window
-[car_data_p2_1.csv] Removed 3 laps with coverage < 0.5
-[car_data_p2_1.csv] Removed 9 laps not in the cleaned lap data
-[car_data_p2_1.csv] 14 laps aggregated
+[car_data_p2_1.csv] Removed 4131 samples outside any lap window
+[car_data_p2_1.csv] Removed 2 laps with coverage < 0.5
+[car_data_p2_1.csv] Removed 13 laps not in the cleaned lap data
+[car_data_p2_1.csv] 11 laps aggregated
 
-Loaded car_data_p2_2.csv with 17760 rows (drivers [44], session [10008])
-[car_data_p2_2.csv] Median sample rate: 4.17 Hz
-[car_data_p2_2.csv] Removed 0 duplicate-timestamp samples
-[car_data_p2_2.csv] Removed 6505 no-input samples (brake/throttle = 104)
-[car_data_p2_2.csv] Removed 0 out-of-range samples
-[car_data_p2_2.csv] Encoded brake -> braking, drs -> drs_open
-[car_data_p2_2.csv] Removed 2106 samples outside any lap window
-[car_data_p2_2.csv] Removed 3 laps with coverage < 0.5
-[car_data_p2_2.csv] Removed 8 laps not in the cleaned lap data
-[car_data_p2_2.csv] 11 laps aggregated
+Loaded car_data_p2_10.csv with 17760 rows (drivers [10], session [10008])
+[car_data_p2_10.csv] Median sample rate: 4.17 Hz
+[car_data_p2_10.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_10.csv] Removed 2325 no-input samples (brake/throttle = 104)
+[car_data_p2_10.csv] Removed 0 out-of-range samples
+[car_data_p2_10.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_10.csv] Removed 4458 samples outside any lap window
+[car_data_p2_10.csv] Removed 2 laps with coverage < 0.5
+[car_data_p2_10.csv] Removed 9 laps not in the cleaned lap data
+[car_data_p2_10.csv] 15 laps aggregated
 
-Loaded car_data_p3_1.csv with 17601 rows (drivers [16], session [10009])
+Loaded car_data_p2_12.csv with 17760 rows (drivers [12], session [10008])
+[car_data_p2_12.csv] Median sample rate: 4.17 Hz
+[car_data_p2_12.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_12.csv] Removed 2167 no-input samples (brake/throttle = 104)
+[car_data_p2_12.csv] Removed 0 out-of-range samples
+[car_data_p2_12.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_12.csv] Removed 4525 samples outside any lap window
+[car_data_p2_12.csv] Removed 2 laps with coverage < 0.5
+[car_data_p2_12.csv] Removed 16 laps not in the cleaned lap data
+[car_data_p2_12.csv] 8 laps aggregated
+
+Loaded car_data_p2_14.csv with 17760 rows (drivers [14], session [10008])
+[car_data_p2_14.csv] Median sample rate: 4.17 Hz
+[car_data_p2_14.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_14.csv] Removed 5243 no-input samples (brake/throttle = 104)
+[car_data_p2_14.csv] Removed 0 out-of-range samples
+[car_data_p2_14.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_14.csv] Removed 4991 samples outside any lap window
+[car_data_p2_14.csv] Removed 1 laps with coverage < 0.5
+[car_data_p2_14.csv] Removed 6 laps not in the cleaned lap data
+[car_data_p2_14.csv] 11 laps aggregated
+
+Loaded car_data_p2_16.csv with 17760 rows (drivers [16], session [10008])
+[car_data_p2_16.csv] Median sample rate: 4.17 Hz
+[car_data_p2_16.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_16.csv] Removed 4312 no-input samples (brake/throttle = 104)
+[car_data_p2_16.csv] Removed 0 out-of-range samples
+[car_data_p2_16.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_16.csv] Removed 2248 samples outside any lap window
+[car_data_p2_16.csv] Removed 3 laps with coverage < 0.5
+[car_data_p2_16.csv] Removed 9 laps not in the cleaned lap data
+[car_data_p2_16.csv] 14 laps aggregated
+
+Loaded car_data_p2_18.csv with 17760 rows (drivers [18], session [10008])
+[car_data_p2_18.csv] Median sample rate: 4.17 Hz
+[car_data_p2_18.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_18.csv] Removed 1917 no-input samples (brake/throttle = 104)
+[car_data_p2_18.csv] Removed 0 out-of-range samples
+[car_data_p2_18.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_18.csv] Removed 4508 samples outside any lap window
+[car_data_p2_18.csv] Removed 2 laps with coverage < 0.5
+[car_data_p2_18.csv] Removed 12 laps not in the cleaned lap data
+[car_data_p2_18.csv] 12 laps aggregated
+
+Loaded car_data_p2_22.csv with 17760 rows (drivers [22], session [10008])
+[car_data_p2_22.csv] Median sample rate: 4.17 Hz
+[car_data_p2_22.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_22.csv] Removed 4188 no-input samples (brake/throttle = 104)
+[car_data_p2_22.csv] Removed 0 out-of-range samples
+[car_data_p2_22.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_22.csv] Removed 3360 samples outside any lap window
+[car_data_p2_22.csv] Removed 2 laps with coverage < 0.5
+[car_data_p2_22.csv] Removed 14 laps not in the cleaned lap data
+[car_data_p2_22.csv] 8 laps aggregated
+
+Loaded car_data_p2_23.csv with 17760 rows (drivers [23], session [10008])
+[car_data_p2_23.csv] Median sample rate: 4.17 Hz
+[car_data_p2_23.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_23.csv] Removed 1968 no-input samples (brake/throttle = 104)
+[car_data_p2_23.csv] Removed 0 out-of-range samples
+[car_data_p2_23.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_23.csv] Removed 4365 samples outside any lap window
+[car_data_p2_23.csv] Removed 2 laps with coverage < 0.5
+[car_data_p2_23.csv] Removed 18 laps not in the cleaned lap data
+[car_data_p2_23.csv] 8 laps aggregated
+
+Loaded car_data_p2_27.csv with 17760 rows (drivers [27], session [10008])
+[car_data_p2_27.csv] Median sample rate: 4.17 Hz
+[car_data_p2_27.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_27.csv] Removed 3759 no-input samples (brake/throttle = 104)
+[car_data_p2_27.csv] Removed 0 out-of-range samples
+[car_data_p2_27.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_27.csv] Removed 4134 samples outside any lap window
+[car_data_p2_27.csv] Removed 2 laps with coverage < 0.5
+[car_data_p2_27.csv] Removed 11 laps not in the cleaned lap data
+[car_data_p2_27.csv] 10 laps aggregated
+
+Loaded car_data_p2_30.csv with 17760 rows (drivers [30], session [10008])
+[car_data_p2_30.csv] Median sample rate: 4.17 Hz
+[car_data_p2_30.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_30.csv] Removed 2195 no-input samples (brake/throttle = 104)
+[car_data_p2_30.csv] Removed 0 out-of-range samples
+[car_data_p2_30.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_30.csv] Removed 4684 samples outside any lap window
+[car_data_p2_30.csv] Removed 3 laps with coverage < 0.5
+[car_data_p2_30.csv] Removed 10 laps not in the cleaned lap data
+[car_data_p2_30.csv] 13 laps aggregated
+
+Loaded car_data_p2_31.csv with 17760 rows (drivers [31], session [10008])
+[car_data_p2_31.csv] Median sample rate: 4.17 Hz
+[car_data_p2_31.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_31.csv] Removed 3848 no-input samples (brake/throttle = 104)
+[car_data_p2_31.csv] Removed 0 out-of-range samples
+[car_data_p2_31.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_31.csv] Removed 2262 samples outside any lap window
+[car_data_p2_31.csv] Removed 2 laps with coverage < 0.5
+[car_data_p2_31.csv] Removed 13 laps not in the cleaned lap data
+[car_data_p2_31.csv] 11 laps aggregated
+
+Loaded car_data_p2_4.csv with 17760 rows (drivers [4], session [10008])
+[car_data_p2_4.csv] Median sample rate: 4.17 Hz
+[car_data_p2_4.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_4.csv] Removed 4548 no-input samples (brake/throttle = 104)
+[car_data_p2_4.csv] Removed 0 out-of-range samples
+[car_data_p2_4.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_4.csv] Removed 2373 samples outside any lap window
+[car_data_p2_4.csv] Removed 2 laps with coverage < 0.5
+[car_data_p2_4.csv] Removed 13 laps not in the cleaned lap data
+[car_data_p2_4.csv] 12 laps aggregated
+
+Loaded car_data_p2_44.csv with 17760 rows (drivers [44], session [10008])
+[car_data_p2_44.csv] Median sample rate: 4.17 Hz
+[car_data_p2_44.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_44.csv] Removed 6505 no-input samples (brake/throttle = 104)
+[car_data_p2_44.csv] Removed 0 out-of-range samples
+[car_data_p2_44.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_44.csv] Removed 2106 samples outside any lap window
+[car_data_p2_44.csv] Removed 3 laps with coverage < 0.5
+[car_data_p2_44.csv] Removed 8 laps not in the cleaned lap data
+[car_data_p2_44.csv] 11 laps aggregated
+
+Loaded car_data_p2_5.csv with 17760 rows (drivers [5], session [10008])
+[car_data_p2_5.csv] Median sample rate: 4.17 Hz
+[car_data_p2_5.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_5.csv] Removed 3512 no-input samples (brake/throttle = 104)
+[car_data_p2_5.csv] Removed 0 out-of-range samples
+[car_data_p2_5.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_5.csv] Removed 4134 samples outside any lap window
+[car_data_p2_5.csv] Removed 2 laps with coverage < 0.5
+[car_data_p2_5.csv] Removed 10 laps not in the cleaned lap data
+[car_data_p2_5.csv] 12 laps aggregated
+
+Loaded car_data_p2_55.csv with 17760 rows (drivers [55], session [10008])
+[car_data_p2_55.csv] Median sample rate: 4.17 Hz
+[car_data_p2_55.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_55.csv] Removed 1761 no-input samples (brake/throttle = 104)
+[car_data_p2_55.csv] Removed 0 out-of-range samples
+[car_data_p2_55.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_55.csv] Removed 4344 samples outside any lap window
+[car_data_p2_55.csv] Removed 2 laps with coverage < 0.5
+[car_data_p2_55.csv] Removed 15 laps not in the cleaned lap data
+[car_data_p2_55.csv] 10 laps aggregated
+
+Loaded car_data_p2_6.csv with 17760 rows (drivers [6], session [10008])
+[car_data_p2_6.csv] Median sample rate: 4.17 Hz
+[car_data_p2_6.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_6.csv] Removed 3379 no-input samples (brake/throttle = 104)
+[car_data_p2_6.csv] Removed 0 out-of-range samples
+[car_data_p2_6.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_6.csv] Removed 4979 samples outside any lap window
+[car_data_p2_6.csv] Removed 3 laps with coverage < 0.5
+[car_data_p2_6.csv] Removed 11 laps not in the cleaned lap data
+[car_data_p2_6.csv] 9 laps aggregated
+
+Loaded car_data_p2_63.csv with 17760 rows (drivers [63], session [10008])
+[car_data_p2_63.csv] Median sample rate: 4.17 Hz
+[car_data_p2_63.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_63.csv] Removed 2442 no-input samples (brake/throttle = 104)
+[car_data_p2_63.csv] Removed 0 out-of-range samples
+[car_data_p2_63.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_63.csv] Removed 5127 samples outside any lap window
+[car_data_p2_63.csv] Removed 2 laps with coverage < 0.5
+[car_data_p2_63.csv] Removed 12 laps not in the cleaned lap data
+[car_data_p2_63.csv] 10 laps aggregated
+
+Loaded car_data_p2_7.csv with 17760 rows (drivers [7], session [10008])
+[car_data_p2_7.csv] Median sample rate: 4.17 Hz
+[car_data_p2_7.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_7.csv] Removed 2461 no-input samples (brake/throttle = 104)
+[car_data_p2_7.csv] Removed 0 out-of-range samples
+[car_data_p2_7.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_7.csv] Removed 4378 samples outside any lap window
+[car_data_p2_7.csv] Removed 2 laps with coverage < 0.5
+[car_data_p2_7.csv] Removed 11 laps not in the cleaned lap data
+[car_data_p2_7.csv] 13 laps aggregated
+
+Loaded car_data_p2_81.csv with 17760 rows (drivers [81], session [10008])
+[car_data_p2_81.csv] Median sample rate: 4.17 Hz
+[car_data_p2_81.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_81.csv] Removed 1792 no-input samples (brake/throttle = 104)
+[car_data_p2_81.csv] Removed 0 out-of-range samples
+[car_data_p2_81.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_81.csv] Removed 4580 samples outside any lap window
+[car_data_p2_81.csv] Removed 2 laps with coverage < 0.5
+[car_data_p2_81.csv] Removed 12 laps not in the cleaned lap data
+[car_data_p2_81.csv] 14 laps aggregated
+
+Loaded car_data_p2_87.csv with 17760 rows (drivers [87], session [10008])
+[car_data_p2_87.csv] Median sample rate: 4.17 Hz
+[car_data_p2_87.csv] Removed 0 duplicate-timestamp samples
+[car_data_p2_87.csv] Removed 4564 no-input samples (brake/throttle = 104)
+[car_data_p2_87.csv] Removed 0 out-of-range samples
+[car_data_p2_87.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p2_87.csv] Removed 2246 samples outside any lap window
+[car_data_p2_87.csv] Removed 2 laps with coverage < 0.5
+[car_data_p2_87.csv] Removed 15 laps not in the cleaned lap data
+[car_data_p2_87.csv] 9 laps aggregated
+
+Loaded car_data_p3_1.csv with 17601 rows (drivers [1], session [10009])
 [car_data_p3_1.csv] Median sample rate: 4.17 Hz
 [car_data_p3_1.csv] Removed 0 duplicate-timestamp samples
-[car_data_p3_1.csv] Removed 2938 no-input samples (brake/throttle = 104)
+[car_data_p3_1.csv] Removed 5887 no-input samples (brake/throttle = 104)
 [car_data_p3_1.csv] Removed 0 out-of-range samples
 [car_data_p3_1.csv] Encoded brake -> braking, drs -> drs_open
-[car_data_p3_1.csv] Removed 6336 samples outside any lap window
-[car_data_p3_1.csv] Removed 2 laps with coverage < 0.5
-[car_data_p3_1.csv] Removed 10 laps not in the cleaned lap data
-[car_data_p3_1.csv] 6 laps aggregated
+[car_data_p3_1.csv] Removed 6222 samples outside any lap window
+[car_data_p3_1.csv] Removed 3 laps with coverage < 0.5
+[car_data_p3_1.csv] Removed 7 laps not in the cleaned lap data
+[car_data_p3_1.csv] 2 laps aggregated
 
-Loaded car_data_p3_2.csv with 17601 rows (drivers [44], session [10009])
-[car_data_p3_2.csv] Median sample rate: 4.17 Hz
-[car_data_p3_2.csv] Removed 0 duplicate-timestamp samples
-[car_data_p3_2.csv] Removed 7860 no-input samples (brake/throttle = 104)
-[car_data_p3_2.csv] Removed 0 out-of-range samples
-[car_data_p3_2.csv] Encoded brake -> braking, drs -> drs_open
-[car_data_p3_2.csv] Removed 1803 samples outside any lap window
-[car_data_p3_2.csv] Removed 2 laps with coverage < 0.5
-[car_data_p3_2.csv] Removed 10 laps not in the cleaned lap data
-[car_data_p3_2.csv] 5 laps aggregated
-[all files] Removed 0 laps with |z| > 3 (per session)
+Loaded car_data_p3_10.csv with 17601 rows (drivers [10], session [10009])
+[car_data_p3_10.csv] Median sample rate: 4.17 Hz
+[car_data_p3_10.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_10.csv] Removed 2735 no-input samples (brake/throttle = 104)
+[car_data_p3_10.csv] Removed 0 out-of-range samples
+[car_data_p3_10.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_10.csv] Removed 7277 samples outside any lap window
+[car_data_p3_10.csv] Removed 1 laps with coverage < 0.5
+[car_data_p3_10.csv] Removed 10 laps not in the cleaned lap data
+[car_data_p3_10.csv] 5 laps aggregated
+
+Loaded car_data_p3_12.csv with 17601 rows (drivers [12], session [10009])
+[car_data_p3_12.csv] Median sample rate: 4.17 Hz
+[car_data_p3_12.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_12.csv] Removed 7104 no-input samples (brake/throttle = 104)
+[car_data_p3_12.csv] Removed 0 out-of-range samples
+[car_data_p3_12.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_12.csv] Removed 5172 samples outside any lap window
+[car_data_p3_12.csv] Removed 2 laps with coverage < 0.5
+[car_data_p3_12.csv] Removed 6 laps not in the cleaned lap data
+[car_data_p3_12.csv] 3 laps aggregated
+
+Loaded car_data_p3_14.csv with 17601 rows (drivers [14], session [10009])
+[car_data_p3_14.csv] Median sample rate: 4.17 Hz
+[car_data_p3_14.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_14.csv] Removed 4241 no-input samples (brake/throttle = 104)
+[car_data_p3_14.csv] Removed 0 out-of-range samples
+[car_data_p3_14.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_14.csv] Removed 5819 samples outside any lap window
+[car_data_p3_14.csv] Removed 2 laps with coverage < 0.5
+[car_data_p3_14.csv] Removed 8 laps not in the cleaned lap data
+[car_data_p3_14.csv] 7 laps aggregated
+
+Loaded car_data_p3_16.csv with 17601 rows (drivers [16], session [10009])
+[car_data_p3_16.csv] Median sample rate: 4.17 Hz
+[car_data_p3_16.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_16.csv] Removed 2938 no-input samples (brake/throttle = 104)
+[car_data_p3_16.csv] Removed 0 out-of-range samples
+[car_data_p3_16.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_16.csv] Removed 6336 samples outside any lap window
+[car_data_p3_16.csv] Removed 2 laps with coverage < 0.5
+[car_data_p3_16.csv] Removed 10 laps not in the cleaned lap data
+[car_data_p3_16.csv] 6 laps aggregated
+
+Loaded car_data_p3_18.csv with 17601 rows (drivers [18], session [10009])
+[car_data_p3_18.csv] Median sample rate: 4.17 Hz
+[car_data_p3_18.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_18.csv] Removed 4982 no-input samples (brake/throttle = 104)
+[car_data_p3_18.csv] Removed 0 out-of-range samples
+[car_data_p3_18.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_18.csv] Removed 5887 samples outside any lap window
+[car_data_p3_18.csv] Removed 2 laps with coverage < 0.5
+[car_data_p3_18.csv] Removed 7 laps not in the cleaned lap data
+[car_data_p3_18.csv] 5 laps aggregated
+
+Loaded car_data_p3_22.csv with 17601 rows (drivers [22], session [10009])
+[car_data_p3_22.csv] Median sample rate: 4.17 Hz
+[car_data_p3_22.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_22.csv] Removed 4876 no-input samples (brake/throttle = 104)
+[car_data_p3_22.csv] Removed 0 out-of-range samples
+[car_data_p3_22.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_22.csv] Removed 5958 samples outside any lap window
+[car_data_p3_22.csv] Removed 2 laps with coverage < 0.5
+[car_data_p3_22.csv] Removed 9 laps not in the cleaned lap data
+[car_data_p3_22.csv] 3 laps aggregated
+
+Loaded car_data_p3_23.csv with 17601 rows (drivers [23], session [10009])
+[car_data_p3_23.csv] Median sample rate: 4.17 Hz
+[car_data_p3_23.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_23.csv] Removed 5578 no-input samples (brake/throttle = 104)
+[car_data_p3_23.csv] Removed 0 out-of-range samples
+[car_data_p3_23.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_23.csv] Removed 5086 samples outside any lap window
+[car_data_p3_23.csv] Removed 2 laps with coverage < 0.5
+[car_data_p3_23.csv] Removed 10 laps not in the cleaned lap data
+[car_data_p3_23.csv] 3 laps aggregated
+
+Loaded car_data_p3_27.csv with 17601 rows (drivers [27], session [10009])
+[car_data_p3_27.csv] Median sample rate: 4.17 Hz
+[car_data_p3_27.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_27.csv] Removed 7594 no-input samples (brake/throttle = 104)
+[car_data_p3_27.csv] Removed 0 out-of-range samples
+[car_data_p3_27.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_27.csv] Removed 7801 samples outside any lap window
+[car_data_p3_27.csv] Removed 0 laps with coverage < 0.5
+[car_data_p3_27.csv] Removed 3 laps not in the cleaned lap data
+[car_data_p3_27.csv] 2 laps aggregated
+
+Loaded car_data_p3_30.csv with 17601 rows (drivers [30], session [10009])
+[car_data_p3_30.csv] Median sample rate: 4.17 Hz
+[car_data_p3_30.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_30.csv] Removed 1793 no-input samples (brake/throttle = 104)
+[car_data_p3_30.csv] Removed 0 out-of-range samples
+[car_data_p3_30.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_30.csv] Removed 9593 samples outside any lap window
+[car_data_p3_30.csv] Removed 3 laps with coverage < 0.5
+[car_data_p3_30.csv] Removed 6 laps not in the cleaned lap data
+[car_data_p3_30.csv] 4 laps aggregated
+
+Loaded car_data_p3_31.csv with 17601 rows (drivers [31], session [10009])
+[car_data_p3_31.csv] Median sample rate: 4.17 Hz
+[car_data_p3_31.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_31.csv] Removed 4854 no-input samples (brake/throttle = 104)
+[car_data_p3_31.csv] Removed 0 out-of-range samples
+[car_data_p3_31.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_31.csv] Removed 5180 samples outside any lap window
+[car_data_p3_31.csv] Removed 3 laps with coverage < 0.5
+[car_data_p3_31.csv] Removed 7 laps not in the cleaned lap data
+[car_data_p3_31.csv] 6 laps aggregated
+
+Loaded car_data_p3_4.csv with 17601 rows (drivers [4], session [10009])
+[car_data_p3_4.csv] Median sample rate: 4.17 Hz
+[car_data_p3_4.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_4.csv] Removed 7885 no-input samples (brake/throttle = 104)
+[car_data_p3_4.csv] Removed 30 out-of-range samples
+[car_data_p3_4.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_4.csv] Removed 2170 samples outside any lap window
+[car_data_p3_4.csv] Removed 2 laps with coverage < 0.5
+[car_data_p3_4.csv] Removed 10 laps not in the cleaned lap data
+[car_data_p3_4.csv] 5 laps aggregated
+
+Loaded car_data_p3_44.csv with 17601 rows (drivers [44], session [10009])
+[car_data_p3_44.csv] Median sample rate: 4.17 Hz
+[car_data_p3_44.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_44.csv] Removed 7860 no-input samples (brake/throttle = 104)
+[car_data_p3_44.csv] Removed 0 out-of-range samples
+[car_data_p3_44.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_44.csv] Removed 1803 samples outside any lap window
+[car_data_p3_44.csv] Removed 2 laps with coverage < 0.5
+[car_data_p3_44.csv] Removed 10 laps not in the cleaned lap data
+[car_data_p3_44.csv] 5 laps aggregated
+
+Loaded car_data_p3_5.csv with 17601 rows (drivers [5], session [10009])
+[car_data_p3_5.csv] Median sample rate: 4.17 Hz
+[car_data_p3_5.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_5.csv] Removed 3118 no-input samples (brake/throttle = 104)
+[car_data_p3_5.csv] Removed 0 out-of-range samples
+[car_data_p3_5.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_5.csv] Removed 7329 samples outside any lap window
+[car_data_p3_5.csv] Removed 3 laps with coverage < 0.5
+[car_data_p3_5.csv] Removed 8 laps not in the cleaned lap data
+[car_data_p3_5.csv] 4 laps aggregated
+
+Loaded car_data_p3_55.csv with 17601 rows (drivers [55], session [10009])
+[car_data_p3_55.csv] Median sample rate: 4.17 Hz
+[car_data_p3_55.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_55.csv] Removed 7119 no-input samples (brake/throttle = 104)
+[car_data_p3_55.csv] Removed 0 out-of-range samples
+[car_data_p3_55.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_55.csv] Removed 4190 samples outside any lap window
+[car_data_p3_55.csv] Removed 3 laps with coverage < 0.5
+[car_data_p3_55.csv] Removed 7 laps not in the cleaned lap data
+[car_data_p3_55.csv] 4 laps aggregated
+
+Loaded car_data_p3_6.csv with 17601 rows (drivers [6], session [10009])
+[car_data_p3_6.csv] Median sample rate: 4.17 Hz
+[car_data_p3_6.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_6.csv] Removed 1860 no-input samples (brake/throttle = 104)
+[car_data_p3_6.csv] Removed 0 out-of-range samples
+[car_data_p3_6.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_6.csv] Removed 9448 samples outside any lap window
+[car_data_p3_6.csv] Removed 3 laps with coverage < 0.5
+[car_data_p3_6.csv] Removed 7 laps not in the cleaned lap data
+[car_data_p3_6.csv] 4 laps aggregated
+
+Loaded car_data_p3_63.csv with 17601 rows (drivers [63], session [10009])
+[car_data_p3_63.csv] Median sample rate: 4.17 Hz
+[car_data_p3_63.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_63.csv] Removed 5764 no-input samples (brake/throttle = 104)
+[car_data_p3_63.csv] Removed 0 out-of-range samples
+[car_data_p3_63.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_63.csv] Removed 6297 samples outside any lap window
+[car_data_p3_63.csv] Removed 2 laps with coverage < 0.5
+[car_data_p3_63.csv] Removed 7 laps not in the cleaned lap data
+[car_data_p3_63.csv] 2 laps aggregated
+
+Loaded car_data_p3_7.csv with 17601 rows (drivers [7], session [10009])
+[car_data_p3_7.csv] Median sample rate: 4.17 Hz
+[car_data_p3_7.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_7.csv] Removed 2997 no-input samples (brake/throttle = 104)
+[car_data_p3_7.csv] Removed 0 out-of-range samples
+[car_data_p3_7.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_7.csv] Removed 7162 samples outside any lap window
+[car_data_p3_7.csv] Removed 1 laps with coverage < 0.5
+[car_data_p3_7.csv] Removed 11 laps not in the cleaned lap data
+[car_data_p3_7.csv] 4 laps aggregated
+
+Loaded car_data_p3_81.csv with 17601 rows (drivers [81], session [10009])
+[car_data_p3_81.csv] Median sample rate: 4.17 Hz
+[car_data_p3_81.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_81.csv] Removed 3456 no-input samples (brake/throttle = 104)
+[car_data_p3_81.csv] Removed 0 out-of-range samples
+[car_data_p3_81.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_81.csv] Removed 8592 samples outside any lap window
+[car_data_p3_81.csv] Removed 2 laps with coverage < 0.5
+[car_data_p3_81.csv] Removed 7 laps not in the cleaned lap data
+[car_data_p3_81.csv] 3 laps aggregated
+
+Loaded car_data_p3_87.csv with 17601 rows (drivers [87], session [10009])
+[car_data_p3_87.csv] Median sample rate: 4.17 Hz
+[car_data_p3_87.csv] Removed 0 duplicate-timestamp samples
+[car_data_p3_87.csv] Removed 7448 no-input samples (brake/throttle = 104)
+[car_data_p3_87.csv] Removed 0 out-of-range samples
+[car_data_p3_87.csv] Encoded brake -> braking, drs -> drs_open
+[car_data_p3_87.csv] Removed 2567 samples outside any lap window
+[car_data_p3_87.csv] Removed 3 laps with coverage < 0.5
+[car_data_p3_87.csv] Removed 9 laps not in the cleaned lap data
+[car_data_p3_87.csv] 5 laps aggregated
+[all files] Removed 19 laps with |z| > 3 (per session)
 
 Laps per session/driver:
 session_key  driver_number
-10007        38               10
-             44                9
-10008        16               14
-             44               11
-10009        16                6
-             44                5
-  → Saved cleaned file: process_cardata_cleaned_car_data_p1_1.csv (3692 samples)
-  → Saved cleaned file: process_cardata_cleaned_car_data_p1_2.csv (3371 samples)
-  → Saved cleaned file: process_cardata_cleaned_car_data_p2_1.csv (5108 samples)
-  → Saved cleaned file: process_cardata_cleaned_car_data_p2_2.csv (4071 samples)
-  → Saved cleaned file: process_cardata_cleaned_car_data_p3_1.csv (2116 samples)
-  → Saved cleaned file: process_cardata_cleaned_car_data_p3_2.csv (1775 samples)
+10007        4                11
+             5                10
+             6                 9
+             7                 6
+             10                8
+             12                1
+             18                9
+             22               10
+             23                8
+             27                8
+             30                8
+             31                3
+             34                7
+             37                7
+             38               10
+             44                8
+             46                2
+             50               10
+             72               11
+             81               12
+10008        1                11
+             4                12
+             5                 9
+             6                 9
+             7                13
+             10               15
+             12                8
+             14               10
+             16               14
+             18               11
+             22                8
+             23                8
+             27               10
+             30               13
+             31               11
+             44               10
+             55               10
+             63                9
+             81               14
+             87                9
+10009        1                 2
+             4                 4
+             5                 3
+             6                 3
+             7                 4
+             10                5
+             12                3
+             14                5
+             16                6
+             18                5
+             22                3
+             23                3
+             27                2
+             30                4
+             31                6
+             44                4
+             55                4
+             63                2
+             81                3
+             87                5
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_10.csv (2938 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_12.csv (365 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_18.csv (3293 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_22.csv (3780 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_23.csv (2914 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_27.csv (2959 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_30.csv (2924 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_31.csv (1085 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_34.csv (2542 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_37.csv (2581 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_38.csv (3692 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_4.csv (4002 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_44.csv (3004 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_46.csv (733 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_5.csv (3708 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_50.csv (3720 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_6.csv (3328 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_7.csv (2187 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_72.csv (4093 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p1_81.csv (4427 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_1.csv (4040 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_10.csv (5510 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_12.csv (2951 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_14.csv (3635 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_16.csv (5108 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_18.csv (4000 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_22.csv (2991 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_23.csv (2928 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_27.csv (3658 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_30.csv (4817 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_31.csv (4071 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_4.csv (4390 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_44.csv (3682 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_5.csv (3296 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_55.csv (3659 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_6.csv (3289 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_63.csv (3243 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_7.csv (4755 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_81.csv (5106 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p2_87.csv (3315 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_1.csv (684 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_10.csv (1720 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_12.csv (1027 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_14.csv (1731 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_16.csv (2116 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_18.csv (1774 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_22.csv (1039 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_23.csv (1041 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_27.csv (706 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_30.csv (1388 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_31.csv (2153 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_4.csv (1402 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_44.csv (1395 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_5.csv (1066 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_55.csv (1392 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_6.csv (1038 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_63.csv (677 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_7.csv (1364 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_81.csv (1027 samples)
+  → Saved cleaned file: process_cardata_cleaned_car_data_p3_87.csv (1808 samples)
 
-Saved unscaled per-lap dataset: process_cardata_per_lap_unscaled.csv
-[all files] Scaled per session: ['mean_speed', 'max_speed', 'mean_throttle', 'full_throttle_pct', 'brake_pct', 'mean_rpm', 'max_rpm', 'mean_gear', 'gear_changes', 'drs_open_pct']
-Saved per-lap dataset: process_cardata_per_lap.csv (55 laps)
+Saved per-lap dataset: process_cardata_per_lap.csv (448 laps)
 Saved hand-off dataset: ..\data\cardata_per_lap_clean.csv
 
 PROCESS COMPLETED. Files generated:
-  - process_cardata_cleaned_car_data_p1_1.csv
-  - process_cardata_cleaned_car_data_p1_2.csv
+  - process_cardata_cleaned_car_data_p1_10.csv
+  - process_cardata_cleaned_car_data_p1_12.csv
+  - process_cardata_cleaned_car_data_p1_18.csv
+  - process_cardata_cleaned_car_data_p1_22.csv
+  - process_cardata_cleaned_car_data_p1_23.csv
+  - process_cardata_cleaned_car_data_p1_27.csv
+  - process_cardata_cleaned_car_data_p1_30.csv
+  - process_cardata_cleaned_car_data_p1_31.csv
+  - process_cardata_cleaned_car_data_p1_34.csv
+  - process_cardata_cleaned_car_data_p1_37.csv
+  - process_cardata_cleaned_car_data_p1_38.csv
+  - process_cardata_cleaned_car_data_p1_4.csv
+  - process_cardata_cleaned_car_data_p1_44.csv
+  - process_cardata_cleaned_car_data_p1_46.csv
+  - process_cardata_cleaned_car_data_p1_5.csv
+  - process_cardata_cleaned_car_data_p1_50.csv
+  - process_cardata_cleaned_car_data_p1_6.csv
+  - process_cardata_cleaned_car_data_p1_7.csv
+  - process_cardata_cleaned_car_data_p1_72.csv
+  - process_cardata_cleaned_car_data_p1_81.csv
   - process_cardata_cleaned_car_data_p2_1.csv
-  - process_cardata_cleaned_car_data_p2_2.csv
+  - process_cardata_cleaned_car_data_p2_10.csv
+  - process_cardata_cleaned_car_data_p2_12.csv
+  - process_cardata_cleaned_car_data_p2_14.csv
+  - process_cardata_cleaned_car_data_p2_16.csv
+  - process_cardata_cleaned_car_data_p2_18.csv
+  - process_cardata_cleaned_car_data_p2_22.csv
+  - process_cardata_cleaned_car_data_p2_23.csv
+  - process_cardata_cleaned_car_data_p2_27.csv
+  - process_cardata_cleaned_car_data_p2_30.csv
+  - process_cardata_cleaned_car_data_p2_31.csv
+  - process_cardata_cleaned_car_data_p2_4.csv
+  - process_cardata_cleaned_car_data_p2_44.csv
+  - process_cardata_cleaned_car_data_p2_5.csv
+  - process_cardata_cleaned_car_data_p2_55.csv
+  - process_cardata_cleaned_car_data_p2_6.csv
+  - process_cardata_cleaned_car_data_p2_63.csv
+  - process_cardata_cleaned_car_data_p2_7.csv
+  - process_cardata_cleaned_car_data_p2_81.csv
+  - process_cardata_cleaned_car_data_p2_87.csv
   - process_cardata_cleaned_car_data_p3_1.csv
-  - process_cardata_cleaned_car_data_p3_2.csv
-  - process_cardata_per_lap_unscaled.csv
-  - process_cardata_scaling_summary.csv
+  - process_cardata_cleaned_car_data_p3_10.csv
+  - process_cardata_cleaned_car_data_p3_12.csv
+  - process_cardata_cleaned_car_data_p3_14.csv
+  - process_cardata_cleaned_car_data_p3_16.csv
+  - process_cardata_cleaned_car_data_p3_18.csv
+  - process_cardata_cleaned_car_data_p3_22.csv
+  - process_cardata_cleaned_car_data_p3_23.csv
+  - process_cardata_cleaned_car_data_p3_27.csv
+  - process_cardata_cleaned_car_data_p3_30.csv
+  - process_cardata_cleaned_car_data_p3_31.csv
+  - process_cardata_cleaned_car_data_p3_4.csv
+  - process_cardata_cleaned_car_data_p3_44.csv
+  - process_cardata_cleaned_car_data_p3_5.csv
+  - process_cardata_cleaned_car_data_p3_55.csv
+  - process_cardata_cleaned_car_data_p3_6.csv
+  - process_cardata_cleaned_car_data_p3_63.csv
+  - process_cardata_cleaned_car_data_p3_7.csv
+  - process_cardata_cleaned_car_data_p3_81.csv
+  - process_cardata_cleaned_car_data_p3_87.csv
   - process_cardata_per_lap.csv
   - process_cardata_removed_rows_summary.csv
   - process_cardata_manifest.txt

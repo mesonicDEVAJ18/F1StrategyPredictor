@@ -388,7 +388,8 @@ def optimize_strategy(total_laps, base_features):
 # MAIN EXECUTION
 # ============================================================
 if __name__ == "__main__":
-    # Baseline = training medians (features are in physical units, so 0 is not "average")
+    # Baseline = training medians (features are in physical units, so 0 is not "average").
+    # Speed traps and car-data aggregates stay at these medians for the whole rollout.
     start_features = {f: 0.0 for f in SIM_FEATURE_COLUMNS}
     start_features.update({f: v for f, v in MEDIANS.items() if f in start_features})
 

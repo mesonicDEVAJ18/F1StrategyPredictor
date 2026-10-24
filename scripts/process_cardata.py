@@ -1,8 +1,8 @@
 import pandas as pd
 import os
 from pathlib import Path
-from sklearn.preprocessing import StandardScaler
 
+from feature_config import CARDATA_FEATURE_COLUMNS
 from env_config import env_str, env_int, env_float, env_list
 
 
@@ -28,13 +28,14 @@ def log(msg: str):
 # INPUT FILE CONFIG
 # ============================================================
 data_dir = Path(env_str("DATA_DIR"))
+cardata_dir = data_dir / env_str("CARDATA_DIR")
 cardata_glob = env_str("CARDATA_GLOB")
-cardata_files = sorted(data_dir.glob(cardata_glob))
+cardata_files = sorted(cardata_dir.glob(cardata_glob))
 laps_files = sorted(data_dir.glob(env_str("LAPS_GLOB")))
 clean_laps_file = data_dir / env_str("LAPS_CLEAN_FILE")
 
 if not cardata_files:
-    raise FileNotFoundError(f"No {cardata_glob} files found at {data_dir}")
+    raise FileNotFoundError(f"No {cardata_glob} files found at {cardata_dir}")
 if not clean_laps_file.exists():
     raise FileNotFoundError(f"{clean_laps_file.name} not found at {data_dir}, run process_laps.py first")
 
@@ -59,14 +60,7 @@ LAP_KEYS = ["session_key", "driver_number", "lap_number"]
 
 # Per-lap aggregates checked for outliers. drs_open_pct is left out: it is mostly 0,
 # so any lap that uses DRS would look like an outlier.
-ZSCORE_COLS = [
-    "mean_speed", "max_speed",
-    "mean_throttle", "full_throttle_pct",
-    "brake_pct",
-    "mean_rpm", "max_rpm",
-    "mean_gear", "gear_changes",
-]
-SCALE_COLS = ZSCORE_COLS + ["drs_open_pct"]
+ZSCORE_COLS = [c for c in CARDATA_FEATURE_COLUMNS if c != "drs_open_pct"]
 
 
 # ============================================================
@@ -224,18 +218,6 @@ def zscore_outlier_filter(per_lap, cols, fname):
     return per_lap
 
 
-def scale_per_session(per_lap, cols, fname):
-    """Standard-scale the per-lap aggregates, one scaler per session (as for laps)."""
-    per_lap = per_lap.copy()
-    # max_speed, max_rpm and gear_changes are integers
-    per_lap[cols] = per_lap[cols].astype(float)
-    for session, idx in per_lap.groupby("session_key").groups.items():
-        scaler = StandardScaler()
-        per_lap.loc[idx, cols] = scaler.fit_transform(per_lap.loc[idx, cols])
-    log(f"[{fname}] Scaled per session: {cols}")
-    return per_lap
-
-
 # ============================================================
 # MAIN PROCESSING LOOP
 # ============================================================
@@ -297,26 +279,14 @@ for file, df in samples_by_file.items():
     generated_files.append(cleaned_name)
     log(f"  → Saved cleaned file: {cleaned_name} ({len(df)} samples)")
 
-# Unscaled copy, in physical units
-unscaled_name = f"{SCRIPT_NAME}_per_lap_unscaled.csv"
-combined.to_csv(f"{RESULTS_DIR}/{unscaled_name}", index=False)
-generated_files.append(unscaled_name)
-log(f"\nSaved unscaled per-lap dataset: {unscaled_name}")
-
-# Normalization
-combined = scale_per_session(combined, SCALE_COLS, "all files")
-
-scaling_summary = pd.DataFrame({"scaled_columns": SCALE_COLS})
-scaling_name = f"{SCRIPT_NAME}_scaling_summary.csv"
-scaling_summary.to_csv(f"{RESULTS_DIR}/{scaling_name}", index=False)
-generated_files.append(scaling_name)
-
+# Not scaled: the aggregates are model inputs and stay in physical units like the laps
+# (diagnostic.md #7, #16), so the simulator's median baseline is meaningful
 combined_name = f"{SCRIPT_NAME}_per_lap.csv"
 combined.to_csv(f"{RESULTS_DIR}/{combined_name}", index=False)
 generated_files.append(combined_name)
-log(f"Saved per-lap dataset: {combined_name} ({len(combined)} laps)")
+log(f"\nSaved per-lap dataset: {combined_name} ({len(combined)} laps)")
 
-# Hand-off (not consumed by feature_engineer.py yet, see diagnostic.md #16)
+# Hand-off for feature_engineer.py (merged on lap t as model inputs, diagnostic.md #16)
 handoff_path = data_dir / env_str("CARDATA_CLEAN_FILE")
 combined.to_csv(handoff_path, index=False)
 log(f"Saved hand-off dataset: {handoff_path}")

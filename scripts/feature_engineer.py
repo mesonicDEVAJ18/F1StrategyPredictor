@@ -4,7 +4,7 @@ from pathlib import Path
 import os
 from datetime import datetime
 
-from feature_config import SESSION_COLUMNS, FUEL_EFFECT_K
+from feature_config import SESSION_COLUMNS, CARDATA_FEATURE_COLUMNS, FUEL_EFFECT_K
 from env_config import env_str
 
 # ============================================================
@@ -34,6 +34,7 @@ data_dir = (BASE_DIR / env_str("DATA_DIR")).resolve()
 laps_file = data_dir / env_str("LAPS_CLEAN_FILE")
 stints_file = data_dir / env_str("STINTS_CLEAN_FILE")
 weather_file = data_dir / env_str("WEATHER_CLEAN_FILE")
+cardata_file = data_dir / env_str("CARDATA_CLEAN_FILE")
 
 # Max gap between a lap's start and its nearest weather sample
 WEATHER_MERGE_TOLERANCE = env_str("WEATHER_MERGE_TOLERANCE")
@@ -49,10 +50,12 @@ log("Loading preprocessed data...")
 laps = pd.read_csv(laps_file)
 stints = pd.read_csv(stints_file)
 weather = pd.read_csv(weather_file)
+cardata = pd.read_csv(cardata_file)
 
 log(f"  → Laps:   {len(laps)} rows")
 log(f"  → Stints: {len(stints)} rows")
 log(f"  → Weather:{len(weather)} rows")
+log(f"  → Car data:{len(cardata)} laps")
 
 laps_initial_name = f"{SCRIPT_NAME}_laps_initial_snapshot.csv"
 laps.to_csv(f"{RESULTS_DIR}/{laps_initial_name}", index=False)
@@ -169,6 +172,34 @@ laps.to_csv(f"{RESULTS_DIR}/{merge_weather_snapshot}", index=False)
 generated_files.append(merge_weather_snapshot)
 
 log("  → Weather merged successfully")
+
+
+# ============================================================
+# MERGE CAR DATA ON LAP KEYS
+# ============================================================
+log("\nMerging per-lap car data (session_key, driver_number, lap_number)...")
+
+# Each row gets its own lap t's telemetry; the target is lap t+1, so nothing leaks.
+# Laps whose telemetry was dropped (low coverage, outliers) stay NaN and are filled
+# with the training medians in train_model.py (diagnostic.md #16)
+lap_keys = ["session_key", "driver_number", "lap_number"]
+rows_before = len(laps)
+laps = laps.merge(
+    cardata[lap_keys + CARDATA_FEATURE_COLUMNS],
+    on=lap_keys,
+    how="left",
+    validate="one_to_one"
+)
+
+no_cardata = laps[CARDATA_FEATURE_COLUMNS[0]].isna().sum()
+log(f"  → Rows before/after merge: {rows_before} / {len(laps)}")
+log(f"  → Laps without car data: {no_cardata} of {len(laps)}")
+
+merge_cardata_snapshot = f"{SCRIPT_NAME}_laps_after_cardata_merge.csv"
+laps.to_csv(f"{RESULTS_DIR}/{merge_cardata_snapshot}", index=False)
+generated_files.append(merge_cardata_snapshot)
+
+log("  → Car data merged successfully")
 
 
 # ============================================================

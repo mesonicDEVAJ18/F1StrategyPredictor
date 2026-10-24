@@ -60,14 +60,16 @@ curl "https://api.openf1.org/v1/stints?session_key=10009&csv=true" -o data/stint
 # Weather data for the whole meeting (process_weather.py keeps the practice sessions)
 curl "https://api.openf1.org/v1/weather?meeting_key=1257&csv=true" -o data/weather.csv
 
-# Car data for the Ferrari cars (cleaned and aggregated per lap, not a model input yet)
-# In FP1, driver 38 ran Ferrari's #16 car
-curl "https://api.openf1.org/v1/car_data?session_key=10007&driver_number=38&csv=true" -o data/car_data_p1_1.csv
-curl "https://api.openf1.org/v1/car_data?session_key=10007&driver_number=44&csv=true" -o data/car_data_p1_2.csv
-curl "https://api.openf1.org/v1/car_data?session_key=10008&driver_number=16&csv=true" -o data/car_data_p2_1.csv
-curl "https://api.openf1.org/v1/car_data?session_key=10008&driver_number=44&csv=true" -o data/car_data_p2_2.csv
-curl "https://api.openf1.org/v1/car_data?session_key=10009&driver_number=16&csv=true" -o data/car_data_p3_1.csv
-curl "https://api.openf1.org/v1/car_data?session_key=10009&driver_number=44&csv=true" -o data/car_data_p3_2.csv
+# Car data for every driver in each session (20 per session, 60 files), into data/car_data/
+# Drivers are read from that session's laps file (in FP1, driver 38 ran Ferrari's #16 car)
+mkdir -p data/car_data
+for n in 1 2 3; do
+  key=$((10006 + n))
+  for d in $(python -c "import csv;print(*sorted({r['driver_number'] for r in csv.DictReader(open('data/laps_p$n.csv'))},key=int))"); do
+    curl "https://api.openf1.org/v1/car_data?session_key=$key&driver_number=$d&csv=true" -o data/car_data/car_data_p${n}_${d}.csv
+    sleep 1.5   # stay under the free API's rate limit
+  done
+done
 ```
 
 Laps and stints cover the whole field (~20 drivers per session), and the model is trained on all of them.
@@ -105,7 +107,7 @@ Environmental conditions:
 - `process_stints.py`: Validates stint metadata
 - `tyre_sets.py`: Infers each Ferrari's tyre sets from the practice stints (chained by compound and `tyre_age_at_start`) and writes the sets left for the race
 - `process_weather.py`: Filters atmospheric anomalies
-- `process_cardata.py`: Drops no-input (brake/throttle = 104) and out-of-range telemetry samples, encodes brake/DRS as 0/1, aggregates the ~4 Hz samples per lap (speed, throttle, braking, rpm, gears, DRS), keeps only laps that survive `process_laps.py`, removes z-score outliers and scales per session. Not a model input yet (see #16 in [diagnostic.md](diagnostic.md))
+- `process_cardata.py`: Drops no-input (brake/throttle = 104) and out-of-range telemetry samples, encodes brake/DRS as 0/1, aggregates the ~4 Hz samples per lap (speed, throttle, braking, rpm, gears, DRS), keeps only laps that survive `process_laps.py`, removes z-score outliers, and leaves the aggregates unscaled (physical units). They are merged into the engineered dataset as model inputs (diagnostic.md #16)
 
 ### Data Cleaning Process
 
@@ -138,6 +140,7 @@ Environmental conditions:
 
 **4. Normalization**
 - **Laps**: Not scaled. Lap times, sector times and speeds stay in seconds and km/h. The models are unaffected by a global rescale, and per-session scaling erased each session's pace level and left predictions in z-scores
+- **Car data**: Not scaled, like the laps, so the per-lap aggregates stay in km/h, %, rpm and shares
 - **Weather**: StandardScaler on temperature, humidity, pressure, wind speed, rainfall
 - **Wind direction**: Kept raw (circular variable)
 
@@ -147,6 +150,7 @@ Environmental conditions:
 |---------|---------|---------|
 | `stint_number` | Stints numbered 1, 2, 3… per driver across all sessions | Track tyre degradation per stint |
 | weather join | nearest weather sample to each lap's `date_start` (`merge_asof`, 5 min tolerance) | Give each lap the conditions it was driven in |
+| car-data join | lap `t`'s per-lap telemetry aggregates, merged on `session_key`, `driver_number`, `lap_number` (448 of 467 laps; the rest filled with medians) | Describe how lap `t` was driven (speed, throttle, braking, rpm, gears, DRS) |
 | `laps_since_stint_start` | `lap_number - lap_start + 1` | Measure tyre age in current stint |
 | `tyre_age` | `tyre_age_at_start + laps_since_stint_start` | Real age of the set (laps on it including lap `t`), so used sets are told apart from new ones |
 | `session_FP1/2/3` | One-hot of the practice session | Separate session-level pace offsets |
@@ -174,9 +178,9 @@ Predict **fuel-corrected pace on the next lap** rather than explicitly computing
 
 | Model | Reasoning | Test MAE | Test RMSE | Test R² |
 |-------|-----------|----------|-----------|---------|
-| Linear Regression | Underfits non-linear tyre behavior | 1.67 s | 2.10 s | 0.157 |
-| Random Forest | Noisy, stepwise predictions | 1.13 s | 1.61 s | 0.505 |
-| **XGBoost** | Chosen for non-linear learning and smooth predictions | 1.03 s | 1.46 s | 0.590 |
+| Linear Regression | Underfits non-linear tyre behavior | 1.44 s | 1.90 s | 0.308 |
+| Random Forest | Noisy, stepwise predictions | 1.20 s | 1.68 s | 0.460 |
+| **XGBoost** | Chosen for non-linear learning and smooth predictions | 1.07 s | 1.60 s | 0.510 |
 
 *MAE and RMSE are in seconds, from the current run (31 test rows). The split still shuffles single laps, so laps of one stint are in both train and test, which flatters these numbers (diagnostic.md #18); see [diagnostic.md](diagnostic.md).*
 
@@ -199,7 +203,7 @@ Built by `build_next_lap_target()` in `scripts/feature_config.py`: the same driv
 - `laps_remaining` (used in fuel correction formula)
 
 **3. Features and Split**
-- 26 inputs defined in `scripts/feature_config.py` (`MODEL_FEATURE_COLUMNS`), including the `session_FP1/2/3` one-hots
+- 36 inputs defined in `scripts/feature_config.py` (`MODEL_FEATURE_COLUMNS`), including the `session_FP1/2/3` one-hots and 10 car-data aggregates (`CARDATA_FEATURE_COLUMNS`)
 - Missing values filled with column medians; 80/20 shuffled train/test split (`random_state=42`)
 - The saved bundle holds the model, the feature list, the training medians and each session's share of training rows (`{"model", "features", "medians", "session_weights"}`)
 
@@ -231,6 +235,7 @@ For each compound and set age a car has left, and every stint length L = 1–57,
    - The sector times are rescaled to sum to `raw`.
    - `stint_avg_pace` is the mean of the earlier laps.
    - `laps_since_stint_start` and `tyre_age` go up by one.
+   - Speeds, weather and the car-data aggregates stay at their medians.
 4. **Price:** a stint's time is the summed rollout fcp for its length, plus a race fuel penalty of `0.035 s × laps of fuel remaining` for each race lap it covers.
 
 ### 3. Objective Function
@@ -240,8 +245,8 @@ Minimize: Total Race Time (s) = Σ(stint lap times) + 22 s × number of pit stop
 ```
 
 Current output (set age at the start of each stint in brackets):
-- car 16: SOFT(6)–MEDIUM(0), stop on lap 46, 5838.86 s (ties with MEDIUM(0)–SOFT(6), stop on lap 11); best 2-stop 9.44 s slower
-- car 44: SOFT(6)–MEDIUM(3), stop on lap 46, 5838.15 s (ties with the reverse, stop on lap 11); best 2-stop 11.21 s slower
+- car 16: HARD(0)–SOFT(6), stop on lap 45, 5840.85 s (ties with SOFT(6)–HARD(0), stop on lap 12); best 2-stop 13.75 s slower
+- car 44: SOFT(4)–HARD(0), stop on lap 14, 5840.39 s (ties with the reverse, stop on lap 43); best 2-stop 13.38 s slower
 
 Every race lap is summed once: "stop on lap p" means lap p is the in-lap and the next stint starts on lap p + 1, with the 22 s pit loss on top (diagnostic.md #11).
 
@@ -258,7 +263,7 @@ None of this is tyre physics yet. 1 stop wins because every rollout is almost fl
 ## ✅ Evaluation & Validation
 
 ### Model Validation (`validate_strategy.py`)
-- **Cross-validation**: 5-fold CV on next-lap predictions (current: MAE 1.19 s, RMSE 1.67 s)
+- **Cross-validation**: 5-fold CV on next-lap predictions (current: MAE 1.13 s, RMSE 1.60 s)
 - **Residual analysis**: Check for systematic bias
 - **Feature importance**: Verify alignment with tyre physics
   - Expected top features: tyre age, compound, track temperature
@@ -301,7 +306,7 @@ python master.py
 | 2 | `process_stints.py` | `data/stints_combined_clean.csv` |
 | 3 | `tyre_sets.py` | `data/tyre_sets_race_inventory.csv` (each car's sets left for the race) |
 | 4 | `process_weather.py` | `data/cleaned_weather.csv` |
-| 5 | `process_cardata.py` | `data/cardata_per_lap_clean.csv` (not read by later stages yet) |
+| 5 | `process_cardata.py` | `data/cardata_per_lap_clean.csv` (merged by `feature_engineer.py`) |
 | 6 | `feature_engineer.py` | `data/final_engineered_dataset.csv` |
 | 7 | `train_model.py` | `scripts/results/train_model/train_model_xgb_model.pkl` |
 | 8 | `strategy_simulator.py` | best strategy per car |

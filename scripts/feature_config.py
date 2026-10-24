@@ -8,6 +8,16 @@ FUEL_EFFECT_K = env_float("FUEL_EFFECT_K")
 # Practice session one-hot (named by order, so stable across weekends; session_key is an identifier only)
 SESSION_COLUMNS = ["session_FP1", "session_FP2", "session_FP3"]
 
+# Per-lap car-data aggregates (process_cardata.py), in physical units; lap t's own telemetry
+CARDATA_FEATURE_COLUMNS = [
+    "mean_speed", "max_speed",
+    "mean_throttle", "full_throttle_pct",
+    "brake_pct",
+    "mean_rpm", "max_rpm",
+    "mean_gear", "gear_changes",
+    "drs_open_pct",
+]
+
 # Model input order (WHAT THE MODEL EXPECTS)
 MODEL_FEATURE_COLUMNS = [
     "duration_sector_1",
@@ -31,6 +41,7 @@ MODEL_FEATURE_COLUMNS = [
     "track_temperature",
     "wind_direction",
     "wind_speed",
+    *CARDATA_FEATURE_COLUMNS,
     "laps_since_stint_start",
     "tyre_age",                 # tyre_age_at_start + laps_since_stint_start (laps on the set)
     "stint_avg_pace",

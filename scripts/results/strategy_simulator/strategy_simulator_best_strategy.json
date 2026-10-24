@@ -3,31 +3,31 @@
   "cars": {
     "16": {
       "best_compound_sequence": [
-        "SOFT",
-        "MEDIUM"
+        "HARD",
+        "SOFT"
       ],
       "best_set_ages_at_start": [
-        6,
-        0
+        0,
+        6
       ],
       "best_pit_laps": [
-        46
+        45
       ],
-      "best_total_time": 5838.861377513212
+      "best_total_time": 5840.848606754482
     },
     "44": {
       "best_compound_sequence": [
         "SOFT",
-        "MEDIUM"
+        "HARD"
       ],
       "best_set_ages_at_start": [
-        6,
-        3
+        4,
+        0
       ],
       "best_pit_laps": [
-        46
+        14
       ],
-      "best_total_time": 5838.146816898519
+      "best_total_time": 5840.385277314632
     }
   }
 }

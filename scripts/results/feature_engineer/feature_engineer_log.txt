@@ -2,6 +2,7 @@ Loading preprocessed data...
   → Laps:   467 rows
   → Stints: 275 rows
   → Weather:239 rows
+  → Car data:448 laps
 
 Assigning stint numbers to laps...
   → Missing stint numbers: 0
@@ -14,6 +15,11 @@ Merging stints into laps...
 Merging weather on timestamps (lap date_start ~ weather date)...
   → Laps without weather within 5min: 0
   → Weather merged successfully
+
+Merging per-lap car data (session_key, driver_number, lap_number)...
+  → Rows before/after merge: 467 / 467
+  → Laps without car data: 19 of 467
+  → Car data merged successfully
 
 Engineering features...
   → Session one-hot rows: {'session_FP1': 164, 'session_FP2': 221, 'session_FP3': 82}
@@ -30,6 +36,7 @@ FILES GENERATED:
   - feature_engineer_laps_with_stints.csv
   - feature_engineer_laps_after_stint_merge.csv
   - feature_engineer_laps_after_weather_merge.csv
+  - feature_engineer_laps_after_cardata_merge.csv
   - feature_engineer_feature_engineered_snapshot.csv
   - feature_engineer_final_engineered_dataset.csv
   - feature_engineer_manifest.txt
