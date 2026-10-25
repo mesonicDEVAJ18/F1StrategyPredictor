@@ -475,8 +475,10 @@ Implemented:
 configuration on next-lap fuel-corrected pace. Each fold holds out 10 whole stints (23-41 rows), so the score is for stints the model hasn't seen.
 Missing inputs (stint_avg_pace on a stint's first lap) are filled with the training medians from the model bundle, as in train_model.py.
 Current result: CV MAE 1.23 s, CV RMSE 1.70 s (per fold: MAE 0.75-1.68 s, RMSE 1.18-2.19 s).
-Residual plot (predicted vs residual) to check for systematic bias.
-[TODO #6, P2, see diagnostic.md] The plot uses the last fold's model on all rows, including its training rows. Use out-of-fold predictions.
+Residual plot (predicted vs residual) to check for systematic bias, from out-of-fold predictions: each row is predicted by the
+fold model that held its stint out, so all 153 rows are scored on unseen stints (saved in validate_strategy_oof_predictions.csv).
+Current result: OOF MAE 1.18 s, RMSE 1.69 s, mean residual -0.20 s. No clear trend against predicted pace, but the residuals are
+right-skewed (a few laps 4-5 s slower than predicted) and the predictions (96.4-104.2 s) don't reach the slowest targets (up to 107.8 s).
 Feature importance from Random Forest and XGBoost, saved by train_model.py.
 An example two-sample t-test on randomly generated data. This is a placeholder: it does not test anything about the model or the
 strategy, and its p-value changes from run to run.
@@ -511,7 +513,7 @@ KNOWN ISSUES
 Known bugs and their effect on the results are documented in diagnostic.md.
 Open TODOs by priority (IDs as in diagnostic.md; each is tagged [TODO #N, ...] where it applies above):
 P1, results are invalid until fixed:  none open
-P2, method or validation misleading:  #18 splits mix laps of one stint, #6 residual plot leakage, #5 placeholder t-test,
+P2, method or validation misleading:  #18 splits mix laps of one stint, #5 placeholder t-test,
                                       #13 model choice, #27 model experiments and reasoning
 P3, completeness and cleanup:         #12 dead starting-compound setting, #25 no EDA, #26 no statistical inference,
                                       #15 results documentation

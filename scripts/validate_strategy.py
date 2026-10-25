@@ -84,6 +84,10 @@ cv_rmse = []
 
 fold_results = []
 
+# Out-of-fold predictions: each row is predicted by the fold that held it out
+oof_pred = np.full(len(y), np.nan)
+oof_fold = np.zeros(len(y), dtype=int)
+
 log(f"\nRunning {CV_FOLDS}-fold cross-validation grouped by stint...")
 
 for fold, (train_idx, test_idx) in enumerate(kf.split(X, y, groups), 1):
@@ -91,8 +95,10 @@ for fold, (train_idx, test_idx) in enumerate(kf.split(X, y, groups), 1):
     shared = len(np.intersect1d(groups[train_idx], groups[test_idx]))
     model.fit(X[train_idx], y[train_idx])
     pred = model.predict(X[test_idx])
+    oof_pred[test_idx] = pred
+    oof_fold[test_idx] = fold
 
-    mae = mean_absolute_error(y[test_idx], pred)
+    mae =mean_absolute_error(y[test_idx], pred)
     rmse = np.sqrt(mean_squared_error(y[test_idx], pred))
 
     cv_mae.append(mae)
@@ -117,6 +123,11 @@ mean_rmse = np.mean(cv_rmse)
 log(f"\nCV MAE = {mean_mae} s")
 log(f"CV RMSE = {mean_rmse} s")
 
+# GroupKFold puts every row in exactly one test fold
+if np.isnan(oof_pred).any():
+    raise RuntimeError(f"{int(np.isnan(oof_pred).sum())} rows got no out-of-fold prediction")
+log(f"Out-of-fold predictions: {len(oof_pred)} rows, each predicted once")
+
 
 # Save fold-by-fold results
 fold_df = pd.DataFrame(fold_results)
@@ -130,15 +141,27 @@ generated_files.append(fold_file)
 # ============================================================
 log("\nGenerating residual plot...")
 
-pred_full = model.predict(X)
-residuals = y - pred_full
+# Out-of-fold, so no row is scored by a model that trained on it
+residuals = y - oof_pred
 
-N = min(3000, len(y))
+oof_mae = mean_absolute_error(y, oof_pred)
+oof_rmse = np.sqrt(mean_squared_error(y, oof_pred))
+oof_bias = residuals.mean()
+
+log(f"OOF MAE = {oof_mae:.4f} s, OOF RMSE = {oof_rmse:.4f} s, mean residual = {oof_bias:+.4f} s")
+
+oof_df = df[["session_key", "driver_number", "stint_number", "lap_number", "target_next_fcp"]].copy()
+oof_df["oof_pred"] = oof_pred
+oof_df["residual"] = residuals
+oof_df["fold"] = oof_fold
+oof_file = f"{SCRIPT_NAME}_oof_predictions.csv"
+oof_df.to_csv(f"{RESULTS_DIR}/{oof_file}", index=False)
+generated_files.append(oof_file)
 
 plt.figure(figsize=(9,4))
-plt.scatter(pred_full[:N], residuals[:N], s=4, alpha=0.4)
+plt.scatter(oof_pred, residuals, s=4, alpha=0.4)
 plt.axhline(0, color="red", linewidth=1)
-plt.title("Residual Plot")
+plt.title("Residual Plot (out-of-fold, grouped by stint)")
 plt.xlabel("Predicted Fuel-Corrected Pace (s)")
 plt.ylabel("Residual (s)")
 
@@ -175,6 +198,9 @@ generated_files.append(ttest_file)
 summary = pd.DataFrame({
     "CV_MAE": [mean_mae],
     "CV_RMSE": [mean_rmse],
+    "OOF_MAE": [oof_mae],
+    "OOF_RMSE": [oof_rmse],
+    "OOF_mean_residual": [oof_bias],
     "t_test_p": [p]
 })
 

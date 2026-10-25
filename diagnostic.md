@@ -224,11 +224,16 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
       - Predictions stay within 96.1–120.1 s over all rollouts, so there's no runaway drift.
     - **Effect on strategy:** the best total went from 6055.98 s to 5695.12 s, now SOFT–SOFT–SOFT with pits on laps 12 and 13. SOFT–MEDIUM–SOFT and SOFT–HARD–SOFT tie with it, and SOFT–SOFT–SOFT with pits on 45 and 46 is 2.3 s behind. The best 1-stop is SOFT–SOFT, pit on lap 13, 5775.17 s. The best 0-stop is SOFT at 5847.05 s. It is still **not** a valid recommendation, because of #8 and #11.
 
-- [ ] **#6 The residual plot mixes training and test data**
+- [x] **#6 The residual plot mixes training and test data**
   - **Where:** `pred_full = model.predict(X)` in `scripts/validate_strategy.py`.
   - **Problem:** the model from the last cross-validation fold predicts every row, including the 80% that fold was trained on, so the residuals look better than they really are.
   - **Fix:** plot out-of-fold predictions (collect each fold's test predictions), or use the held-out split only.
   - **readme.txt:** Evaluation step 1, residual plot.
+  - **Fixed:** the CV loop in `validate_strategy.py` now stores each fold's test predictions in `oof_pred`. The residual plot uses those, so every row is scored by the one model that held its stint out. GroupKFold (#18) holds each row out exactly once, so all 153 rows are plotted, and the script raises if any row has no prediction. The `N = min(3000, len(y))` slice (first rows in sort order, not a sample) is gone.
+    - **Outputs:** `validate_strategy_oof_predictions.csv` (ids, target, OOF prediction, residual, fold). `validate_strategy_validation_summary.csv` gains `OOF_MAE`, `OOF_RMSE` and `OOF_mean_residual`. The plot title says it is out-of-fold.
+    - **Checks:** the fold metrics are unchanged (CV MAE 1.23 s, RMSE 1.70 s). Every fold holds 10 stints, every row has exactly one prediction, and `residual = target − prediction` to 1e-14 s.
+    - **Effect:** pooled OOF MAE 1.18 s, RMSE 1.69 s, mean residual −0.20 s. The old plot (last fold's model on all rows) gave MAE 0.23 s and RMSE 0.85 s, so it understated the error about 5× (MAE) and 2× (RMSE).
+    - **What the plot shows:** no clear trend against predicted pace (slope −0.09, correlation −0.07). The residuals are right-skewed: median −0.32 s, 5th–95th percentile −2.31 to +3.75 s, with a handful of laps 4–5 s slower than predicted. The predictions span 96.4–104.2 s against targets of 95.9–107.8 s, so the model doesn't reach the slowest laps. The per-fold mean residual ranges from −1.00 s (fold 5) to +0.12 s, so the small overall bias depends on which stints are held out.
 
 - [ ] **#5 The t-test is a placeholder**
   - **Where:** the "T-TEST EXAMPLE" block in `scripts/validate_strategy.py`.

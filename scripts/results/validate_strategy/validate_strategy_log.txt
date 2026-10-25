@@ -11,17 +11,20 @@ Running 5-fold cross-validation grouped by stint...
 
 CV MAE = 1.2255335720516445 s
 CV RMSE = 1.7047356658518151 s
+Out-of-fold predictions: 153 rows, each predicted once
 
 Generating residual plot...
+OOF MAE = 1.1806 s, OOF RMSE = 1.6893 s, mean residual = -0.2018 s
 Residual plot saved.
 
 Running example t-test...
-T-test p-value: 9.4038256865405e-150
+T-test p-value: 5.7528419978497394e-164
 
 Validation summary saved.
 
 FILES GENERATED:
   - validate_strategy_cv_fold_metrics.csv
+  - validate_strategy_oof_predictions.csv
   - validate_strategy_residual_plot.png
   - validate_strategy_ttest_samples.csv
   - validate_strategy_validation_summary.csv
