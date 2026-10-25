@@ -1,3 +1,4 @@
+import sys
 import pandas as pd
 import numpy as np
 import joblib
@@ -27,10 +28,12 @@ log_file = open(log_path, "w", encoding="utf-8", errors="replace")
 generated_files = []
 
 def log(msg: str):
-    # Remove unsupported characters for Windows console/logging
-    safe_msg = msg.encode("utf-8", errors="replace").decode("utf-8", "replace")
+    # Replace characters the console/redirect encoding can't show (e.g. cp1252 when output is
+    # redirected on Windows); the log file is UTF-8 and keeps the original text
+    enc = sys.stdout.encoding or "utf-8"
+    safe_msg = msg.encode(enc, errors="replace").decode(enc, "replace")
     print(safe_msg)
-    log_file.write(safe_msg + "\n")
+    log_file.write(msg + "\n")
 
 
 # ============================================================

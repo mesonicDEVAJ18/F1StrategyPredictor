@@ -145,8 +145,9 @@ Every pipeline script follows the same house style — match it when adding or e
 - **Per-script results dir**: `SCRIPT_NAME = "..."`, `RESULTS_DIR = f"{env_str('RESULTS_ROOT')}/{SCRIPT_NAME}"`
   (`RESULTS_ROOT=./results` in `.env`), created with `os.makedirs(..., exist_ok=True)`.
 - **Logging**: a `log(msg)` helper that both `print`s and appends to
-  `results/<name>/<name>_log.txt`, opened with `encoding="utf-8", errors="replace"`. This
-  encode/replace dance exists to survive the Windows console — keep it.
+  `results/<name>/<name>_log.txt`, opened with `encoding="utf-8", errors="replace"`. The printed
+  copy is encoded with `sys.stdout.encoding` and `errors="replace"`, because redirected output on Windows
+  is cp1252 and can't hold `→` (#28); the log file gets the original text. Keep this encode/replace dance.
 - **Output naming**: intermediate CSVs, plots, and a `<name>_manifest.txt` are prefixed with the
   script name and written into that script's results dir. Track generated paths in the
   `generated_files` list.

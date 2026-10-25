@@ -468,6 +468,12 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **Depends on:** #25 (same data, likely the same stage).
   - **readme.txt:** Exploratory Data Analysis and Statistical Inference.
 
+- [x] **#28 Redirected output crashes on non-ASCII log text**
+  - **Where:** the `log()` helper in all 11 stage scripts.
+  - **Problem:** when stdout is a file or pipe on Windows (`python master.py > run.txt`), Python encodes it with the ANSI code page (cp1252), which has no `→` or `✅`. The helper's "remove unsupported characters" step encoded and decoded with UTF-8, which never replaces anything, so `print` raised `UnicodeEncodeError`. `→` is logged by `process_laps.py`, `process_stints.py`, `process_weather.py`, `process_cardata.py`, `feature_engineer.py` (also `✅`), `train_model.py` and `validate_strategy.py`, so the pipeline stopped at `process_laps.py`. An interactive console was unaffected (Python 3.10 writes UTF-16 to it), and `PYTHONIOENCODING=utf-8` worked around it.
+  - **Fixed:** `log()` encodes with `sys.stdout.encoding` and `errors="replace"`, so redirected cp1252 output shows `?` in place of those characters instead of crashing. The UTF-8 log file gets the original message, so the tracked `*_log.txt` files are unchanged. No log text changed.
+    - **Checks:** with stdout redirected (cp1252) and no `PYTHONIOENCODING`, `process_laps.py` and the full `master.py` run exit 0 (all 11 stages). No tracked output changes apart from the RandomForest's last digits, which differ between runs anyway.
+
 - [ ] **#15 Results documentation**
   - **Problem:** results currently exist only as raw files in `scripts/results/<script>/` and a few numbers in the readmes.
   - **Depends on:** all P1 items, plus #13 (#9 is fixed). The numbers will change once those are fixed, so write this up afterwards.
