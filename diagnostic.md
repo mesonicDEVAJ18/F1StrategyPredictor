@@ -4,7 +4,7 @@ The pipeline runs end to end (`python master.py` from `scripts/`), but the open 
 
 The file lists the open items first, then ideas to explore, then the fixed items. Within each group, items are split by priority and sorted by ID.
 
-Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies with a `[TODO #N, P?, see diagnostic.md]` line. When an item is fixed, tick it, say what changed, move it to its priority under **Fixed**, and remove or update its tags in `readme.txt`.
+Items keep a stable ID (`#N`), which is also the item's GitHub issue number (open items are open issues, fixed ones are closed). `readme.txt` marks every place an item applies with a `[TODO #N, P?, see diagnostic.md]` line. When an item is fixed, tick it, say what changed, move it to its priority under **Fixed**, and remove or update its tags in `readme.txt`. Close the issue too, and open a new issue for a new item so the numbers stay in step.
 
 **Priorities**
 - **P1, results are invalid until fixed.** The training data, the target or the strategy objective is wrong, so the recommendation can't be trusted.
@@ -18,12 +18,14 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
 ### P2: method or validation is misleading
 
 - [ ] **#27 The model choice rests on three untuned models and untested reasoning**
-  - **Where:** `scripts/train_model.py` (Linear Regression, Random Forest 200 trees, XGBoost with one fixed set of hyperparameters from `.env`); the "Reasoning" paragraph in `readme.txt` ML Modelling step 3.
+  - **Where:** `scripts/train_model.py` (Linear Regression, Random Forest 200 trees, XGBoost with one fixed set of hyperparameters from `.env`; it always saves XGBoost); the "Reasoning" paragraph in `readme.txt` ML Modelling step 3.
   - **Problem:**
     - Only three models are compared, each with one configuration, on one held-out split (10 stints, 25 rows since #18; 31 rows before). XGBoost at max depth 7 with 36 inputs on 153 rows is likely to overfit, but no other setting has been tried.
+    - XGBoost is saved regardless of the comparison. It is the best of the three on the held-out stints (MAE 2.37 / 1.32 / 1.12 s, R² −1.002 / 0.250 / 0.353 for LR/RF/XGB), but only XGBoost gets grouped CV, and with 10 test stints its lead over Random Forest is close to noise. Its rank has changed with the fixes: it was last before #4 (the history is under #13).
     - There is no naive baseline, so it isn't known whether any model beats a trivial forecast.
     - The reasoning is asserted, not tested. "Random Forest produces noisy, stepwise predictions, unstable in autoregressive simulations" and "XGBoost: stable rollouts" were never checked: only XGBoost is ever rolled out. The "aligns with real-world motorsport pipelines" line has no source.
   - **Fix:**
+    - [ ] **Grouped CV for the current three:** run the grouped CV by stint (#18) for Linear Regression, Random Forest and XGBoost, not just XGBoost. Then either keep XGBoost with metrics that support it, or save the best model. This is the comparison from #13; the items below widen it.
     - [ ] **Baselines:** the next lap equals lap *t*'s fcp, and the next lap equals `stint_avg_pace`. Every model has to beat these to count. Since #5, `validate_strategy.py` scores the first (persistence) per fold and tests XGBoost against it per stint; the `stint_avg_pace` baseline and the other candidates are still to do.
     - [ ] **More candidates:** regularised linear models (Ridge / Lasso), a simple per-compound linear degradation model, ExtraTrees and `HistGradientBoostingRegressor` from scikit-learn. LightGBM or others would be a new dependency, so confirm first.
     - [ ] **Tuning:** a small hyperparameter search for each model (for XGBoost: shallower trees, `min_child_weight`, regularisation), scored with grouped CV by stint (#18). The tuned values go in `.env`.
@@ -31,14 +33,14 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - [ ] **Rollout comparison:** roll each serious candidate out through the simulator's `rollout_stint()`. Compare stability (largest lap-to-lap step, drift), whether pace rises with tyre age, and whether compounds come out in a plausible order. One-step error alone doesn't show how a model behaves when rolled forward.
     - [ ] **Report:** per-fold MAE / RMSE / R² with the spread for every candidate, not a single split.
     - [ ] **Update the reasoning** in `readme.txt` ML Modelling step 3 to match the results. Keep each claim only if the experiments back it, replace the asserted ones with the measured comparison, drop or source the "real-world pipelines" line, and update the results table and the "XGBoost is kept" sentence. If another model wins, save it instead (the bundle format and the simulator would need to accept it).
-  - **Depends on:** nothing left (#18, grouped CV, is fixed). Supersedes the comparison part of #13; close both together.
+  - **Depends on:** nothing left (#18, grouped CV, is fixed). #13 is merged into this item.
   - **readme.txt:** ML Modelling step 3, model choice, reasoning and results table.
 
 ### P3: completeness and cleanup
 
 - [ ] **#15 Results documentation**
   - **Problem:** results currently exist only as raw files in `scripts/results/<script>/` and a few numbers in the readmes.
-  - **Depends on:** all P1 items, plus #13 (#9 is fixed). The numbers will change once those are fixed, so write this up afterwards.
+  - **Depends on:** all P1 items, plus #27 (#9 is fixed). The numbers will change once those are fixed, so write this up afterwards.
   - **readme.txt:** Known Issues.
   - Cover:
     - [ ] **Data cleaning:** rows removed per session and per filter (from the `*_removed_rows_summary.csv` files and the weather z-score summary), and the final row counts. This includes car data: samples and laps removed per stage, and the laps kept per driver and session.
@@ -70,19 +72,19 @@ Ideas that could make more data usable, not confirmed bugs. Each one changes the
 
 Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 467 (164 / 221 / 82), and only 153 rows survive the next-lap target shift in `train_model.py`. Removed by `process_laps.py`: 275 pit-out laps, 7 invalid-sector or extreme lap times, 102 for "unrealistic speed", 34 IQR outliers and 372 non-push laps.
 
-- [ ] **Speed filter drops laps with a missing speed trap, not just slow ones**
+- [ ] **#29 Speed filter drops laps with a missing speed trap, not just slow ones**
   - **Where:** `scripts/process_laps.py`: `df[(df[speed_cols] > MIN_SPEED_KMH).all(axis=1)]`.
   - **Problem:** `NaN > MIN_SPEED_KMH` is False, so a lap missing any of `i1_speed` / `i2_speed` / `st_speed` is dropped as "unrealistic speed". The filter removes 102 laps (25 / 70 / 7). The non-pit-out raw laps with at least one missing speed number 24 / 71 / 7, so nearly all of the 102 are missing data, not slow laps.
   - **Effect:** FP2, the session with the long runs, loses the most laps this way.
   - **Idea:** drop a lap only when a speed is present and below the threshold, and let missing speeds fall through to the training medians. Or require only the speed columns the model actually uses. That would recover up to ~100 laps.
 
-- [ ] **Push-lap filter may be too strict for long runs**
+- [ ] **#30 Push-lap filter may be too strict for long runs**
   - **Where:** `scripts/process_laps.py`: `apply_push_lap_filter()`, `PUSH_LAP_MAX_BEST_RATIO=1.15` in `.env` (#20).
   - **Problem:** the cutoff is relative to the driver's best lap in the whole session, which is usually a low-fuel SOFT lap. Heavy-fuel long-run laps, which are what the race simulation needs, sit close to that cutoff.
   - **Effect:** 372 laps (145 / 109 / 118) are removed, the largest single filter.
   - **Idea:** try a looser ratio, or apply the ratio per stint (against the stint's best lap) so long runs are judged against themselves while cool-down laps are still removed.
 
-- [ ] **Next-lap target loses most rows**
+- [ ] **#31 Next-lap target loses most rows**
   - **Where:** `build_next_lap_target()` in `scripts/feature_config.py`; `train_model.py` logs "Rows after target shift drop: 153".
   - **Problem:** the target needs the same driver's lap `lap_number + 1` in the same stint, and that lap must also survive cleaning. Practice runs alternate push and cool-down laps, so dropping the cool-downs breaks most consecutive pairs.
   - **Effect:** 467 cleaned laps give only 153 training pairs, about 120 after the train/test split.
@@ -264,6 +266,10 @@ Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 467 (
       - SOFT degrading least is not tyre physics. It is what the model has learnt from FP data that still has #17 and #20 open.
       - Predictions stay within 96.1–120.1 s over all rollouts, so there's no runaway drift.
     - **Effect on strategy:** the best total went from 6055.98 s to 5695.12 s, now SOFT–SOFT–SOFT with pits on laps 12 and 13. SOFT–MEDIUM–SOFT and SOFT–HARD–SOFT tie with it, and SOFT–SOFT–SOFT with pits on 45 and 46 is 2.3 s behind. The best 1-stop is SOFT–SOFT, pit on lap 13, 5775.17 s. The best 0-stop is SOFT at 5847.05 s. It is still **not** a valid recommendation, because of #8 and #11.
+
+- [x] **#13 The saved model is the weakest of the three on the test split**
+  - **Merged into #27:** its fix, a grouped-CV comparison of the three current models, is the first item of #27's Fix. Closed here so the ID stays in step with the GitHub issue.
+  - **Metric history** (held-out split, LR / RF / XGB): before #4 R² 0.043 / 0.060 / −0.039. After #4: 0.534 / 0.625 / 0.652. After #7 (seconds, 25 inputs with the session one-hot): 0.586 / 0.640 / 0.656, MAE 12.12 / 10.65 / 10.51 s. After #17 (causal `stint_avg_pace`): 0.373 / 0.565 / 0.620, MAE 16.62 / 12.54 / 12.06 s. After #21 and #19 (fuel term subtracted): 0.374 / 0.568 / 0.615, MAE 16.64 / 12.42 / 12.19 s. After #20 (non-push laps dropped, 153 target rows): 0.157 / 0.505 / 0.590, MAE 1.67 / 1.13 / 1.03 s. After #16 (10 car-data inputs, 36 in all): 0.308 / 0.460 / 0.510, MAE 1.44 / 1.20 / 1.07 s. After #18 (split grouped by stint, 10 test stints): −1.002 / 0.250 / 0.353, MAE 2.37 / 1.32 / 1.12 s.
 
 - [x] **#17 `stint_avg_pace` contains the target lap**
   - **Where:** the leave-one-out `stint_avg_pace` in `scripts/feature_engineer.py`.

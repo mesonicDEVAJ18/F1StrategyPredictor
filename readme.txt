@@ -407,8 +407,8 @@ test mean on unseen stints. The test set is only 10 stints, so with 36 inputs th
 XGBoost's top inputs are session_FP2 (0.210), drs_open_pct (0.116), stint_avg_pace (0.087), full_throttle_pct (0.085) and i2_speed (0.069);
 tyre_age is 7th (0.030).
 Random Forest is led by i2_speed (0.151), duration_sector_2 (0.139) and full_throttle_pct (0.115).
-[TODO #13, P2, see diagnostic.md] Re-run the comparison with grouped CV for all three models and confirm (or change) the saved model.
-[TODO #27, P2, see diagnostic.md] Experiment more: naive baselines, more candidate models, hyperparameter tuning, smaller feature sets and
+[TODO #27, P2, see diagnostic.md] Re-run the comparison with grouped CV for all three models and confirm (or change) the saved model.
+Then experiment more: naive baselines, more candidate models, hyperparameter tuning, smaller feature sets and
 a rollout comparison of the candidates. Then update the reasoning above to match: the claims about Random Forest's unstable rollouts and
 XGBoost's stable ones haven't been tested, since only XGBoost is ever rolled out.
 
@@ -545,9 +545,9 @@ KNOWN ISSUES
 Known bugs and their effect on the results are documented in diagnostic.md.
 Open TODOs by priority (IDs as in diagnostic.md; each is tagged [TODO #N, ...] where it applies above):
 P1, results are invalid until fixed:  none open
-P2, method or validation misleading:  #13 model choice, #27 model experiments and reasoning
+P2, method or validation misleading:  #27 model choice, experiments and reasoning
 P3, completeness and cleanup:         #26 no statistical inference, #15 results documentation
-[TODO #15, P3, see diagnostic.md] Results are not written up yet. Do this once #18 and #13 are settled, since the numbers will change.
+[TODO #15, P3, see diagnostic.md] Results are not written up yet. Do this once #27 is settled, since the numbers will change.
 
 THANK YOU
 DEVAJ RATHORE

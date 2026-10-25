@@ -191,7 +191,7 @@ Predict **fuel-corrected pace on the next lap** rather than explicitly computing
 | Random Forest | Noisy, stepwise predictions | 1.32 s | 1.68 s | 0.250 |
 | **XGBoost** | Chosen for non-linear learning and smooth predictions | 1.12 s | 1.56 s | 0.353 |
 
-*MAE and RMSE are in seconds, from the current run. The split is by stint, so the test set is 10 stints (25 rows) the model never saw; with so few, the gap between Random Forest and XGBoost is close to noise. See [diagnostic.md](diagnostic.md) (#13, #27).*
+*MAE and RMSE are in seconds, from the current run. The split is by stint, so the test set is 10 stints (25 rows) the model never saw; with so few, the gap between Random Forest and XGBoost is close to noise. See [diagnostic.md](diagnostic.md) (#27).*
 
 **XGBoost Advantages:**
 - Captures non-linear tyre physics (warm-up, thermal degradation, cliff effects)
