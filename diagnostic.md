@@ -2,7 +2,9 @@
 
 The pipeline runs end to end (`python master.py` from `scripts/`), but the open items below affect how far the current output can be trusted. Fixed items are ticked and say what changed.
 
-Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies with a `[TODO #N, P?, see diagnostic.md]` line. When an item is fixed, tick it here, say what changed, and remove or update its tags in `readme.txt`.
+The file lists the open items first, then ideas to explore, then the fixed items. Within each group, items are split by priority and sorted by ID.
+
+Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies with a `[TODO #N, P?, see diagnostic.md]` line. When an item is fixed, tick it, say what changed, move it to its priority under **Fixed**, and remove or update its tags in `readme.txt`.
 
 **Priorities**
 - **P1, results are invalid until fixed.** The training data, the target or the strategy objective is wrong, so the recommendation can't be trusted.
@@ -11,7 +13,86 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
 
 ---
 
-## P1: results are invalid until fixed
+## Open
+
+### P2: method or validation is misleading
+
+- [ ] **#27 The model choice rests on three untuned models and untested reasoning**
+  - **Where:** `scripts/train_model.py` (Linear Regression, Random Forest 200 trees, XGBoost with one fixed set of hyperparameters from `.env`); the "Reasoning" paragraph in `readme.txt` ML Modelling step 3.
+  - **Problem:**
+    - Only three models are compared, each with one configuration, on one held-out split (10 stints, 25 rows since #18; 31 rows before). XGBoost at max depth 7 with 36 inputs on 153 rows is likely to overfit, but no other setting has been tried.
+    - There is no naive baseline, so it isn't known whether any model beats a trivial forecast.
+    - The reasoning is asserted, not tested. "Random Forest produces noisy, stepwise predictions, unstable in autoregressive simulations" and "XGBoost: stable rollouts" were never checked: only XGBoost is ever rolled out. The "aligns with real-world motorsport pipelines" line has no source.
+  - **Fix:**
+    - [ ] **Baselines:** the next lap equals lap *t*'s fcp, and the next lap equals `stint_avg_pace`. Every model has to beat these to count. Since #5, `validate_strategy.py` scores the first (persistence) per fold and tests XGBoost against it per stint; the `stint_avg_pace` baseline and the other candidates are still to do.
+    - [ ] **More candidates:** regularised linear models (Ridge / Lasso), a simple per-compound linear degradation model, ExtraTrees and `HistGradientBoostingRegressor` from scikit-learn. LightGBM or others would be a new dependency, so confirm first.
+    - [ ] **Tuning:** a small hyperparameter search for each model (for XGBoost: shallower trees, `min_child_weight`, regularisation), scored with grouped CV by stint (#18). The tuned values go in `.env`.
+    - [ ] **Fewer inputs:** try reduced feature sets (e.g. without the car-data aggregates, the 3 constant inputs or the collinear groups found by `eda.py`, see #25), since 36 inputs on 153 rows is a lot.
+    - [ ] **Rollout comparison:** roll each serious candidate out through the simulator's `rollout_stint()`. Compare stability (largest lap-to-lap step, drift), whether pace rises with tyre age, and whether compounds come out in a plausible order. One-step error alone doesn't show how a model behaves when rolled forward.
+    - [ ] **Report:** per-fold MAE / RMSE / R² with the spread for every candidate, not a single split.
+    - [ ] **Update the reasoning** in `readme.txt` ML Modelling step 3 to match the results. Keep each claim only if the experiments back it, replace the asserted ones with the measured comparison, drop or source the "real-world pipelines" line, and update the results table and the "XGBoost is kept" sentence. If another model wins, save it instead (the bundle format and the simulator would need to accept it).
+  - **Depends on:** nothing left (#18, grouped CV, is fixed). Supersedes the comparison part of #13; close both together.
+  - **readme.txt:** ML Modelling step 3, model choice, reasoning and results table.
+
+### P3: completeness and cleanup
+
+- [ ] **#15 Results documentation**
+  - **Problem:** results currently exist only as raw files in `scripts/results/<script>/` and a few numbers in the readmes.
+  - **Depends on:** all P1 items, plus #13 (#9 is fixed). The numbers will change once those are fixed, so write this up afterwards.
+  - **readme.txt:** Known Issues.
+  - Cover:
+    - [ ] **Data cleaning:** rows removed per session and per filter (from the `*_removed_rows_summary.csv` files and the weather z-score summary), and the final row counts. This includes car data: samples and laps removed per stage, and the laps kept per driver and session.
+    - [ ] **Feature engineering:** final dataset shape, how many laps matched a stint, and how many rows are usable for training.
+    - [ ] **Model comparison:** test MAE, RMSE and R² for all three models, in seconds rather than z-scores, with the metric chart and prediction overlay plots and what they show.
+    - [ ] **Feature importance:** top features for Random Forest and XGBoost, and whether they match tyre physics (tyre age, compound, track temperature).
+    - [ ] **Validation:** CV results per fold with the spread, the residual plot and what it shows about bias, and the model-vs-persistence test (#5, done).
+    - [ ] **Strategy:** recommended strategy (compound sequence and pit laps), predicted race time in seconds, the next-best alternatives and the gap to them, and predicted pace by compound across the race.
+    - [ ] **Limitations:** a short note on which results depend on items still open above.
+    - [ ] Decide where this lives (a results section in `readme.txt` / `README.md`, or a separate `RESULTS.md`) and link it from both readmes.
+
+- [ ] **#26 No statistical inference on the practice data**
+  - **Where:** no script. The only statistical test is in `validate_strategy.py` (#5), and it tests the model's errors against a persistence baseline, not effects in the data.
+  - **Problem:** nothing tests whether the effects the strategy depends on are real in the data: differences in pace between compounds, tyre degradation, and pace changes between sessions.
+  - **Fix:** add tests on the real laps, in the #25 stage or next to it:
+    - [ ] **Compound pace:** do SOFT, MEDIUM and HARD differ in `fuel_corrected_pace`? Use pairwise Welch t-tests or one-way ANOVA / Kruskal–Wallis, within session so the session's pace level doesn't confound it.
+    - [ ] **Degradation:** is the slope of `fuel_corrected_pace` against `tyre_age` per compound different from 0? Report the slope with a confidence interval.
+    - [ ] **Session pace:** do FP1, FP2 and FP3 differ (track evolution)?
+  - **Watch out:** laps within one stint aren't independent (the same issue as #18), so per-lap tests overstate significance. Test on stint-level values (e.g. per-stint slopes or means) or account for the grouping.
+  - `scipy` is already pinned. `statsmodels` isn't installed, so confirm before adding a dependency.
+  - **Depends on:** #25 (same data, likely the same stage).
+  - **readme.txt:** Exploratory Data Analysis and Statistical Inference.
+
+---
+
+## Things to explore
+
+Ideas that could make more data usable, not confirmed bugs. Each one changes the results, so check the effect before adopting it.
+
+Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 467 (164 / 221 / 82), and only 153 rows survive the next-lap target shift in `train_model.py`. Removed by `process_laps.py`: 275 pit-out laps, 7 invalid-sector or extreme lap times, 102 for "unrealistic speed", 34 IQR outliers and 372 non-push laps.
+
+- [ ] **Speed filter drops laps with a missing speed trap, not just slow ones**
+  - **Where:** `scripts/process_laps.py`: `df[(df[speed_cols] > MIN_SPEED_KMH).all(axis=1)]`.
+  - **Problem:** `NaN > MIN_SPEED_KMH` is False, so a lap missing any of `i1_speed` / `i2_speed` / `st_speed` is dropped as "unrealistic speed". The filter removes 102 laps (25 / 70 / 7). The non-pit-out raw laps with at least one missing speed number 24 / 71 / 7, so nearly all of the 102 are missing data, not slow laps.
+  - **Effect:** FP2, the session with the long runs, loses the most laps this way.
+  - **Idea:** drop a lap only when a speed is present and below the threshold, and let missing speeds fall through to the training medians. Or require only the speed columns the model actually uses. That would recover up to ~100 laps.
+
+- [ ] **Push-lap filter may be too strict for long runs**
+  - **Where:** `scripts/process_laps.py`: `apply_push_lap_filter()`, `PUSH_LAP_MAX_BEST_RATIO=1.15` in `.env` (#20).
+  - **Problem:** the cutoff is relative to the driver's best lap in the whole session, which is usually a low-fuel SOFT lap. Heavy-fuel long-run laps, which are what the race simulation needs, sit close to that cutoff.
+  - **Effect:** 372 laps (145 / 109 / 118) are removed, the largest single filter.
+  - **Idea:** try a looser ratio, or apply the ratio per stint (against the stint's best lap) so long runs are judged against themselves while cool-down laps are still removed.
+
+- [ ] **Next-lap target loses most rows**
+  - **Where:** `build_next_lap_target()` in `scripts/feature_config.py`; `train_model.py` logs "Rows after target shift drop: 153".
+  - **Problem:** the target needs the same driver's lap `lap_number + 1` in the same stint, and that lap must also survive cleaning. Practice runs alternate push and cool-down laps, so dropping the cool-downs breaks most consecutive pairs.
+  - **Effect:** 467 cleaned laps give only 153 training pairs, about 120 after the train/test split.
+  - **Idea:** allow the next *surviving* lap in the stint (lap *t+k*) as the target, with *k* as a feature, so the model learns pace k laps ahead. This is a bigger modelling change: the simulator's rollout would need to match, and every feature must still belong to lap *t* (no leakage).
+
+---
+
+## Fixed
+
+### P1: results are invalid until fixed
 
 - [x] **#1 Weather comes from a different event**
   - **Where:** `data/raw/weather/weather.csv`, and the download URL in `readme.txt` / `README.md`.
@@ -121,7 +202,68 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
       - Used sets now lose because they reach the tyre-age ~20 step sooner, which outweighs the new-set second lap. Neighbouring pit laps are 4–7 s behind, and consecutive pit laps 124.53 s.
       - No P1 items are left, but the rollout shape still comes from practice laps that include cool-down laps (#20), and the metrics come from a shuffled split (#18). This is still **not** a valid recommendation.
 
-## P2: method or validation is misleading
+### P2: method or validation is misleading
+
+- [x] **#5 The t-test is a placeholder**
+  - **Where:** the "T-TEST EXAMPLE" block in `scripts/validate_strategy.py`.
+  - **Problem:** it compares two sets of random numbers (`np.random.normal(4800, 10)` against `np.random.normal(4820, 10)`), unseeded. The p-value says nothing about the model or the strategy, and it changes every run.
+  - **Fix:** replace it with a meaningful test (e.g. per-fold errors of two models, or simulated race times of the top strategies), or remove it.
+  - **readme.txt:** Evaluation step 1, t-test.
+  - **Fixed:** the placeholder is replaced by a test of whether the model beats a naive forecast on unseen stints ("BASELINE SIGNIFICANCE TEST" in `validate_strategy.py`).
+    - **Baseline (persistence):** lap *t+1*'s fcp = lap *t*'s `fuel_corrected_pace`. Nothing is fitted, so it is out-of-sample for every row, like the out-of-fold predictions (#6).
+    - **Test:** laps of one stint aren't independent (#18), so each stint is one paired observation: the mean |error| of the OOF prediction against the mean |error| of the baseline, over its rows. A one-sided paired t-test (`ttest_rel`, `alternative="less"`) and, because the residuals are right-skewed, a one-sided Wilcoxon signed-rank test, judged at `SIGNIFICANCE_LEVEL` (`.env`, 0.05). Both are deterministic.
+    - **Outputs:** `validate_strategy_baseline_test_stints.csv` (one row per stint: `session_key`, rows, fold, `model_MAE`, `baseline_MAE`, `diff`) replaces `_ttest_samples.csv`. `validate_strategy_cv_fold_metrics.csv` gains `baseline_MAE`, `validate_strategy_oof_predictions.csv` gains `baseline_pred`, and the summary's `t_test_p` is replaced by `baseline_MAE`, `baseline_RMSE`, `paired_t_stat`, `paired_t_p` and `wilcoxon_p`.
+    - **Checks:** the CV and OOF metrics are unchanged (CV MAE 1.23 s, RMSE 1.70 s; OOF MAE 1.18 s). The stint table has 50 stints covering 153 rows, `diff = model_MAE − baseline_MAE`, and the per-fold baseline MAE matches the per-row errors (to 1e-15 s). Two runs give byte-identical summary and stint CSVs.
+    - **Result:** baseline MAE 1.80 s, RMSE 3.32 s (model OOF 1.18 / 1.69 s). The model is better on 32 of 50 stints. Per-stint MAE difference: mean −1.60 s, median −0.14 s. Paired t = −3.32, p = 0.0008. Wilcoxon p = 0.011. So the model beats persistence at 0.05.
+      - The mean is driven by a few single-row stints where lap *t* was 9–12 s off its next lap and persistence carries that error forward. The typical gain is the median, 0.14 s, and the Wilcoxon p is the more honest of the two.
+      - Per fold, the baseline MAE is 2.13 / 2.72 / 1.08 / 2.01 / 1.27 s against the model's 1.12 / 1.68 / 1.08 / 0.75 / 1.51 s. The model ties persistence in fold 3 and loses in fold 5.
+      - This only shows that the model beats a trivial one-step forecast. It says nothing about how the strategy holds up (planned Strategy Validation), and it doesn't compare candidate models (#13, #27).
+
+- [x] **#6 The residual plot mixes training and test data**
+  - **Where:** `pred_full = model.predict(X)` in `scripts/validate_strategy.py`.
+  - **Problem:** the model from the last cross-validation fold predicts every row, including the 80% that fold was trained on, so the residuals look better than they really are.
+  - **Fix:** plot out-of-fold predictions (collect each fold's test predictions), or use the held-out split only.
+  - **readme.txt:** Evaluation step 1, residual plot.
+  - **Fixed:** the CV loop in `validate_strategy.py` now stores each fold's test predictions in `oof_pred`. The residual plot uses those, so every row is scored by the one model that held its stint out. GroupKFold (#18) holds each row out exactly once, so all 153 rows are plotted, and the script raises if any row has no prediction. The `N = min(3000, len(y))` slice (first rows in sort order, not a sample) is gone.
+    - **Outputs:** `validate_strategy_oof_predictions.csv` (ids, target, OOF prediction, residual, fold). `validate_strategy_validation_summary.csv` gains `OOF_MAE`, `OOF_RMSE` and `OOF_mean_residual`. The plot title says it is out-of-fold.
+    - **Checks:** the fold metrics are unchanged (CV MAE 1.23 s, RMSE 1.70 s). Every fold holds 10 stints, every row has exactly one prediction, and `residual = target − prediction` to 1e-14 s.
+    - **Effect:** pooled OOF MAE 1.18 s, RMSE 1.69 s, mean residual −0.20 s. The old plot (last fold's model on all rows) gave MAE 0.23 s and RMSE 0.85 s, so it understated the error about 5× (MAE) and 2× (RMSE).
+    - **What the plot shows:** no clear trend against predicted pace (slope −0.09, correlation −0.07). The residuals are right-skewed: median −0.32 s, 5th–95th percentile −2.31 to +3.75 s, with a handful of laps 4–5 s slower than predicted. The predictions span 96.4–104.2 s against targets of 95.9–107.8 s, so the model doesn't reach the slowest laps. The per-fold mean residual ranges from −1.00 s (fold 5) to +0.12 s, so the small overall bias depends on which stints are held out.
+
+- [x] **#9 The simulation does not roll predictions forward**
+  - **Where:** `precompute_lap_predictions()` in `scripts/strategy_simulator.py`.
+  - **Problem:**
+    - Each lap is predicted on its own, with every feature other than the compound, the session one-hot and `laps_since_stint_start` fixed at its training median (fixed at 0 before #7).
+    - `fuel_corrected_pace` is set to 0.0 as a placeholder. It isn't a model input anyway, because the vector is cut down to `FEATURES`.
+    - `readme.txt` says each prediction is fed into the next lap, which doesn't happen.
+  - **Effect:** "degradation" comes only from the model's response to `laps_since_stint_start`.
+  - **Fix:** roll the lap-*t* feature vector forward from each prediction, or change `readme.txt` to describe the per-lap approach that is actually used.
+  - **readme.txt:** ML Modelling step 2 (autoregressive, emergent degradation); Race Simulation step 2; Evaluation, planned critical checks.
+  - **Fixed** (together with #10): `rollout_stint()` in `scripts/strategy_simulator.py` rolls each stint forward lap by lap.
+    - **Seed:** lap 1 of a stint is a median lap. Its state is the training medians (bundle `medians`) with the compound set, and its lap time is the sum of the median sector times (98.98 s).
+    - **Step:** the model predicts lap *a+1*'s fcp from lap *a*'s state (the training relationship), still averaged over the session one-hots (`predict_fcp()`).
+    - **Feedback:** the prediction is turned back into a raw lap time by undoing training's fuel term, `raw = fcp − FUEL_EFFECT_K × (L − age)` for a stint of L laps. This needs one rollout per (compound, L): 4959 laps in total, about 6 s. It then becomes the next state:
+      - the sector times are the median sector shares scaled to sum to `raw`
+      - `stint_avg_pace` is the mean of the stint's earlier raw laps (the causal form #17 proposed; training uses it too since #17 was fixed)
+      - `laps_since_stint_start` goes up by one
+      - `fuel_corrected_pace` holds the lap's fcp instead of a 0.0 dummy
+    - **Held fixed:** speeds, segment counts and weather stay at the medians. The k = 0.035 used to build fcp is now `FUEL_EFFECT_K` in `feature_config.py`, shared by `feature_engineer.py` and the simulator.
+    - **Outputs:** `strategy_simulator_stint_rollouts.csv` has one row per compound, stint length and tyre age, with fcp, raw lap time, sectors and `stint_avg_pace`. `strategy_simulator_stint_totals.csv` is compound × stint length. They replace `_precomputed_predictions.csv` and `_prefix_sums.csv`.
+    - **Checks:**
+      - sectors sum to the raw lap
+      - `fcp − raw = 0.035 × (L − age)` on every row
+      - every age-1 lap is the seed
+      - `stint_avg_pace` is the mean of the earlier raw laps
+      - stint totals equal the rollout sums
+    - **Rollout behaviour** (57-lap stint, fcp in s; logged on every run):
+      - SOFT: 100.94 at age 1, 99.34 at 18, 114.05 at 57
+      - MEDIUM: 100.94 → 114.82 → 118.40
+      - HARD: 100.94 → 115.06 → 119.42
+      - The largest lap-to-lap step is 5.7–6.4 s. For the first ~8 laps the predictions zig-zag by ±3 s: a slow fed-back lap is followed by a fast prediction.
+      - MEDIUM and HARD step up by about 12 s around ages 11–15. SOFT stays near 99 s until about age 48.
+      - SOFT degrading least is not tyre physics. It is what the model has learnt from FP data that still has #17 and #20 open.
+      - Predictions stay within 96.1–120.1 s over all rollouts, so there's no runaway drift.
+    - **Effect on strategy:** the best total went from 6055.98 s to 5695.12 s, now SOFT–SOFT–SOFT with pits on laps 12 and 13. SOFT–MEDIUM–SOFT and SOFT–HARD–SOFT tie with it, and SOFT–SOFT–SOFT with pits on 45 and 46 is 2.3 s behind. The best 1-stop is SOFT–SOFT, pit on lap 13, 5775.17 s. The best 0-stop is SOFT at 5847.05 s. It is still **not** a valid recommendation, because of #8 and #11.
 
 - [x] **#17 `stint_avg_pace` contains the target lap**
   - **Where:** the leave-one-out `stint_avg_pace` in `scripts/feature_engineer.py`.
@@ -189,85 +331,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
       - Neighbouring pit laps are within about 1 s. The rollouts are almost flat, so tyre age barely matters, and an extra stop can't win back its 22 s. The model has learnt almost no compound or tyre-age effect from 153 rows. Every new stint also gets a fast median seed lap, which narrows the gap to 2 stops.
       - The metrics still come from a shuffled split (#18). This is still **not** a valid recommendation.
 
-- [x] **#9 The simulation does not roll predictions forward**
-  - **Where:** `precompute_lap_predictions()` in `scripts/strategy_simulator.py`.
-  - **Problem:**
-    - Each lap is predicted on its own, with every feature other than the compound, the session one-hot and `laps_since_stint_start` fixed at its training median (fixed at 0 before #7).
-    - `fuel_corrected_pace` is set to 0.0 as a placeholder. It isn't a model input anyway, because the vector is cut down to `FEATURES`.
-    - `readme.txt` says each prediction is fed into the next lap, which doesn't happen.
-  - **Effect:** "degradation" comes only from the model's response to `laps_since_stint_start`.
-  - **Fix:** roll the lap-*t* feature vector forward from each prediction, or change `readme.txt` to describe the per-lap approach that is actually used.
-  - **readme.txt:** ML Modelling step 2 (autoregressive, emergent degradation); Race Simulation step 2; Evaluation, planned critical checks.
-  - **Fixed** (together with #10): `rollout_stint()` in `scripts/strategy_simulator.py` rolls each stint forward lap by lap.
-    - **Seed:** lap 1 of a stint is a median lap. Its state is the training medians (bundle `medians`) with the compound set, and its lap time is the sum of the median sector times (98.98 s).
-    - **Step:** the model predicts lap *a+1*'s fcp from lap *a*'s state (the training relationship), still averaged over the session one-hots (`predict_fcp()`).
-    - **Feedback:** the prediction is turned back into a raw lap time by undoing training's fuel term, `raw = fcp − FUEL_EFFECT_K × (L − age)` for a stint of L laps. This needs one rollout per (compound, L): 4959 laps in total, about 6 s. It then becomes the next state:
-      - the sector times are the median sector shares scaled to sum to `raw`
-      - `stint_avg_pace` is the mean of the stint's earlier raw laps (the causal form #17 proposed; training uses it too since #17 was fixed)
-      - `laps_since_stint_start` goes up by one
-      - `fuel_corrected_pace` holds the lap's fcp instead of a 0.0 dummy
-    - **Held fixed:** speeds, segment counts and weather stay at the medians. The k = 0.035 used to build fcp is now `FUEL_EFFECT_K` in `feature_config.py`, shared by `feature_engineer.py` and the simulator.
-    - **Outputs:** `strategy_simulator_stint_rollouts.csv` has one row per compound, stint length and tyre age, with fcp, raw lap time, sectors and `stint_avg_pace`. `strategy_simulator_stint_totals.csv` is compound × stint length. They replace `_precomputed_predictions.csv` and `_prefix_sums.csv`.
-    - **Checks:**
-      - sectors sum to the raw lap
-      - `fcp − raw = 0.035 × (L − age)` on every row
-      - every age-1 lap is the seed
-      - `stint_avg_pace` is the mean of the earlier raw laps
-      - stint totals equal the rollout sums
-    - **Rollout behaviour** (57-lap stint, fcp in s; logged on every run):
-      - SOFT: 100.94 at age 1, 99.34 at 18, 114.05 at 57
-      - MEDIUM: 100.94 → 114.82 → 118.40
-      - HARD: 100.94 → 115.06 → 119.42
-      - The largest lap-to-lap step is 5.7–6.4 s. For the first ~8 laps the predictions zig-zag by ±3 s: a slow fed-back lap is followed by a fast prediction.
-      - MEDIUM and HARD step up by about 12 s around ages 11–15. SOFT stays near 99 s until about age 48.
-      - SOFT degrading least is not tyre physics. It is what the model has learnt from FP data that still has #17 and #20 open.
-      - Predictions stay within 96.1–120.1 s over all rollouts, so there's no runaway drift.
-    - **Effect on strategy:** the best total went from 6055.98 s to 5695.12 s, now SOFT–SOFT–SOFT with pits on laps 12 and 13. SOFT–MEDIUM–SOFT and SOFT–HARD–SOFT tie with it, and SOFT–SOFT–SOFT with pits on 45 and 46 is 2.3 s behind. The best 1-stop is SOFT–SOFT, pit on lap 13, 5775.17 s. The best 0-stop is SOFT at 5847.05 s. It is still **not** a valid recommendation, because of #8 and #11.
-
-- [x] **#6 The residual plot mixes training and test data**
-  - **Where:** `pred_full = model.predict(X)` in `scripts/validate_strategy.py`.
-  - **Problem:** the model from the last cross-validation fold predicts every row, including the 80% that fold was trained on, so the residuals look better than they really are.
-  - **Fix:** plot out-of-fold predictions (collect each fold's test predictions), or use the held-out split only.
-  - **readme.txt:** Evaluation step 1, residual plot.
-  - **Fixed:** the CV loop in `validate_strategy.py` now stores each fold's test predictions in `oof_pred`. The residual plot uses those, so every row is scored by the one model that held its stint out. GroupKFold (#18) holds each row out exactly once, so all 153 rows are plotted, and the script raises if any row has no prediction. The `N = min(3000, len(y))` slice (first rows in sort order, not a sample) is gone.
-    - **Outputs:** `validate_strategy_oof_predictions.csv` (ids, target, OOF prediction, residual, fold). `validate_strategy_validation_summary.csv` gains `OOF_MAE`, `OOF_RMSE` and `OOF_mean_residual`. The plot title says it is out-of-fold.
-    - **Checks:** the fold metrics are unchanged (CV MAE 1.23 s, RMSE 1.70 s). Every fold holds 10 stints, every row has exactly one prediction, and `residual = target − prediction` to 1e-14 s.
-    - **Effect:** pooled OOF MAE 1.18 s, RMSE 1.69 s, mean residual −0.20 s. The old plot (last fold's model on all rows) gave MAE 0.23 s and RMSE 0.85 s, so it understated the error about 5× (MAE) and 2× (RMSE).
-    - **What the plot shows:** no clear trend against predicted pace (slope −0.09, correlation −0.07). The residuals are right-skewed: median −0.32 s, 5th–95th percentile −2.31 to +3.75 s, with a handful of laps 4–5 s slower than predicted. The predictions span 96.4–104.2 s against targets of 95.9–107.8 s, so the model doesn't reach the slowest laps. The per-fold mean residual ranges from −1.00 s (fold 5) to +0.12 s, so the small overall bias depends on which stints are held out.
-
-- [x] **#5 The t-test is a placeholder**
-  - **Where:** the "T-TEST EXAMPLE" block in `scripts/validate_strategy.py`.
-  - **Problem:** it compares two sets of random numbers (`np.random.normal(4800, 10)` against `np.random.normal(4820, 10)`), unseeded. The p-value says nothing about the model or the strategy, and it changes every run.
-  - **Fix:** replace it with a meaningful test (e.g. per-fold errors of two models, or simulated race times of the top strategies), or remove it.
-  - **readme.txt:** Evaluation step 1, t-test.
-  - **Fixed:** the placeholder is replaced by a test of whether the model beats a naive forecast on unseen stints ("BASELINE SIGNIFICANCE TEST" in `validate_strategy.py`).
-    - **Baseline (persistence):** lap *t+1*'s fcp = lap *t*'s `fuel_corrected_pace`. Nothing is fitted, so it is out-of-sample for every row, like the out-of-fold predictions (#6).
-    - **Test:** laps of one stint aren't independent (#18), so each stint is one paired observation: the mean |error| of the OOF prediction against the mean |error| of the baseline, over its rows. A one-sided paired t-test (`ttest_rel`, `alternative="less"`) and, because the residuals are right-skewed, a one-sided Wilcoxon signed-rank test, judged at `SIGNIFICANCE_LEVEL` (`.env`, 0.05). Both are deterministic.
-    - **Outputs:** `validate_strategy_baseline_test_stints.csv` (one row per stint: `session_key`, rows, fold, `model_MAE`, `baseline_MAE`, `diff`) replaces `_ttest_samples.csv`. `validate_strategy_cv_fold_metrics.csv` gains `baseline_MAE`, `validate_strategy_oof_predictions.csv` gains `baseline_pred`, and the summary's `t_test_p` is replaced by `baseline_MAE`, `baseline_RMSE`, `paired_t_stat`, `paired_t_p` and `wilcoxon_p`.
-    - **Checks:** the CV and OOF metrics are unchanged (CV MAE 1.23 s, RMSE 1.70 s; OOF MAE 1.18 s). The stint table has 50 stints covering 153 rows, `diff = model_MAE − baseline_MAE`, and the per-fold baseline MAE matches the per-row errors (to 1e-15 s). Two runs give byte-identical summary and stint CSVs.
-    - **Result:** baseline MAE 1.80 s, RMSE 3.32 s (model OOF 1.18 / 1.69 s). The model is better on 32 of 50 stints. Per-stint MAE difference: mean −1.60 s, median −0.14 s. Paired t = −3.32, p = 0.0008. Wilcoxon p = 0.011. So the model beats persistence at 0.05.
-      - The mean is driven by a few single-row stints where lap *t* was 9–12 s off its next lap and persistence carries that error forward. The typical gain is the median, 0.14 s, and the Wilcoxon p is the more honest of the two.
-      - Per fold, the baseline MAE is 2.13 / 2.72 / 1.08 / 2.01 / 1.27 s against the model's 1.12 / 1.68 / 1.08 / 0.75 / 1.51 s. The model ties persistence in fold 3 and loses in fold 5.
-      - This only shows that the model beats a trivial one-step forecast. It says nothing about how the strategy holds up (planned Strategy Validation), and it doesn't compare candidate models (#13, #27).
-
-- [ ] **#27 The model choice rests on three untuned models and untested reasoning**
-  - **Where:** `scripts/train_model.py` (Linear Regression, Random Forest 200 trees, XGBoost with one fixed set of hyperparameters from `.env`); the "Reasoning" paragraph in `readme.txt` ML Modelling step 3.
-  - **Problem:**
-    - Only three models are compared, each with one configuration, on one held-out split (10 stints, 25 rows since #18; 31 rows before). XGBoost at max depth 7 with 36 inputs on 153 rows is likely to overfit, but no other setting has been tried.
-    - There is no naive baseline, so it isn't known whether any model beats a trivial forecast.
-    - The reasoning is asserted, not tested. "Random Forest produces noisy, stepwise predictions, unstable in autoregressive simulations" and "XGBoost: stable rollouts" were never checked: only XGBoost is ever rolled out. The "aligns with real-world motorsport pipelines" line has no source.
-  - **Fix:**
-    - [ ] **Baselines:** the next lap equals lap *t*'s fcp, and the next lap equals `stint_avg_pace`. Every model has to beat these to count. Since #5, `validate_strategy.py` scores the first (persistence) per fold and tests XGBoost against it per stint; the `stint_avg_pace` baseline and the other candidates are still to do.
-    - [ ] **More candidates:** regularised linear models (Ridge / Lasso), a simple per-compound linear degradation model, ExtraTrees and `HistGradientBoostingRegressor` from scikit-learn. LightGBM or others would be a new dependency, so confirm first.
-    - [ ] **Tuning:** a small hyperparameter search for each model (for XGBoost: shallower trees, `min_child_weight`, regularisation), scored with grouped CV by stint (#18). The tuned values go in `.env`.
-    - [ ] **Fewer inputs:** try reduced feature sets (e.g. without the car-data aggregates, the 3 constant inputs or the collinear groups found by `eda.py`, see #25), since 36 inputs on 153 rows is a lot.
-    - [ ] **Rollout comparison:** roll each serious candidate out through the simulator's `rollout_stint()`. Compare stability (largest lap-to-lap step, drift), whether pace rises with tyre age, and whether compounds come out in a plausible order. One-step error alone doesn't show how a model behaves when rolled forward.
-    - [ ] **Report:** per-fold MAE / RMSE / R² with the spread for every candidate, not a single split.
-    - [ ] **Update the reasoning** in `readme.txt` ML Modelling step 3 to match the results. Keep each claim only if the experiments back it, replace the asserted ones with the measured comparison, drop or source the "real-world pipelines" line, and update the results table and the "XGBoost is kept" sentence. If another model wins, save it instead (the bundle format and the simulator would need to accept it).
-  - **Depends on:** nothing left (#18, grouped CV, is fixed). Supersedes the comparison part of #13; close both together.
-  - **readme.txt:** ML Modelling step 3, model choice, reasoning and results table.
-
-## P3: completeness and cleanup
+### P3: completeness and cleanup
 
 - [x] **#12 The starting compound setting has no effect**
   - **Where:** `start_features` in `__main__` of `scripts/strategy_simulator.py`.
@@ -456,60 +520,8 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
       - **Correlations (153 target rows):** 18 input pairs at |r| ≥ 0.8 in 4 groups: `session_FP1`/`session_FP2` with air and track temperature, humidity and pressure; `duration_sector_2` with `mean_speed`; `st_speed` with `max_speed`; `mean_throttle` with `full_throttle_pct`. The sector times and speed traps are not collinear among themselves at 0.8. The top target correlations are `full_throttle_pct` (+0.44), `i2_speed` (+0.44) and `mean_throttle` (+0.36); `tyre_age` is +0.02 and the compound one-hots within ±0.13, as between-stint pace levels swamp the within-stint trend.
       - **Coverage:** 467 laps in 223 stints, 136 of them with a single clean lap; 153 target rows in 50 stints (FP1 45 / FP2 101 / FP3 7; SOFT 64 / MEDIUM 63 / HARD 26).
 
-- [ ] **#26 No statistical inference on the practice data**
-  - **Where:** no script. The only statistical test is in `validate_strategy.py` (#5), and it tests the model's errors against a persistence baseline, not effects in the data.
-  - **Problem:** nothing tests whether the effects the strategy depends on are real in the data: differences in pace between compounds, tyre degradation, and pace changes between sessions.
-  - **Fix:** add tests on the real laps, in the #25 stage or next to it:
-    - [ ] **Compound pace:** do SOFT, MEDIUM and HARD differ in `fuel_corrected_pace`? Use pairwise Welch t-tests or one-way ANOVA / Kruskal–Wallis, within session so the session's pace level doesn't confound it.
-    - [ ] **Degradation:** is the slope of `fuel_corrected_pace` against `tyre_age` per compound different from 0? Report the slope with a confidence interval.
-    - [ ] **Session pace:** do FP1, FP2 and FP3 differ (track evolution)?
-  - **Watch out:** laps within one stint aren't independent (the same issue as #18), so per-lap tests overstate significance. Test on stint-level values (e.g. per-stint slopes or means) or account for the grouping.
-  - `scipy` is already pinned. `statsmodels` isn't installed, so confirm before adding a dependency.
-  - **Depends on:** #25 (same data, likely the same stage).
-  - **readme.txt:** Exploratory Data Analysis and Statistical Inference.
-
 - [x] **#28 Redirected output crashes on non-ASCII log text**
   - **Where:** the `log()` helper in all 11 stage scripts.
   - **Problem:** when stdout is a file or pipe on Windows (`python master.py > run.txt`), Python encodes it with the ANSI code page (cp1252), which has no `→` or `✅`. The helper's "remove unsupported characters" step encoded and decoded with UTF-8, which never replaces anything, so `print` raised `UnicodeEncodeError`. `→` is logged by `process_laps.py`, `process_stints.py`, `process_weather.py`, `process_cardata.py`, `feature_engineer.py` (also `✅`), `train_model.py` and `validate_strategy.py`, so the pipeline stopped at `process_laps.py`. An interactive console was unaffected (Python 3.10 writes UTF-16 to it), and `PYTHONIOENCODING=utf-8` worked around it.
   - **Fixed:** `log()` encodes with `sys.stdout.encoding` and `errors="replace"`, so redirected cp1252 output shows `?` in place of those characters instead of crashing. The UTF-8 log file gets the original message, so the tracked `*_log.txt` files are unchanged. No log text changed.
     - **Checks:** with stdout redirected (cp1252) and no `PYTHONIOENCODING`, `process_laps.py` and the full `master.py` run exit 0 (all 11 stages). No tracked output changes apart from the RandomForest's last digits, which differ between runs anyway.
-
-- [ ] **#15 Results documentation**
-  - **Problem:** results currently exist only as raw files in `scripts/results/<script>/` and a few numbers in the readmes.
-  - **Depends on:** all P1 items, plus #13 (#9 is fixed). The numbers will change once those are fixed, so write this up afterwards.
-  - **readme.txt:** Known Issues.
-  - Cover:
-    - [ ] **Data cleaning:** rows removed per session and per filter (from the `*_removed_rows_summary.csv` files and the weather z-score summary), and the final row counts. This includes car data: samples and laps removed per stage, and the laps kept per driver and session.
-    - [ ] **Feature engineering:** final dataset shape, how many laps matched a stint, and how many rows are usable for training.
-    - [ ] **Model comparison:** test MAE, RMSE and R² for all three models, in seconds rather than z-scores, with the metric chart and prediction overlay plots and what they show.
-    - [ ] **Feature importance:** top features for Random Forest and XGBoost, and whether they match tyre physics (tyre age, compound, track temperature).
-    - [ ] **Validation:** CV results per fold with the spread, the residual plot and what it shows about bias, and the model-vs-persistence test (#5, done).
-    - [ ] **Strategy:** recommended strategy (compound sequence and pit laps), predicted race time in seconds, the next-best alternatives and the gap to them, and predicted pace by compound across the race.
-    - [ ] **Limitations:** a short note on which results depend on items still open above.
-    - [ ] Decide where this lives (a results section in `readme.txt` / `README.md`, or a separate `RESULTS.md`) and link it from both readmes.
-
----
-
-## Things to explore
-
-Ideas that could make more data usable, not confirmed bugs. Each one changes the results, so check the effect before adopting it.
-
-Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 467 (164 / 221 / 82), and only 153 rows survive the next-lap target shift in `train_model.py`. Removed by `process_laps.py`: 275 pit-out laps, 7 invalid-sector or extreme lap times, 102 for "unrealistic speed", 34 IQR outliers and 372 non-push laps.
-
-- [ ] **Speed filter drops laps with a missing speed trap, not just slow ones**
-  - **Where:** `scripts/process_laps.py`: `df[(df[speed_cols] > MIN_SPEED_KMH).all(axis=1)]`.
-  - **Problem:** `NaN > MIN_SPEED_KMH` is False, so a lap missing any of `i1_speed` / `i2_speed` / `st_speed` is dropped as "unrealistic speed". The filter removes 102 laps (25 / 70 / 7). The non-pit-out raw laps with at least one missing speed number 24 / 71 / 7, so nearly all of the 102 are missing data, not slow laps.
-  - **Effect:** FP2, the session with the long runs, loses the most laps this way.
-  - **Idea:** drop a lap only when a speed is present and below the threshold, and let missing speeds fall through to the training medians. Or require only the speed columns the model actually uses. That would recover up to ~100 laps.
-
-- [ ] **Push-lap filter may be too strict for long runs**
-  - **Where:** `scripts/process_laps.py`: `apply_push_lap_filter()`, `PUSH_LAP_MAX_BEST_RATIO=1.15` in `.env` (#20).
-  - **Problem:** the cutoff is relative to the driver's best lap in the whole session, which is usually a low-fuel SOFT lap. Heavy-fuel long-run laps, which are what the race simulation needs, sit close to that cutoff.
-  - **Effect:** 372 laps (145 / 109 / 118) are removed, the largest single filter.
-  - **Idea:** try a looser ratio, or apply the ratio per stint (against the stint's best lap) so long runs are judged against themselves while cool-down laps are still removed.
-
-- [ ] **Next-lap target loses most rows**
-  - **Where:** `build_next_lap_target()` in `scripts/feature_config.py`; `train_model.py` logs "Rows after target shift drop: 153".
-  - **Problem:** the target needs the same driver's lap `lap_number + 1` in the same stint, and that lap must also survive cleaning. Practice runs alternate push and cool-down laps, so dropping the cool-downs breaks most consecutive pairs.
-  - **Effect:** 467 cleaned laps give only 153 training pairs, about 120 after the train/test split.
-  - **Idea:** allow the next *surviving* lap in the stint (lap *t+k*) as the target, with *k* as a feature, so the model learns pace k laps ahead. This is a bigger modelling change: the simulator's rollout would need to match, and every feature must still belong to lap *t* (no leakage).
