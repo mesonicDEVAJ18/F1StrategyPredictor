@@ -3,11 +3,11 @@ Loaded dataset with 467 rows.
 Rows after target shift drop: 153 (50 stints)
 
 Running 5-fold cross-validation grouped by stint...
- Fold 1 → 10 stints / 25 rows, 0 shared, MAE=1.1205 s, RMSE=1.5559 s
- Fold 2 → 10 stints / 28 rows, 0 shared, MAE=1.6779 s, RMSE=2.1906 s
- Fold 3 → 10 stints / 41 rows, 0 shared, MAE=1.0751 s, RMSE=1.4126 s
- Fold 4 → 10 stints / 36 rows, 0 shared, MAE=0.7470 s, RMSE=1.1787 s
- Fold 5 → 10 stints / 23 rows, 0 shared, MAE=1.5071 s, RMSE=2.1859 s
+ Fold 1 → 10 stints / 25 rows, 0 shared, MAE=1.1205 s, RMSE=1.5559 s, baseline MAE=2.1270 s
+ Fold 2 → 10 stints / 28 rows, 0 shared, MAE=1.6779 s, RMSE=2.1906 s, baseline MAE=2.7221 s
+ Fold 3 → 10 stints / 41 rows, 0 shared, MAE=1.0751 s, RMSE=1.4126 s, baseline MAE=1.0761 s
+ Fold 4 → 10 stints / 36 rows, 0 shared, MAE=0.7470 s, RMSE=1.1787 s, baseline MAE=2.0064 s
+ Fold 5 → 10 stints / 23 rows, 0 shared, MAE=1.5071 s, RMSE=2.1859 s, baseline MAE=1.2655 s
 
 CV MAE = 1.2255335720516445 s
 CV RMSE = 1.7047356658518151 s
@@ -17,8 +17,12 @@ Generating residual plot...
 OOF MAE = 1.1806 s, OOF RMSE = 1.6893 s, mean residual = -0.2018 s
 Residual plot saved.
 
-Running example t-test...
-T-test p-value: 5.7528419978497394e-164
+Testing the model against the persistence baseline (lap t+1 = lap t)...
+Baseline MAE = 1.7964 s, baseline RMSE = 3.3211 s
+Stints: 50, model better on 32; per-stint MAE difference mean -1.6031 s, median -0.1386 s
+Paired t-test (one-sided): t = -3.3221, p = 0.000847
+Wilcoxon signed-rank (one-sided): p = 0.011189
+Model beats the persistence baseline on unseen stints at alpha = 0.05
 
 Validation summary saved.
 
@@ -26,7 +30,7 @@ FILES GENERATED:
   - validate_strategy_cv_fold_metrics.csv
   - validate_strategy_oof_predictions.csv
   - validate_strategy_residual_plot.png
-  - validate_strategy_ttest_samples.csv
+  - validate_strategy_baseline_test_stints.csv
   - validate_strategy_validation_summary.csv
 
 --- VALIDATION COMPLETE ---

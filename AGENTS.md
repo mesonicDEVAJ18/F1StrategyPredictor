@@ -37,7 +37,7 @@ scripts/            # ALL pipeline code lives here; run scripts FROM this direct
   feature_engineer.py   # merge laps+stints+weather+car data, build engineered features
   train_model.py        # train/compare models, persist XGBoost bundle
   strategy_simulator.py # enumerate + simulate strategies, pick best
-  validate_strategy.py  # cross-validation, residual plot, placeholder t-test (strategy robustness is planned, not built)
+  validate_strategy.py  # cross-validation, residual plot, model-vs-persistence test (strategy robustness is planned, not built)
   results/<script>/     # per-script outputs (logs, intermediate CSVs, plots, model)
 data/
   raw/                  # the selected weekend's OpenF1 downloads (RAW_DIR), one folder per source (LAPS_DIR, STINTS_DIR, DRIVERS_DIR, WEATHER_DIR, CARDATA_DIR)
@@ -73,7 +73,7 @@ python process_laps.py      # or run any single stage on its own
 `validate_strategy`. It aborts the whole run if any stage exits non-zero.
 
 **Known gaps (don't "fix" silently — confirm intent first):**
-- Open issues (the placeholder t-test, the unconfirmed model choice, etc.) are listed in [diagnostic.md](diagnostic.md). Fixing them
+- Open issues (the unconfirmed model choice, no EDA, etc.) are listed in [diagnostic.md](diagnostic.md). Fixing them
   changes results, so confirm before fixing, and update diagnostic.md when one is resolved.
 
 ## Data flow / hand-offs

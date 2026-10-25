@@ -273,7 +273,7 @@ None of this is tyre physics yet. 1 stop wins because every rollout is almost fl
 - **Residual analysis**: Check for systematic bias
 - **Feature importance**: Verify alignment with tyre physics
   - Expected top features: tyre age, compound, track temperature
-- **t-test**: Placeholder on random sample data
+- **Baseline test**: per-stint paired t-test and Wilcoxon test of the model's out-of-fold error against a persistence baseline (lap *t+1* = lap *t*). Current: baseline MAE 1.80 s, model better on 32 of 50 stints, p = 0.0008 (t) / 0.011 (Wilcoxon), median gain 0.14 s
 - **Simulation stability** (logged by `strategy_simulator.py`): fcp at stint laps 1, 18 and 57 of a full-length rollout for each compound and set age, plus the largest lap-to-lap step.
   - No runaway drift (car 16, Bahrain 2025): every rollout stays within 97.15–101.54 s, and the largest lap-to-lap step is 2.28–2.60 s (stint laps 1–3).
   - Smooth but nearly flat: about 99.5 s on stint lap 2 and 101 s on lap 3, then 100.5–101.5 s to lap 57. All compounds and set ages are within about 0.4 s, so the model shows almost no tyre degradation yet.

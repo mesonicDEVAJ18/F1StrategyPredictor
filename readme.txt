@@ -171,7 +171,7 @@ live in .env at the repo root and are read through scripts/env_config.py. An env
 runs the whole pipeline on Jeddah 2024. The race laps come from the weekend table in race_weekend.py.
 A weekend fetched before loads from data/cache/ with no requests (see Data Collection, Weekend cache). data/raw/, data/processed/ and
 scripts/results/ are tracked in git, so running another weekend rewrites them; switching back to 2025 bahrain restores the committed
-data from the cache, and the results reproduce apart from the placeholder t-test and the RandomForest's last digits.
+data from the cache, and the results reproduce apart from the RandomForest's last digits.
 Stages hand data to each other through CSVs in data/processed/:
     race_weekend.py      -> data/raw/ (the selected weekend, from data/cache/ or OpenF1)
     process_laps.py      -> data/processed/laps_combined_clean.csv
@@ -320,7 +320,7 @@ EXPLORATORY DATA ANALYSIS AND STATISTICAL Inference
 [TODO #25, P3, see diagnostic.md] Not implemented yet: no stage looks at the data (distributions, pace against tyre age, correlations,
 row coverage) before it is modelled.
 [TODO #26, P3, see diagnostic.md] Not implemented yet: no test on the practice laps of compound pace differences, degradation slopes or
-session pace. The only test is the placeholder t-test (#5).
+session pace.
 
 ML MODELLING TO COMPUTE DEGRADATION RATE (train_model.py)
 1. Remove dependant variables to avoid leakage
@@ -480,9 +480,15 @@ fold model that held its stint out, so all 153 rows are scored on unseen stints 
 Current result: OOF MAE 1.18 s, RMSE 1.69 s, mean residual -0.20 s. No clear trend against predicted pace, but the residuals are
 right-skewed (a few laps 4-5 s slower than predicted) and the predictions (96.4-104.2 s) don't reach the slowest targets (up to 107.8 s).
 Feature importance from Random Forest and XGBoost, saved by train_model.py.
-An example two-sample t-test on randomly generated data. This is a placeholder: it does not test anything about the model or the
-strategy, and its p-value changes from run to run.
-[TODO #5, P2, see diagnostic.md] Replace with a meaningful test or remove it.
+Baseline significance test: does the model beat a naive forecast on unseen stints? The persistence baseline predicts lap t+1's
+fuel_corrected_pace as lap t's (nothing is fitted, so it is out-of-sample for every row). Laps of one stint aren't independent, so each
+stint is one paired observation: the mean |error| of the out-of-fold prediction against that of the baseline. A one-sided paired t-test
+and, because the residuals are right-skewed, a one-sided Wilcoxon signed-rank test, at SIGNIFICANCE_LEVEL (0.05). Per-stint values are
+saved in validate_strategy_baseline_test_stints.csv, and the baseline MAE per fold in validate_strategy_cv_fold_metrics.csv.
+Current result: baseline MAE 1.80 s, RMSE 3.32 s (model 1.18 / 1.69 s). The model is better on 32 of 50 stints; paired t p = 0.0008,
+Wilcoxon p = 0.011, so it beats persistence. The median per-stint gain is only 0.14 s: the mean (1.60 s) comes mostly from a few
+one-lap stints where lap t was 9-12 s off and persistence carried that over. The model ties persistence in fold 3 and loses in fold 5.
+This tests the one-step forecast only, not the strategy.
 
 Rollout check (logged by strategy_simulator.py on every run): for a full-race-length stint of each compound and set age SIM_DRIVER has,
 fcp at stint laps 1, 18 and the last lap, and the largest lap-to-lap step.
@@ -513,8 +519,7 @@ KNOWN ISSUES
 Known bugs and their effect on the results are documented in diagnostic.md.
 Open TODOs by priority (IDs as in diagnostic.md; each is tagged [TODO #N, ...] where it applies above):
 P1, results are invalid until fixed:  none open
-P2, method or validation misleading:  #18 splits mix laps of one stint, #5 placeholder t-test,
-                                      #13 model choice, #27 model experiments and reasoning
+P2, method or validation misleading:  #13 model choice, #27 model experiments and reasoning
 P3, completeness and cleanup:         #12 dead starting-compound setting, #25 no EDA, #26 no statistical inference,
                                       #15 results documentation
 [TODO #15, P3, see diagnostic.md] Results are not written up yet. Do this once #18 and #13 are settled, since the numbers will change.

@@ -1,5 +1,5 @@
 validate_strategy_cv_fold_metrics.csv
 validate_strategy_oof_predictions.csv
 validate_strategy_residual_plot.png
-validate_strategy_ttest_samples.csv
+validate_strategy_baseline_test_stints.csv
 validate_strategy_validation_summary.csv

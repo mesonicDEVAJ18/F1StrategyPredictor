@@ -235,11 +235,20 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - **Effect:** pooled OOF MAE 1.18 s, RMSE 1.69 s, mean residual −0.20 s. The old plot (last fold's model on all rows) gave MAE 0.23 s and RMSE 0.85 s, so it understated the error about 5× (MAE) and 2× (RMSE).
     - **What the plot shows:** no clear trend against predicted pace (slope −0.09, correlation −0.07). The residuals are right-skewed: median −0.32 s, 5th–95th percentile −2.31 to +3.75 s, with a handful of laps 4–5 s slower than predicted. The predictions span 96.4–104.2 s against targets of 95.9–107.8 s, so the model doesn't reach the slowest laps. The per-fold mean residual ranges from −1.00 s (fold 5) to +0.12 s, so the small overall bias depends on which stints are held out.
 
-- [ ] **#5 The t-test is a placeholder**
+- [x] **#5 The t-test is a placeholder**
   - **Where:** the "T-TEST EXAMPLE" block in `scripts/validate_strategy.py`.
   - **Problem:** it compares two sets of random numbers (`np.random.normal(4800, 10)` against `np.random.normal(4820, 10)`), unseeded. The p-value says nothing about the model or the strategy, and it changes every run.
   - **Fix:** replace it with a meaningful test (e.g. per-fold errors of two models, or simulated race times of the top strategies), or remove it.
   - **readme.txt:** Evaluation step 1, t-test.
+  - **Fixed:** the placeholder is replaced by a test of whether the model beats a naive forecast on unseen stints ("BASELINE SIGNIFICANCE TEST" in `validate_strategy.py`).
+    - **Baseline (persistence):** lap *t+1*'s fcp = lap *t*'s `fuel_corrected_pace`. Nothing is fitted, so it is out-of-sample for every row, like the out-of-fold predictions (#6).
+    - **Test:** laps of one stint aren't independent (#18), so each stint is one paired observation: the mean |error| of the OOF prediction against the mean |error| of the baseline, over its rows. A one-sided paired t-test (`ttest_rel`, `alternative="less"`) and, because the residuals are right-skewed, a one-sided Wilcoxon signed-rank test, judged at `SIGNIFICANCE_LEVEL` (`.env`, 0.05). Both are deterministic.
+    - **Outputs:** `validate_strategy_baseline_test_stints.csv` (one row per stint: `session_key`, rows, fold, `model_MAE`, `baseline_MAE`, `diff`) replaces `_ttest_samples.csv`. `validate_strategy_cv_fold_metrics.csv` gains `baseline_MAE`, `validate_strategy_oof_predictions.csv` gains `baseline_pred`, and the summary's `t_test_p` is replaced by `baseline_MAE`, `baseline_RMSE`, `paired_t_stat`, `paired_t_p` and `wilcoxon_p`.
+    - **Checks:** the CV and OOF metrics are unchanged (CV MAE 1.23 s, RMSE 1.70 s; OOF MAE 1.18 s). The stint table has 50 stints covering 153 rows, `diff = model_MAE − baseline_MAE`, and the per-fold baseline MAE matches the per-row errors (to 1e-15 s). Two runs give byte-identical summary and stint CSVs.
+    - **Result:** baseline MAE 1.80 s, RMSE 3.32 s (model OOF 1.18 / 1.69 s). The model is better on 32 of 50 stints. Per-stint MAE difference: mean −1.60 s, median −0.14 s. Paired t = −3.32, p = 0.0008. Wilcoxon p = 0.011. So the model beats persistence at 0.05.
+      - The mean is driven by a few single-row stints where lap *t* was 9–12 s off its next lap and persistence carries that error forward. The typical gain is the median, 0.14 s, and the Wilcoxon p is the more honest of the two.
+      - Per fold, the baseline MAE is 2.13 / 2.72 / 1.08 / 2.01 / 1.27 s against the model's 1.12 / 1.68 / 1.08 / 0.75 / 1.51 s. The model ties persistence in fold 3 and loses in fold 5.
+      - This only shows that the model beats a trivial one-step forecast. It says nothing about how the strategy holds up (planned Strategy Validation), and it doesn't compare candidate models (#13, #27).
 
 - [ ] **#13 The saved model is the weakest of the three on the test split**
   - **Where:** `scripts/train_model.py` always saves XGBoost.
@@ -256,7 +265,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - There is no naive baseline, so it isn't known whether any model beats a trivial forecast.
     - The reasoning is asserted, not tested. "Random Forest produces noisy, stepwise predictions, unstable in autoregressive simulations" and "XGBoost: stable rollouts" were never checked: only XGBoost is ever rolled out. The "aligns with real-world motorsport pipelines" line has no source.
   - **Fix:**
-    - [ ] **Baselines:** the next lap equals lap *t*'s fcp, and the next lap equals `stint_avg_pace`. Every model has to beat these to count.
+    - [ ] **Baselines:** the next lap equals lap *t*'s fcp, and the next lap equals `stint_avg_pace`. Every model has to beat these to count. Since #5, `validate_strategy.py` scores the first (persistence) per fold and tests XGBoost against it per stint; the `stint_avg_pace` baseline and the other candidates are still to do.
     - [ ] **More candidates:** regularised linear models (Ridge / Lasso), a simple per-compound linear degradation model, ExtraTrees and `HistGradientBoostingRegressor` from scikit-learn. LightGBM or others would be a new dependency, so confirm first.
     - [ ] **Tuning:** a small hyperparameter search for each model (for XGBoost: shallower trees, `min_child_weight`, regularisation), scored with grouped CV by stint (#18). The tuned values go in `.env`.
     - [ ] **Fewer inputs:** try reduced feature sets (e.g. without the car-data aggregates or collinear groups, see #25), since 36 inputs on 153 rows is a lot.
@@ -446,7 +455,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **readme.txt:** Exploratory Data Analysis and Statistical Inference.
 
 - [ ] **#26 No statistical inference on the practice data**
-  - **Where:** no script. The only statistical test is the placeholder t-test in `validate_strategy.py` (#5), which runs on random numbers.
+  - **Where:** no script. The only statistical test is in `validate_strategy.py` (#5), and it tests the model's errors against a persistence baseline, not effects in the data.
   - **Problem:** nothing tests whether the effects the strategy depends on are real in the data: differences in pace between compounds, tyre degradation, and pace changes between sessions.
   - **Fix:** add tests on the real laps, in the #25 stage or next to it:
     - [ ] **Compound pace:** do SOFT, MEDIUM and HARD differ in `fuel_corrected_pace`? Use pairwise Welch t-tests or one-way ANOVA / Kruskal–Wallis, within session so the session's pace level doesn't confound it.
@@ -454,7 +463,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - [ ] **Session pace:** do FP1, FP2 and FP3 differ (track evolution)?
   - **Watch out:** laps within one stint aren't independent (the same issue as #18), so per-lap tests overstate significance. Test on stint-level values (e.g. per-stint slopes or means) or account for the grouping.
   - `scipy` is already pinned. `statsmodels` isn't installed, so confirm before adding a dependency.
-  - **Depends on:** #25 (same data, likely the same stage). A real test here could replace the #5 placeholder.
+  - **Depends on:** #25 (same data, likely the same stage).
   - **readme.txt:** Exploratory Data Analysis and Statistical Inference.
 
 - [ ] **#15 Results documentation**
@@ -466,7 +475,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - [ ] **Feature engineering:** final dataset shape, how many laps matched a stint, and how many rows are usable for training.
     - [ ] **Model comparison:** test MAE, RMSE and R² for all three models, in seconds rather than z-scores, with the metric chart and prediction overlay plots and what they show.
     - [ ] **Feature importance:** top features for Random Forest and XGBoost, and whether they match tyre physics (tyre age, compound, track temperature).
-    - [ ] **Validation:** CV results per fold with the spread, the residual plot and what it shows about bias, and the t-test replaced with a meaningful test or removed (#5).
+    - [ ] **Validation:** CV results per fold with the spread, the residual plot and what it shows about bias, and the model-vs-persistence test (#5, done).
     - [ ] **Strategy:** recommended strategy (compound sequence and pit laps), predicted race time in seconds, the next-best alternatives and the gap to them, and predicted pace by compound across the race.
     - [ ] **Limitations:** a short note on which results depend on items still open above.
     - [ ] Decide where this lives (a results section in `readme.txt` / `README.md`, or a separate `RESULTS.md`) and link it from both readmes.

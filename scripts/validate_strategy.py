@@ -3,14 +3,14 @@ import numpy as np
 import joblib
 import matplotlib.pyplot as plt
 from sklearn.model_selection import GroupKFold
-from scipy.stats import ttest_ind
+from scipy.stats import ttest_rel, wilcoxon
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import os
 import warnings
 from datetime import datetime
 
 from feature_config import TARGET_GROUP_COLUMNS, build_next_lap_target
-from env_config import env_str, env_int
+from env_config import env_str, env_int, env_float
 
 warnings.filterwarnings("ignore")
 
@@ -40,6 +40,7 @@ DATASET_PATH = os.path.join(env_str("DATA_DIR"), env_str("PROCESSED_DIR"), env_s
 MODEL_BUNDLE_PATH = env_str("MODEL_BUNDLE_PATH")
 CV_FOLDS = env_int("CV_FOLDS")
 RANDOM_STATE = env_int("RANDOM_STATE")
+SIGNIFICANCE_LEVEL = env_float("SIGNIFICANCE_LEVEL")
 
 
 # ============================================================
@@ -70,6 +71,8 @@ X = df[FEATURES].replace([np.inf, -np.inf], np.nan).fillna(bundle["medians"]).va
 y = df["target_next_fcp"].values
 # One group per stint, so a stint's laps never sit in both the train and test folds
 groups = df.groupby(TARGET_GROUP_COLUMNS).ngroup().values
+# Persistence baseline: lap t+1's fcp = lap t's fcp. Nothing is fitted, so it is out-of-sample for every row
+baseline_pred = df["fuel_corrected_pace"].values
 
 log(f"Rows after target shift drop: {len(df)} ({len(np.unique(groups))} stints)")
 
@@ -100,6 +103,7 @@ for fold, (train_idx, test_idx) in enumerate(kf.split(X, y, groups), 1):
 
     mae =mean_absolute_error(y[test_idx], pred)
     rmse = np.sqrt(mean_squared_error(y[test_idx], pred))
+    base_mae = mean_absolute_error(y[test_idx], baseline_pred[test_idx])
 
     cv_mae.append(mae)
     cv_rmse.append(rmse)
@@ -109,12 +113,13 @@ for fold, (train_idx, test_idx) in enumerate(kf.split(X, y, groups), 1):
         "test_stints": test_stints,
         "test_rows": len(test_idx),
         "MAE": mae,
-        "RMSE": rmse
+        "RMSE": rmse,
+        "baseline_MAE": base_mae
     })
 
     log(
         f" Fold {fold} → {test_stints} stints / {len(test_idx)} rows, {shared} shared, "
-        f"MAE={mae:.4f} s, RMSE={rmse:.4f} s"
+        f"MAE={mae:.4f} s, RMSE={rmse:.4f} s, baseline MAE={base_mae:.4f} s"
     )
 
 mean_mae = np.mean(cv_mae)
@@ -154,6 +159,7 @@ oof_df = df[["session_key", "driver_number", "stint_number", "lap_number", "targ
 oof_df["oof_pred"] = oof_pred
 oof_df["residual"] = residuals
 oof_df["fold"] = oof_fold
+oof_df["baseline_pred"] = baseline_pred
 oof_file = f"{SCRIPT_NAME}_oof_predictions.csv"
 oof_df.to_csv(f"{RESULTS_DIR}/{oof_file}", index=False)
 generated_files.append(oof_file)
@@ -174,22 +180,49 @@ log("Residual plot saved.")
 
 
 # ============================================================
-# T-TEST EXAMPLE
+# BASELINE SIGNIFICANCE TEST
 # ============================================================
-log("\nRunning example t-test...")
+log("\nTesting the model against the persistence baseline (lap t+1 = lap t)...")
 
-s1 = np.random.normal(4800, 10, size=500)
-s2 = np.random.normal(4820, 10, size=500)
+base_mae = mean_absolute_error(y, baseline_pred)
+base_rmse = np.sqrt(mean_squared_error(y, baseline_pred))
 
-t, p = ttest_ind(s1, s2)
+log(f"Baseline MAE = {base_mae:.4f} s, baseline RMSE = {base_rmse:.4f} s")
 
-log(f"T-test p-value: {p}")
+# Laps of one stint aren't independent, so each stint is one paired observation
+stint_df = oof_df.assign(
+    model_abs_err=np.abs(residuals),
+    baseline_abs_err=np.abs(y - baseline_pred)
+)
+stint_df = stint_df.groupby(TARGET_GROUP_COLUMNS).agg(
+    session_key=("session_key", "first"),
+    rows=("lap_number", "size"),
+    fold=("fold", "first"),
+    model_MAE=("model_abs_err", "mean"),
+    baseline_MAE=("baseline_abs_err", "mean")
+).reset_index()
+stint_df["diff"] = stint_df["model_MAE"] - stint_df["baseline_MAE"]
 
-# Save t-test distributions
-ttest_df = pd.DataFrame({"sample1": s1, "sample2": s2})
-ttest_file = f"{SCRIPT_NAME}_ttest_samples.csv"
-ttest_df.to_csv(f"{RESULTS_DIR}/{ttest_file}", index=False)
-generated_files.append(ttest_file)
+# One-sided: is the model's per-stint error lower than the baseline's?
+t_stat, t_p = ttest_rel(stint_df["model_MAE"], stint_df["baseline_MAE"], alternative="less")
+# Wilcoxon signed-rank as a check, since the residuals are right-skewed
+_, w_p = wilcoxon(stint_df["model_MAE"], stint_df["baseline_MAE"], alternative="less")
+
+model_better = int((stint_df["diff"] < 0).sum())
+log(
+    f"Stints: {len(stint_df)}, model better on {model_better}; "
+    f"per-stint MAE difference mean {stint_df['diff'].mean():+.4f} s, median {stint_df['diff'].median():+.4f} s"
+)
+log(f"Paired t-test (one-sided): t = {t_stat:.4f}, p = {t_p:.6f}")
+log(f"Wilcoxon signed-rank (one-sided): p = {w_p:.6f}")
+if t_p < SIGNIFICANCE_LEVEL and w_p < SIGNIFICANCE_LEVEL:
+    log(f"Model beats the persistence baseline on unseen stints at alpha = {SIGNIFICANCE_LEVEL}")
+else:
+    log(f"Model does NOT significantly beat the persistence baseline at alpha = {SIGNIFICANCE_LEVEL}")
+
+stint_file = f"{SCRIPT_NAME}_baseline_test_stints.csv"
+stint_df.to_csv(f"{RESULTS_DIR}/{stint_file}", index=False)
+generated_files.append(stint_file)
 
 
 # ============================================================
@@ -201,7 +234,11 @@ summary = pd.DataFrame({
     "OOF_MAE": [oof_mae],
     "OOF_RMSE": [oof_rmse],
     "OOF_mean_residual": [oof_bias],
-    "t_test_p": [p]
+    "baseline_MAE": [base_mae],
+    "baseline_RMSE": [base_rmse],
+    "paired_t_stat": [t_stat],
+    "paired_t_p": [t_p],
+    "wilcoxon_p": [w_p]
 })
 
 summary_file = f"{SCRIPT_NAME}_validation_summary.csv"
