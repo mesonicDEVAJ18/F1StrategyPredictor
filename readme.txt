@@ -439,7 +439,7 @@ Predictions stay within 97-101 s. Every compound and set age predicts 99.0-99.4 
 So the model has learnt almost no compound or tyre-age effect from the 153 training rows.
 Per-lap rollouts are saved to scripts/results/strategy_simulator/strategy_simulator_stint_rollouts.csv, and the summed fcp per compound,
 set age and stint length to strategy_simulator_stint_totals.csv.
-[TODO #12, P3, see diagnostic.md] The starting-compound setting in start_features is overwritten and has no effect.
+Each stint's compound is set by the rollout; the median baseline has no starting compound.
 A fuel penalty of 0.035 x (laps of fuel remaining in the race) is added to each race lap a stint covers, so a stint's time is its summed
 rollout fcp plus the fuel of its race laps.
 
@@ -520,8 +520,7 @@ Known bugs and their effect on the results are documented in diagnostic.md.
 Open TODOs by priority (IDs as in diagnostic.md; each is tagged [TODO #N, ...] where it applies above):
 P1, results are invalid until fixed:  none open
 P2, method or validation misleading:  #13 model choice, #27 model experiments and reasoning
-P3, completeness and cleanup:         #12 dead starting-compound setting, #25 no EDA, #26 no statistical inference,
-                                      #15 results documentation
+P3, completeness and cleanup:         #25 no EDA, #26 no statistical inference, #15 results documentation
 [TODO #15, P3, see diagnostic.md] Results are not written up yet. Do this once #18 and #13 are settled, since the numbers will change.
 
 THANK YOU

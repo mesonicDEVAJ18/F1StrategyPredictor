@@ -391,16 +391,10 @@ def optimize_strategy(total_laps, base_features):
 # ============================================================
 if __name__ == "__main__":
     # Baseline = training medians (features are in physical units, so 0 is not "average").
-    # Speed traps and car-data aggregates stay at these medians for the whole rollout.
+    # Speed traps and car-data aggregates stay at these medians for the whole rollout;
+    # rollout_stint() sets each stint's compound, tyre age, sector times and stint_avg_pace.
     start_features = {f: 0.0 for f in SIM_FEATURE_COLUMNS}
     start_features.update({f: v for f, v in MEDIANS.items() if f in start_features})
-
-    # default initial tyres (tyre age, sector times and stint_avg_pace are set by the rollout)
-    start_features.update({
-        "compound_HARD": 1,
-        "compound_MEDIUM": 0,
-        "compound_SOFT": 0,
-    })
 
     best = optimize_strategy(NUM_LAPS, start_features)
 

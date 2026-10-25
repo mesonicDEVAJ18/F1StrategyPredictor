@@ -250,14 +250,6 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
       - Per fold, the baseline MAE is 2.13 / 2.72 / 1.08 / 2.01 / 1.27 s against the model's 1.12 / 1.68 / 1.08 / 0.75 / 1.51 s. The model ties persistence in fold 3 and loses in fold 5.
       - This only shows that the model beats a trivial one-step forecast. It says nothing about how the strategy holds up (planned Strategy Validation), and it doesn't compare candidate models (#13, #27).
 
-- [ ] **#13 The saved model is the weakest of the three on the test split**
-  - **Where:** `scripts/train_model.py` always saves XGBoost.
-  - **Problem:** `readme.txt` justifies XGBoost on qualitative grounds. Before #4 was fixed, the held-out R² was 0.043 for Linear Regression, 0.060 for Random Forest and −0.039 for XGBoost. After #4, XGBoost is now the best of the three: 0.534 for LR, 0.625 for RF and 0.652 for XGB. After #7 (seconds, 25 inputs with the session one-hot), it is 0.586 / 0.640 / 0.656, with MAE 12.12 / 10.65 / 10.51 s. After #17 (causal `stint_avg_pace`), it is 0.373 / 0.565 / 0.620, with MAE 16.62 / 12.54 / 12.06 s: XGBoost's lead over Random Forest grew, but it still comes from one shuffled split. After #21 and #19 (fuel term subtracted), it is 0.374 / 0.568 / 0.615, with MAE 16.64 / 12.42 / 12.19 s. After #20 (non-push laps dropped, 153 target rows), it is 0.157 / 0.505 / 0.590, with MAE 1.67 / 1.13 / 1.03 s. After #16 (10 car-data inputs, 36 in all), it is 0.308 / 0.460 / 0.510, with MAE 1.44 / 1.20 / 1.07 s. After #18 (split grouped by stint, 10 test stints), it is −1.002 / 0.250 / 0.353, with MAE 2.37 / 1.32 / 1.12 s: XGBoost is still the best on the held-out stints, but only one model's grouped CV is run.
-  - **Fix:** re-run the comparison with grouped CV for all three models (#18 is fixed, so the split is by stint). Then either keep XGBoost with metrics that support it, or save the best model and update the reasoning.
-  - **Depends on:** nothing left (#2, #3, #4, #17 and #18 are fixed).
-  - **See also:** #27 widens the comparison beyond these three models.
-  - **readme.txt:** ML Modelling step 3, results table.
-
 - [ ] **#27 The model choice rests on three untuned models and untested reasoning**
   - **Where:** `scripts/train_model.py` (Linear Regression, Random Forest 200 trees, XGBoost with one fixed set of hyperparameters from `.env`); the "Reasoning" paragraph in `readme.txt` ML Modelling step 3.
   - **Problem:**
@@ -277,11 +269,13 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
 
 ## P3: completeness and cleanup
 
-- [ ] **#12 The starting compound setting has no effect**
+- [x] **#12 The starting compound setting has no effect**
   - **Where:** `start_features` in `__main__` of `scripts/strategy_simulator.py`.
   - **Problem:** `compound_HARD = 1` is set, but `precompute_lap_predictions()` (now `rollout_stint()`) overwrites the compound one-hots for every compound anyway. Since #7, `start_features` starts from the training medians, not zeros, but the compound override is still dead.
   - **Fix:** remove the setting. #9 is done and seeds every stint from the medians with the stint's own compound, so the setting has no remaining use.
   - **readme.txt:** Race Simulation step 2.
+  - **Fixed:** the `compound_HARD = 1` / `compound_MEDIUM = 0` / `compound_SOFT = 0` block is removed from `__main__`, so `start_features` is only the training medians. `rollout_stint()` sets every stint's compound one-hots, tyre age, sector times and `stint_avg_pace`, as before.
+    - **Checks:** `strategy_simulator.py` was re-run on the same model bundle. All seven files in `scripts/results/strategy_simulator/` (rollouts, stint totals, all strategy results, best strategy, summary, log, manifest) are byte-identical to the previous run. The best strategy is unchanged: MEDIUM(0)–HARD(0), pit on lap 10, 5774.26 s.
 
 - [x] **#14 The car-data stage is not functional**
   - **Where:** `scripts/process_cardata.py`.
@@ -388,7 +382,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **Problem:** the race constants (`PIT_LOSS = 22.0`, `NUM_LAPS = 57`, `FUEL_PENALTY_PER_LAP`, the pit window `range(10, total_laps - 10)`, stops `[0, 1, 2]`) and `FUEL_EFFECT_K` were literals. So were the cleaning thresholds (30 s, 2× median, 50 km/h, IQR × 3, weather and car-data |z| > 3, car-data limits), the 5 min weather-merge tolerance, the model hyperparameters, the split and CV settings, `random_state=42`, and every data/results path and file name. Trying a different pit loss or another weekend's files meant editing code, and the same value (e.g. the model bundle path, the seed) was repeated across scripts.
   - **Fix:** move them to one settings file that every script reads.
   - **Fixed:** settings live in `.env` at the repo root, which is committed: there are no secrets, and a fresh clone runs as-is. The new `scripts/env_config.py` parses it, with no new dependency. Variables already set in the environment win, so `$env:PIT_LOSS_S="25"; python strategy_simulator.py` overrides one run. The getters (`env_str` / `env_int` / `env_float` / `env_list`) raise `KeyError` on a missing key instead of falling back to a hidden default. Each script reads its keys once at module level. `FUEL_EFFECT_K` stays exported from `feature_config.py`, so its importers are unchanged.
-    - **Kept in code** (schema or format, not settings): the column lists and `COMPOUNDS`, the throttle 0–100 / brake {0, 100} encodings, the XGBoost objective, `n_jobs`, plot cosmetics, the t-test placeholder (#5) and the dead `compound_HARD = 1` start setting (#12).
+    - **Kept in code** (schema or format, not settings): the column lists and `COMPOUNDS`, the throttle 0–100 / brake {0, 100} encodings, the XGBoost objective, `n_jobs`, plot cosmetics, the t-test placeholder (#5) and the dead `compound_HARD = 1` start setting (#12, removed since).
     - **Checks:** the full pipeline was run before and after. All 69 output CSV/JSON/TXT files are identical (CSVs to rtol 1e-9; the RandomForest RMSE differs only in the last digit between runs anyway). The exceptions are the unseeded t-test samples and p-value (#5) and one log line now reading "within 5min". The best strategy is unchanged (SOFT–SOFT–SOFT, pits 12 and 13, 5695.12 s). With `PIT_LOSS_S=30` it becomes 5711.12 s, which is 2 stops × 8 s more, as expected.
   - **readme.txt:** Running the Pipeline.
 
