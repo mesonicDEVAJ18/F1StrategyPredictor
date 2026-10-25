@@ -1,0 +1,13 @@
+eda_summary_stats.csv
+eda_missing_values.csv
+eda_pace_distributions.png
+eda_pace_by_session_compound.csv
+eda_pace_vs_tyre_age.png
+eda_degradation_slopes.csv
+eda_correlation_matrix.csv
+eda_correlation_matrix_spearman.csv
+eda_correlation_heatmap.png
+eda_collinear_pairs.csv
+eda_target_correlations.csv
+eda_row_coverage.csv
+eda_stint_lengths.png

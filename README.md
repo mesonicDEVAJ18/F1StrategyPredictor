@@ -164,6 +164,10 @@ Environmental conditions:
 
 > **Note**: Track evolution was excluded to avoid deriving dependent variables.
 
+### Exploratory Data Analysis (`eda.py`)
+
+Runs after `feature_engineer.py` and describes the engineered dataset before it is modelled; outputs go to `scripts/results/eda/`. It covers summary statistics and missing values per session, lap-time and fuel-corrected-pace distributions by session and compound, pace against tyre age (raw, and with each stint's mean removed so driver and session offsets drop out), correlations between the inputs and with the next-lap target (flagging pairs at |r| ≥ `EDA_COLLINEAR_THRESHOLD`), and row coverage before and after the next-lap target shift. On Bahrain 2025, within-stint pace rises by about 0.17 s/lap on SOFT and 0.04–0.05 s/lap on MEDIUM/HARD, but only 153 of 467 laps (7 in FP3) survive the target shift, and the session one-hots and weather inputs form one collinear group.
+
 ---
 
 ## 🤖 Machine Learning Model
@@ -315,9 +319,10 @@ python master.py
 | 4 | `process_weather.py` | `data/processed/cleaned_weather.csv` |
 | 5 | `process_cardata.py` | `data/processed/cardata_per_lap_clean.csv` (merged by `feature_engineer.py`) |
 | 6 | `feature_engineer.py` | `data/processed/final_engineered_dataset.csv` |
-| 7 | `train_model.py` | `scripts/results/train_model/train_model_xgb_model.pkl` |
-| 8 | `strategy_simulator.py` | best strategy for `SIM_DRIVER` |
-| 9 | `validate_strategy.py` | CV metrics, residual plot |
+| 7 | `eda.py` | EDA tables and plots in `scripts/results/eda/` (nothing downstream reads them) |
+| 8 | `train_model.py` | `scripts/results/train_model/train_model_xgb_model.pkl` |
+| 9 | `strategy_simulator.py` | best strategy for `SIM_DRIVER` |
+| 10 | `validate_strategy.py` | CV metrics, residual plot |
 
 Each script can also be run on its own, and writes its log and outputs to `scripts/results/<script_name>/`.
 

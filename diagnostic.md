@@ -260,7 +260,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - [ ] **Baselines:** the next lap equals lap *t*'s fcp, and the next lap equals `stint_avg_pace`. Every model has to beat these to count. Since #5, `validate_strategy.py` scores the first (persistence) per fold and tests XGBoost against it per stint; the `stint_avg_pace` baseline and the other candidates are still to do.
     - [ ] **More candidates:** regularised linear models (Ridge / Lasso), a simple per-compound linear degradation model, ExtraTrees and `HistGradientBoostingRegressor` from scikit-learn. LightGBM or others would be a new dependency, so confirm first.
     - [ ] **Tuning:** a small hyperparameter search for each model (for XGBoost: shallower trees, `min_child_weight`, regularisation), scored with grouped CV by stint (#18). The tuned values go in `.env`.
-    - [ ] **Fewer inputs:** try reduced feature sets (e.g. without the car-data aggregates or collinear groups, see #25), since 36 inputs on 153 rows is a lot.
+    - [ ] **Fewer inputs:** try reduced feature sets (e.g. without the car-data aggregates, the 3 constant inputs or the collinear groups found by `eda.py`, see #25), since 36 inputs on 153 rows is a lot.
     - [ ] **Rollout comparison:** roll each serious candidate out through the simulator's `rollout_stint()`. Compare stability (largest lap-to-lap step, drift), whether pace rises with tyre age, and whether compounds come out in a plausible order. One-step error alone doesn't show how a model behaves when rolled forward.
     - [ ] **Report:** per-fold MAE / RMSE / R² with the spread for every candidate, not a single split.
     - [ ] **Update the reasoning** in `readme.txt` ML Modelling step 3 to match the results. Keep each claim only if the experiments back it, replace the asserted ones with the measured comparison, drop or source the "real-world pipelines" line, and update the results table and the "XGBoost is kept" sentence. If another model wins, save it instead (the bundle format and the simulator would need to accept it).
@@ -435,18 +435,26 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
       - `RACE_WEEKEND=miami`, `nowhere` and `RACE_YEAR=2023` each raise the expected error.
     - **Still open:** the tyre allocation and return rules, `PIT_LOSS_S`, the fuel settings and the cleaning thresholds are the same for every weekend and were tuned on Bahrain 2025. Results on other weekends carry every open item above (#18 in particular).
 
-- [ ] **#25 No exploratory data analysis**
+- [x] **#25 No exploratory data analysis**
   - **Where:** no script. `readme.txt` has an "EXPLORATORY DATA ANALYSIS AND STATISTICAL Inference" heading with nothing under it, and `master.py` has no EDA stage.
   - **Problem:** nothing looks at the data before it is modelled. The only plots judge the model after training: the prediction overlay, metric chart and feature importance in `train_model.py`, and the residual plot in `validate_strategy.py` (#6).
   - **Effect:** the cleaning thresholds, the feature set (36 inputs on 153 target rows) and the reading of the flat rollouts (#16, #20) aren't backed by a look at the data. For example, nothing shows whether the practice laps contain a compound or tyre-age effect for the model to learn.
   - **Fix:** a new stage `scripts/eda.py`, run after `feature_engineer.py` in `master.py`, with its own `results/eda/` directory, log and manifest. It reads `data/processed/final_engineered_dataset.csv`. Cover:
-    - [ ] **Summary statistics and missing values** per column and session.
-    - [ ] **Distributions** of `lap_duration` / `fuel_corrected_pace` by session and compound.
-    - [ ] **Pace against tyre age:** `fuel_corrected_pace` against `tyre_age` per compound, i.e. the degradation the model is meant to learn.
-    - [ ] **Correlations** between the 36 inputs and with the target, flagging collinear groups (sector times, speed traps and car-data aggregates).
-    - [ ] **Row coverage:** rows per session, compound and stint before and after the next-lap target shift (467 → 153, with only 7 FP3 rows).
+    - [x] **Summary statistics and missing values** per column and session.
+    - [x] **Distributions** of `lap_duration` / `fuel_corrected_pace` by session and compound.
+    - [x] **Pace against tyre age:** `fuel_corrected_pace` against `tyre_age` per compound, i.e. the degradation the model is meant to learn.
+    - [x] **Correlations** between the 36 inputs and with the target, flagging collinear groups (sector times, speed traps and car-data aggregates).
+    - [x] **Row coverage:** rows per session, compound and stint before and after the next-lap target shift (467 → 153, with only 7 FP3 rows).
   - Any thresholds go in `.env`; take the column lists from `feature_config.py`.
   - **readme.txt:** Exploratory Data Analysis and Statistical Inference.
+  - **Fixed:**
+    - **`scripts/eda.py`:** a new stage, run by `master.py` between `feature_engineer.py` and `train_model.py`. It reads `final_engineered_dataset.csv`, writes only to `results/eda/` (log, manifest, 9 CSVs, 4 plots) and has no hand-off file, so the model, simulator and validation are unchanged. Column lists come from `feature_config.py`, and the target rows from `build_next_lap_target()`. `lap_duration` (dropped by `feature_engineer.py`) is rebuilt as `fuel_corrected_pace + FUEL_EFFECT_K × laps_remaining`, and matches the sector sum on all 467 laps.
+    - **`.env`:** `EDA_COLLINEAR_THRESHOLD=0.8`, the |Pearson r| at which two inputs are flagged as collinear.
+    - **Findings, Bahrain 2025:**
+      - **Missing / constant:** `stint_avg_pace` is NaN on 223 rows (47.8%, every stint's first lap), the car-data aggregates on 19 (4.1%). `segments_sector_1`, `segments_sector_2` and `rainfall` are constant, so 3 of the 36 inputs carry nothing.
+      - **Degradation:** with each stint's mean removed, a linear fit of `fuel_corrected_pace` on `tyre_age` gives +0.168 s/lap on SOFT, +0.041 on MEDIUM and +0.053 on HARD (35 / 31 / 21 multi-lap stints). Descriptive only; whether these differ from 0 is #26.
+      - **Correlations (153 target rows):** 18 input pairs at |r| ≥ 0.8 in 4 groups: `session_FP1`/`session_FP2` with air and track temperature, humidity and pressure; `duration_sector_2` with `mean_speed`; `st_speed` with `max_speed`; `mean_throttle` with `full_throttle_pct`. The sector times and speed traps are not collinear among themselves at 0.8. The top target correlations are `full_throttle_pct` (+0.44), `i2_speed` (+0.44) and `mean_throttle` (+0.36); `tyre_age` is +0.02 and the compound one-hots within ±0.13, as between-stint pace levels swamp the within-stint trend.
+      - **Coverage:** 467 laps in 223 stints, 136 of them with a single clean lap; 153 target rows in 50 stints (FP1 45 / FP2 101 / FP3 7; SOFT 64 / MEDIUM 63 / HARD 26).
 
 - [ ] **#26 No statistical inference on the practice data**
   - **Where:** no script. The only statistical test is in `validate_strategy.py` (#5), and it tests the model's errors against a persistence baseline, not effects in the data.

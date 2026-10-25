@@ -47,6 +47,7 @@ def main():
     # 2. Run the main pipeline in specific order
     pipeline_sequence = [
         "feature_engineer.py",      # Feature Engineering
+        "eda.py",                   # Exploratory data analysis (reads the engineered dataset only)
         "train_model.py",           # Training
         "strategy_simulator.py",    # Simulation
         "validate_strategy.py"      # Validation

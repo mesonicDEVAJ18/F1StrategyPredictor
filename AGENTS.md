@@ -35,6 +35,7 @@ scripts/            # ALL pipeline code lives here; run scripts FROM this direct
   process_weather.py    # clean + scale weather
   process_cardata.py    # clean car telemetry (whole field), aggregate per lap, unscaled; model inputs
   feature_engineer.py   # merge laps+stints+weather+car data, build engineered features
+  eda.py                # exploratory data analysis of the engineered dataset (read-only, no hand-off)
   train_model.py        # train/compare models, persist XGBoost bundle
   strategy_simulator.py # enumerate + simulate strategies, pick best
   validate_strategy.py  # cross-validation, residual plot, model-vs-persistence test (strategy robustness is planned, not built)
@@ -69,11 +70,11 @@ python process_laps.py      # or run any single stage on its own
 ```
 
 `master.py` runs, in order: `race_weekend` → `process_laps` → `process_stints` → `tyre_sets` → `process_weather` →
-`process_cardata`, then `feature_engineer` → `train_model` → `strategy_simulator` →
+`process_cardata`, then `feature_engineer` → `eda` → `train_model` → `strategy_simulator` →
 `validate_strategy`. It aborts the whole run if any stage exits non-zero.
 
 **Known gaps (don't "fix" silently — confirm intent first):**
-- Open issues (the unconfirmed model choice, no EDA, etc.) are listed in [diagnostic.md](diagnostic.md). Fixing them
+- Open issues (the unconfirmed model choice, no statistical inference, etc.) are listed in [diagnostic.md](diagnostic.md). Fixing them
   changes results, so confirm before fixing, and update diagnostic.md when one is resolved.
 
 ## Data flow / hand-offs
@@ -111,6 +112,11 @@ Scripts communicate through CSVs in `data/processed/`, not by importing each oth
   `session_FP1/FP2/FP3` one-hot, built from `process_laps.py`'s `session_name`. The car-data aggregates
   (`CARDATA_FEATURE_COLUMNS`) are left-merged on lap *t*'s keys. Laps without telemetry stay NaN and get the
   training medians, and the simulator holds them at those medians.
+- `eda.py` reads the engineered dataset and writes only to `results/eda/` (no hand-off file, nothing downstream
+  reads it): summary statistics and missing values, pace distributions by session and compound, pace against
+  tyre age (raw and with each stint's mean removed), input/target correlations with collinear groups
+  (`EDA_COLLINEAR_THRESHOLD`), and row coverage before and after `build_next_lap_target()`. `lap_duration` is
+  rebuilt from `fuel_corrected_pace` with `FUEL_EFFECT_K`. Descriptive only; tests on the data are #26.
 - `train_model.py` reads the engineered dataset → `results/train_model/train_model_xgb_model.pkl`
   (a joblib bundle: `{"model": ..., "features": [...], "medians": {...}, "session_weights": {...}}`;
   `medians` are the training medians used for `fillna`, and `session_weights` is each session's share of

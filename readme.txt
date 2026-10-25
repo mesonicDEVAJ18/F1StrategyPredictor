@@ -317,8 +317,34 @@ session_key and driver_number stay in it as identifiers for building the target;
 track evolution was not chosen as an engineered parameter, as it would've been a derived dependant value that would not have contributed to the model.
 
 EXPLORATORY DATA ANALYSIS AND STATISTICAL Inference
-[TODO #25, P3, see diagnostic.md] Not implemented yet: no stage looks at the data (distributions, pace against tyre age, correlations,
-row coverage) before it is modelled.
+EDA (eda.py) runs after feature_engineer.py and before train_model.py. It reads final_engineered_dataset.csv, changes nothing
+downstream, and writes its tables, plots and log to scripts/results/eda/. Column lists come from feature_config.py.
+lap_duration is dropped by feature_engineer.py, so it is rebuilt as fuel_corrected_pace + k*laps_remaining; it matches the sector sum exactly.
+Weather columns are z-scores (process_weather.py); everything else is in physical units.
+
+1. Summary statistics and missing values, per column and session (eda_summary_stats.csv, eda_missing_values.csv).
+stint_avg_pace is missing on every stint's first lap (223 rows, 47.8%), the 10 car-data aggregates on 19 laps (4.1%), and the
+segment counts on a few FP1 laps. segments_sector_1, segments_sector_2 and rainfall are constant, so they carry nothing for the model.
+
+2. Distributions of lap_duration and fuel_corrected_pace by session and compound (eda_pace_distributions.png,
+eda_pace_by_session_compound.csv). FP3 is the fastest session (fcp median ~94-97 s against ~96-99 s in FP1/FP2), and SOFT the
+fastest compound within each session.
+
+3. Pace against tyre age (eda_pace_vs_tyre_age.png, eda_degradation_slopes.csv). Raw pace mixes drivers, sessions and run plans
+(the fastest laps cluster at tyre age 2), so each lap's fcp is also shown minus its stint's mean, which leaves the change within a stint.
+A linear fit of that on tyre_age (descriptive, no inference) gives +0.17 s/lap on SOFT, +0.04 s/lap on MEDIUM and +0.05 s/lap on HARD,
+from 35 / 31 / 21 stints with more than one clean lap. So the data does hold a degradation trend, steepest on SOFT, for the model to learn.
+
+4. Correlations (eda_correlation_matrix*.csv, eda_correlation_heatmap.png, eda_collinear_pairs.csv, eda_target_correlations.csv), on the
+153 target rows. Inputs with |Pearson r| >= EDA_COLLINEAR_THRESHOLD (0.8, .env) are grouped: the session one-hots with air/track
+temperature, humidity and pressure (weather is nearly constant within a session), sector 2 time with mean speed, st_speed with max
+speed, and mean throttle with full-throttle share. The strongest single correlations with the target are full_throttle_pct, i2_speed and
+mean_throttle (r ~0.35-0.44); tyre_age and the compound one-hots are near 0 on their own, because the pace level between stints swamps
+the within-stint trend in point 3.
+
+5. Row coverage (eda_row_coverage.csv, eda_stint_lengths.png). The 467 clean laps sit in 223 stints, 136 of which have a single clean
+lap; after the next-lap target shift 153 rows in 50 stints remain (FP1 45, FP2 101, FP3 7; SOFT 64, MEDIUM 63, HARD 26).
+
 [TODO #26, P3, see diagnostic.md] Not implemented yet: no test on the practice laps of compound pace differences, degradation slopes or
 session pace.
 
@@ -520,7 +546,7 @@ Known bugs and their effect on the results are documented in diagnostic.md.
 Open TODOs by priority (IDs as in diagnostic.md; each is tagged [TODO #N, ...] where it applies above):
 P1, results are invalid until fixed:  none open
 P2, method or validation misleading:  #13 model choice, #27 model experiments and reasoning
-P3, completeness and cleanup:         #25 no EDA, #26 no statistical inference, #15 results documentation
+P3, completeness and cleanup:         #26 no statistical inference, #15 results documentation
 [TODO #15, P3, see diagnostic.md] Results are not written up yet. Do this once #18 and #13 are settled, since the numbers will change.
 
 THANK YOU
