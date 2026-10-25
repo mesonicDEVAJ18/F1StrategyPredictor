@@ -236,7 +236,7 @@ session_key, driver_number and lap_number as join keys. lap_duration is dropped 
 3. Encoding
 Laps
 segments_sector_1/2/3 arrive as lists of mini-sector status codes; each list is replaced by its length (the number of mini-sectors).
-Driver number was kept numerical as it's friendly to tree based models (decision to use trees explained later) and was used to combine with stints data.
+Driver number was kept numerical as it was used to combine with stints data and has no signifance as its never fed to the model.
 Driver number is not a model input, as it was decided to not build a driver specific model. It is kept in the engineered dataset as an
 identifier only, so the next-lap target can be built per driver.
 session_name is one-hot encoded (in feature_engineer.py) -> session_FP1, session_FP2, session_FP3 (SESSION_COLUMNS in feature_config.py).
@@ -317,7 +317,10 @@ session_key and driver_number stay in it as identifiers for building the target;
 track evolution was not chosen as an engineered parameter, as it would've been a derived dependant value that would not have contributed to the model.
 
 EXPLORATORY DATA ANALYSIS AND STATISTICAL Inference
-Not implemented in the pipeline yet.
+[TODO #25, P3, see diagnostic.md] Not implemented yet: no stage looks at the data (distributions, pace against tyre age, correlations,
+row coverage) before it is modelled.
+[TODO #26, P3, see diagnostic.md] Not implemented yet: no test on the practice laps of compound pace differences, degradation slopes or
+session pace. The only test is the placeholder t-test (#5).
 
 ML MODELLING TO COMPUTE DEGRADATION RATE (train_model.py)
 1. Remove dependant variables to avoid leakage
@@ -343,13 +346,6 @@ The model learns how tyre, weather, stint age, and track conditions evolve into 
 No sneaky future-lap info (no target leakage)
 Designed for autoregressive race simulation (rolling predictions forward lap by lap)
 Degradation is then obtained as an emergent property:
-
-As XGBoost repeatedly predicts future fcp values, the falling trend in predicted pace is degradation.
-No slope assumptions.
-No fixed compound multipliers.
-Just learned tyre physics from FP laps.
-The simulator does this: each stint is rolled forward lap by lap, with every predicted lap fed back as the next lap's inputs
-(see Race Simulation step 2).
 
 Training: the target is built by build_next_lap_target() in feature_config.py (shared by train_model.py and validate_strategy.py).
 fuel_corrected_pace is shifted back one lap within each driver_number + stint_number group (stint_number is the global per-driver number,
@@ -384,6 +380,9 @@ XGBoost's top inputs are stint_avg_pace (0.145), i2_speed (0.100), mean_gear (0.
 and track_temperature 21st. The 10 car-data inputs carry 0.249 of XGB's importance in total.
 Random Forest is led by duration_sector_2 (0.201) and i2_speed (0.153).
 [TODO #13, P2, see diagnostic.md] Re-run the comparison once #18 is fixed and confirm (or change) the saved model.
+[TODO #27, P2, see diagnostic.md] Experiment more: naive baselines, more candidate models, hyperparameter tuning, smaller feature sets and
+a rollout comparison of the candidates. Then update the reasoning above to match: the claims about Random Forest's unstable rollouts and
+XGBoost's stable ones haven't been tested, since only XGBoost is ever rolled out.
 
 This choice also aligns with how real-world motorsport predictive pipelines are structured:
 "predict the next lap's corrected pace and let degradation emerge naturally from repeated predictions."
@@ -512,8 +511,9 @@ Known bugs and their effect on the results are documented in diagnostic.md.
 Open TODOs by priority (IDs as in diagnostic.md; each is tagged [TODO #N, ...] where it applies above):
 P1, results are invalid until fixed:  none open
 P2, method or validation misleading:  #18 splits mix laps of one stint, #6 residual plot leakage, #5 placeholder t-test,
-                                      #13 model choice
-P3, completeness and cleanup:         #12 dead starting-compound setting, #15 results documentation
+                                      #13 model choice, #27 model experiments and reasoning
+P3, completeness and cleanup:         #12 dead starting-compound setting, #25 no EDA, #26 no statistical inference,
+                                      #15 results documentation
 [TODO #15, P3, see diagnostic.md] Results are not written up yet. Do this once #18 and #13 are settled, since the numbers will change.
 
 THANK YOU

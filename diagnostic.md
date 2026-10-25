@@ -230,7 +230,25 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
   - **Problem:** `readme.txt` justifies XGBoost on qualitative grounds. Before #4 was fixed, the held-out R² was 0.043 for Linear Regression, 0.060 for Random Forest and −0.039 for XGBoost. After #4, XGBoost is now the best of the three: 0.534 for LR, 0.625 for RF and 0.652 for XGB. After #7 (seconds, 25 inputs with the session one-hot), it is 0.586 / 0.640 / 0.656, with MAE 12.12 / 10.65 / 10.51 s. After #17 (causal `stint_avg_pace`), it is 0.373 / 0.565 / 0.620, with MAE 16.62 / 12.54 / 12.06 s: XGBoost's lead over Random Forest grew, but it still comes from one shuffled split. After #21 and #19 (fuel term subtracted), it is 0.374 / 0.568 / 0.615, with MAE 16.64 / 12.42 / 12.19 s. After #20 (non-push laps dropped, 153 target rows), it is 0.157 / 0.505 / 0.590, with MAE 1.67 / 1.13 / 1.03 s. After #16 (10 car-data inputs, 36 in all), it is 0.308 / 0.460 / 0.510, with MAE 1.44 / 1.20 / 1.07 s.
   - **Fix:** re-run the comparison once #18 is fixed. Then either keep XGBoost with metrics that support it, or save the best model and update the reasoning.
   - **Depends on:** #18 (#2, #3, #4 and #17 are fixed).
+  - **See also:** #27 widens the comparison beyond these three models.
   - **readme.txt:** ML Modelling step 3, results table.
+
+- [ ] **#27 The model choice rests on three untuned models and untested reasoning**
+  - **Where:** `scripts/train_model.py` (Linear Regression, Random Forest 200 trees, XGBoost with one fixed set of hyperparameters from `.env`); the "Reasoning" paragraph in `readme.txt` ML Modelling step 3.
+  - **Problem:**
+    - Only three models are compared, each with one configuration, on one 31-row held-out split. XGBoost at max depth 7 with 36 inputs on 153 rows is likely to overfit, but no other setting has been tried.
+    - There is no naive baseline, so it isn't known whether any model beats a trivial forecast.
+    - The reasoning is asserted, not tested. "Random Forest produces noisy, stepwise predictions, unstable in autoregressive simulations" and "XGBoost: stable rollouts" were never checked: only XGBoost is ever rolled out. The "aligns with real-world motorsport pipelines" line has no source.
+  - **Fix:**
+    - [ ] **Baselines:** the next lap equals lap *t*'s fcp, and the next lap equals `stint_avg_pace`. Every model has to beat these to count.
+    - [ ] **More candidates:** regularised linear models (Ridge / Lasso), a simple per-compound linear degradation model, ExtraTrees and `HistGradientBoostingRegressor` from scikit-learn. LightGBM or others would be a new dependency, so confirm first.
+    - [ ] **Tuning:** a small hyperparameter search for each model (for XGBoost: shallower trees, `min_child_weight`, regularisation), scored with grouped CV by stint (#18). The tuned values go in `.env`.
+    - [ ] **Fewer inputs:** try reduced feature sets (e.g. without the car-data aggregates or collinear groups, see #25), since 36 inputs on 153 rows is a lot.
+    - [ ] **Rollout comparison:** roll each serious candidate out through the simulator's `rollout_stint()`. Compare stability (largest lap-to-lap step, drift), whether pace rises with tyre age, and whether compounds come out in a plausible order. One-step error alone doesn't show how a model behaves when rolled forward.
+    - [ ] **Report:** per-fold MAE / RMSE / R² with the spread for every candidate, not a single split.
+    - [ ] **Update the reasoning** in `readme.txt` ML Modelling step 3 to match the results. Keep each claim only if the experiments back it, replace the asserted ones with the measured comparison, drop or source the "real-world pipelines" line, and update the results table and the "XGBoost is kept" sentence. If another model wins, save it instead (the bundle format and the simulator would need to accept it).
+  - **Depends on:** #18 (grouped CV). Supersedes the comparison part of #13; close both together.
+  - **readme.txt:** ML Modelling step 3, model choice, reasoning and results table.
 
 ## P3: completeness and cleanup
 
@@ -397,6 +415,31 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
       - **Switching back to Bahrain 2025:** loaded from the cache with no requests, and the results match the Bahrain run above.
       - `RACE_WEEKEND=miami`, `nowhere` and `RACE_YEAR=2023` each raise the expected error.
     - **Still open:** the tyre allocation and return rules, `PIT_LOSS_S`, the fuel settings and the cleaning thresholds are the same for every weekend and were tuned on Bahrain 2025. Results on other weekends carry every open item above (#18 in particular).
+
+- [ ] **#25 No exploratory data analysis**
+  - **Where:** no script. `readme.txt` has an "EXPLORATORY DATA ANALYSIS AND STATISTICAL Inference" heading with nothing under it, and `master.py` has no EDA stage.
+  - **Problem:** nothing looks at the data before it is modelled. The only plots judge the model after training: the prediction overlay, metric chart and feature importance in `train_model.py`, and the residual plot in `validate_strategy.py` (#6).
+  - **Effect:** the cleaning thresholds, the feature set (36 inputs on 153 target rows) and the reading of the flat rollouts (#16, #20) aren't backed by a look at the data. For example, nothing shows whether the practice laps contain a compound or tyre-age effect for the model to learn.
+  - **Fix:** a new stage `scripts/eda.py`, run after `feature_engineer.py` in `master.py`, with its own `results/eda/` directory, log and manifest. It reads `data/processed/final_engineered_dataset.csv`. Cover:
+    - [ ] **Summary statistics and missing values** per column and session.
+    - [ ] **Distributions** of `lap_duration` / `fuel_corrected_pace` by session and compound.
+    - [ ] **Pace against tyre age:** `fuel_corrected_pace` against `tyre_age` per compound, i.e. the degradation the model is meant to learn.
+    - [ ] **Correlations** between the 36 inputs and with the target, flagging collinear groups (sector times, speed traps and car-data aggregates).
+    - [ ] **Row coverage:** rows per session, compound and stint before and after the next-lap target shift (467 → 153, with only 7 FP3 rows).
+  - Any thresholds go in `.env`; take the column lists from `feature_config.py`.
+  - **readme.txt:** Exploratory Data Analysis and Statistical Inference.
+
+- [ ] **#26 No statistical inference on the practice data**
+  - **Where:** no script. The only statistical test is the placeholder t-test in `validate_strategy.py` (#5), which runs on random numbers.
+  - **Problem:** nothing tests whether the effects the strategy depends on are real in the data: differences in pace between compounds, tyre degradation, and pace changes between sessions.
+  - **Fix:** add tests on the real laps, in the #25 stage or next to it:
+    - [ ] **Compound pace:** do SOFT, MEDIUM and HARD differ in `fuel_corrected_pace`? Use pairwise Welch t-tests or one-way ANOVA / Kruskal–Wallis, within session so the session's pace level doesn't confound it.
+    - [ ] **Degradation:** is the slope of `fuel_corrected_pace` against `tyre_age` per compound different from 0? Report the slope with a confidence interval.
+    - [ ] **Session pace:** do FP1, FP2 and FP3 differ (track evolution)?
+  - **Watch out:** laps within one stint aren't independent (the same issue as #18), so per-lap tests overstate significance. Test on stint-level values (e.g. per-stint slopes or means) or account for the grouping.
+  - `scipy` is already pinned. `statsmodels` isn't installed, so confirm before adding a dependency.
+  - **Depends on:** #25 (same data, likely the same stage). A real test here could replace the #5 placeholder.
+  - **readme.txt:** Exploratory Data Analysis and Statistical Inference.
 
 - [ ] **#15 Results documentation**
   - **Problem:** results currently exist only as raw files in `scripts/results/<script>/` and a few numbers in the readmes.
