@@ -142,12 +142,23 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
       - HARD degrading first and MEDIUM last is still not tyre physics (#18, #20).
     - **Effect on strategy:** the best total is now 6023.36 s, HARD–HARD–SOFT with pits on laps 12 and 24 (was SOFT–SOFT–SOFT, 12 and 13, 5695.12 s). Neighbouring pit laps are within 1 s. The best 1-stop is HARD–SOFT, pit on lap 11, 6144.94 s, and the best 0-stop is MEDIUM at 6178.24 s. Each extra stop still drops its ~100–110 s pit lap for 22 s of pit loss, so #11 still favours more stops and this is still **not** a valid recommendation. The winner happens to use two compounds, but #8 is still open.
 
-- [ ] **#18 Train/test splits mix laps from the same stint**
+- [x] **#18 Train/test splits mix laps from the same stint**
   - **Where:** `train_test_split(..., shuffle=True)` in `scripts/train_model.py` and `KFold(n_splits=5, shuffle=True)` in `scripts/validate_strategy.py`.
   - **Problem:** rows are shuffled one lap at a time, so most stints have laps in both the training and the test set. Consecutive laps of one stint are highly correlated (same driver, car, tyre, fuel and conditions), and before #17 was fixed the test laps' own lap times were spread through the training rows.
   - **Effect:** the test and CV scores measure interpolation within stints the model has already seen, not prediction on a new stint (which is what the simulator does). They overstate the model.
   - **Fix:** split by stint with `GroupShuffleSplit` / `GroupKFold`, grouped on `(driver_number, stint_number)` (or by session, or by driver, for a stricter test). Both id columns are in the engineered dataset since #4.
   - **readme.txt:** ML Modelling, training (80/20 split); Evaluation step 1, cross-validation.
+  - **Fixed:** both splits are grouped by stint, on `TARGET_GROUP_COLUMNS` = `(driver_number, stint_number)` from `feature_config.py` (the global stint number, so one group is one stint in one session). A stint's laps are now all in train or all in test.
+    - **`train_model.py`:** `GroupShuffleSplit(n_splits=1, test_size=TEST_SIZE, random_state=RANDOM_STATE)`. `TEST_SIZE` (0.20) is now a share of stints, so the test row count depends on which stints are drawn: 40 stints / 128 rows train, 10 stints / 25 rows test (was 122 / 31 rows). The test set is 12 FP1, 10 FP2 and 3 FP3 rows; 12 SOFT, 8 MEDIUM, 5 HARD. The medians, session weights and bundle format are unchanged.
+    - **`validate_strategy.py`:** `GroupKFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)` (shuffle needs scikit-learn ≥ 1.6; 1.7.2 is pinned). Each fold holds out 10 stints (23–41 rows). `validate_strategy_cv_fold_metrics.csv` gains `test_stints` and `test_rows`. Fold 1 happens to hold out the same 10 stints as the held-out split, so its scores equal XGBoost's held-out ones.
+    - **Checks:** both scripts log the stints shared between train and test: 0 in the held-out split and in every fold. The folds' test sets cover all 50 stints and 153 rows once.
+    - **Effect on metrics:** held-out MAE 2.37 / 1.32 / 1.12 s, RMSE 2.74 / 1.68 / 1.56 s and R² −1.002 / 0.250 / 0.353 (LR/RF/XGB; was 1.44 / 1.20 / 1.07 s, 1.90 / 1.68 / 1.60 s and 0.308 / 0.460 / 0.510). XGBoost grouped 5-fold CV MAE 1.23 s, RMSE 1.70 s (was 1.13 / 1.60 s), with per-fold MAE 0.75–1.68 s and RMSE 1.18–2.19 s.
+      - Linear Regression collapses on unseen stints (worse than predicting the test mean); with 36 inputs on 128 rows it was fitting within-stint detail. RF and XGB lose about 0.1–0.2 in R² but keep their order, so XGBoost is still the best of the three (#13).
+      - Different stints in the training set also change the saved model, so the feature importances and rollouts below move too. With only 10 test stints, the held-out scores are noisy: the per-fold spread (MAE 0.75–1.68 s) is the better guide.
+    - **Feature importance:** XGB's top five are now `session_FP2` 0.210, `drs_open_pct` 0.116, `stint_avg_pace` 0.087, `full_throttle_pct` 0.085 and `i2_speed` 0.069; `tyre_age` is 7th (0.030). RF is led by `i2_speed` 0.151, `duration_sector_2` 0.139 and `full_throttle_pct` 0.115.
+    - **Rollout behaviour** (57-lap stint, fcp in s): the seed is unchanged (97.15 s). Every compound and set age predicts 99.0–99.4 s on stint lap 2 and 99.9–100.5 s on lap 3, then stays within 99.74–100.87 s (about 0.7 s faster than before). The largest lap-to-lap step is 1.85–2.28 s. Still almost flat; the used SOFT(6) set is ~0.5 s slower per lap than the new sets.
+    - **Effect on strategy** (car 16): MEDIUM(0)–HARD(0), pit on lap 10, 5774.26 s. SOFT(0)–HARD(0) on the same lap is +0.02 s, and the reverse orders and neighbouring pit laps are +0.07–0.54 s. The best 2-stop is MEDIUM(0)–MEDIUM(0)–HARD(0), pits on laps 10 and 20, +17.16 s. No kept strategy uses the SOFT(6) set. Was HARD(0)–SOFT(6), pit on lap 45, 5840.85 s; the ~67 s drop is the faster rollouts, not a better strategy.
+      - The top strategies are still within ~0.5 s, so the compound and pit-lap choice are still close to arbitrary. The metrics are now honest about new stints, but the model has still learnt almost no compound or tyre-age effect from 153 rows (#27). This is still **not** a valid recommendation.
 
 - [x] **#20 The cleaned laps still include slow non-push laps**
   - **Where:** the filters in `scripts/process_laps.py`.
@@ -227,16 +238,16 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
 
 - [ ] **#13 The saved model is the weakest of the three on the test split**
   - **Where:** `scripts/train_model.py` always saves XGBoost.
-  - **Problem:** `readme.txt` justifies XGBoost on qualitative grounds. Before #4 was fixed, the held-out R² was 0.043 for Linear Regression, 0.060 for Random Forest and −0.039 for XGBoost. After #4, XGBoost is now the best of the three: 0.534 for LR, 0.625 for RF and 0.652 for XGB. After #7 (seconds, 25 inputs with the session one-hot), it is 0.586 / 0.640 / 0.656, with MAE 12.12 / 10.65 / 10.51 s. After #17 (causal `stint_avg_pace`), it is 0.373 / 0.565 / 0.620, with MAE 16.62 / 12.54 / 12.06 s: XGBoost's lead over Random Forest grew, but it still comes from one shuffled split. After #21 and #19 (fuel term subtracted), it is 0.374 / 0.568 / 0.615, with MAE 16.64 / 12.42 / 12.19 s. After #20 (non-push laps dropped, 153 target rows), it is 0.157 / 0.505 / 0.590, with MAE 1.67 / 1.13 / 1.03 s. After #16 (10 car-data inputs, 36 in all), it is 0.308 / 0.460 / 0.510, with MAE 1.44 / 1.20 / 1.07 s.
-  - **Fix:** re-run the comparison once #18 is fixed. Then either keep XGBoost with metrics that support it, or save the best model and update the reasoning.
-  - **Depends on:** #18 (#2, #3, #4 and #17 are fixed).
+  - **Problem:** `readme.txt` justifies XGBoost on qualitative grounds. Before #4 was fixed, the held-out R² was 0.043 for Linear Regression, 0.060 for Random Forest and −0.039 for XGBoost. After #4, XGBoost is now the best of the three: 0.534 for LR, 0.625 for RF and 0.652 for XGB. After #7 (seconds, 25 inputs with the session one-hot), it is 0.586 / 0.640 / 0.656, with MAE 12.12 / 10.65 / 10.51 s. After #17 (causal `stint_avg_pace`), it is 0.373 / 0.565 / 0.620, with MAE 16.62 / 12.54 / 12.06 s: XGBoost's lead over Random Forest grew, but it still comes from one shuffled split. After #21 and #19 (fuel term subtracted), it is 0.374 / 0.568 / 0.615, with MAE 16.64 / 12.42 / 12.19 s. After #20 (non-push laps dropped, 153 target rows), it is 0.157 / 0.505 / 0.590, with MAE 1.67 / 1.13 / 1.03 s. After #16 (10 car-data inputs, 36 in all), it is 0.308 / 0.460 / 0.510, with MAE 1.44 / 1.20 / 1.07 s. After #18 (split grouped by stint, 10 test stints), it is −1.002 / 0.250 / 0.353, with MAE 2.37 / 1.32 / 1.12 s: XGBoost is still the best on the held-out stints, but only one model's grouped CV is run.
+  - **Fix:** re-run the comparison with grouped CV for all three models (#18 is fixed, so the split is by stint). Then either keep XGBoost with metrics that support it, or save the best model and update the reasoning.
+  - **Depends on:** nothing left (#2, #3, #4, #17 and #18 are fixed).
   - **See also:** #27 widens the comparison beyond these three models.
   - **readme.txt:** ML Modelling step 3, results table.
 
 - [ ] **#27 The model choice rests on three untuned models and untested reasoning**
   - **Where:** `scripts/train_model.py` (Linear Regression, Random Forest 200 trees, XGBoost with one fixed set of hyperparameters from `.env`); the "Reasoning" paragraph in `readme.txt` ML Modelling step 3.
   - **Problem:**
-    - Only three models are compared, each with one configuration, on one 31-row held-out split. XGBoost at max depth 7 with 36 inputs on 153 rows is likely to overfit, but no other setting has been tried.
+    - Only three models are compared, each with one configuration, on one held-out split (10 stints, 25 rows since #18; 31 rows before). XGBoost at max depth 7 with 36 inputs on 153 rows is likely to overfit, but no other setting has been tried.
     - There is no naive baseline, so it isn't known whether any model beats a trivial forecast.
     - The reasoning is asserted, not tested. "Random Forest produces noisy, stepwise predictions, unstable in autoregressive simulations" and "XGBoost: stable rollouts" were never checked: only XGBoost is ever rolled out. The "aligns with real-world motorsport pipelines" line has no source.
   - **Fix:**
@@ -247,7 +258,7 @@ Items keep a stable ID (`#N`). `readme.txt` marks every place an item applies wi
     - [ ] **Rollout comparison:** roll each serious candidate out through the simulator's `rollout_stint()`. Compare stability (largest lap-to-lap step, drift), whether pace rises with tyre age, and whether compounds come out in a plausible order. One-step error alone doesn't show how a model behaves when rolled forward.
     - [ ] **Report:** per-fold MAE / RMSE / R² with the spread for every candidate, not a single split.
     - [ ] **Update the reasoning** in `readme.txt` ML Modelling step 3 to match the results. Keep each claim only if the experiments back it, replace the asserted ones with the measured comparison, drop or source the "real-world pipelines" line, and update the results table and the "XGBoost is kept" sentence. If another model wins, save it instead (the bundle format and the simulator would need to accept it).
-  - **Depends on:** #18 (grouped CV). Supersedes the comparison part of #13; close both together.
+  - **Depends on:** nothing left (#18, grouped CV, is fixed). Supersedes the comparison part of #13; close both together.
   - **readme.txt:** ML Modelling step 3, model choice, reasoning and results table.
 
 ## P3: completeness and cleanup

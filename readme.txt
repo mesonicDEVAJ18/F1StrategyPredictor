@@ -353,9 +353,11 @@ so a group is one stint in one session), and a row is kept only if the next row 
 This drops the last lap of every stint (223 rows) and laps followed by a gap left by cleaning (91 rows): 467 -> 153 rows.
 Practice runs alternate push and cool-down laps, so once the cool-down laps are cleaned out most lap + 1 pairs are broken; the 153 rows
 come from 50 stints, mostly FP1 and FP2 long runs (FP3 has 7 rows).
-Missing feature values are filled with the column median, then an 80/20 shuffled train/test split (random_state 42) is used.
+Missing feature values are filled with the column median, then the rows are split 80/20 by stint (GroupShuffleSplit on driver_number +
+stint_number, TEST_SIZE 0.20 of the stints, random_state 42): 40 stints / 128 rows train, 10 stints / 25 rows test.
+A stint's laps are all on one side. Consecutive laps of one stint are highly correlated, and the simulator predicts stints the model hasn't
+seen, so a split by single laps would measure interpolation inside known stints and overstate the model.
 The medians and each session's share of the target rows (FP1 0.294, FP2 0.660, FP3 0.046) are saved with the model for the simulator.
-[TODO #18, P2, see diagnostic.md] The split shuffles single laps, so most stints are in both train and test. Split by stint instead.
 
 3. Model choice
 train_model.py fits and compares Linear Regression, Random Forest (200 trees) and XGBoost (300 trees, learning rate 0.05, max depth 7,
@@ -369,17 +371,17 @@ Random Forest produces noisy, stepwise predictions -> unstable in autoregressive
 XGBoost hits the sweet spot ->
 non-linear learning, stable rollouts, fast inference, and direct interpretability through feature importance.
 
-Held-out test results on the current data (MAE and RMSE in seconds):
-| Model             | MAE (s) | RMSE (s) | R2    |
-| LinearRegression  | 1.44    | 1.90     | 0.308 |
-| RandomForest      | 1.20    | 1.68     | 0.460 |
-| XGBoost           | 1.07    | 1.60     | 0.510 |
-XGBoost is the best of the three on this split, and is kept for the reasons above. The test set is only 31 rows, so with 36 inputs the
-differences between the models are close to noise.
-XGBoost's top inputs are stint_avg_pace (0.145), i2_speed (0.100), mean_gear (0.080) and duration_sector_2 (0.066); tyre_age is 7th (0.039)
-and track_temperature 21st. The 10 car-data inputs carry 0.249 of XGB's importance in total.
-Random Forest is led by duration_sector_2 (0.201) and i2_speed (0.153).
-[TODO #13, P2, see diagnostic.md] Re-run the comparison once #18 is fixed and confirm (or change) the saved model.
+Held-out test results on the current data (10 unseen stints, 25 rows; MAE and RMSE in seconds):
+| Model             | MAE (s) | RMSE (s) | R2     |
+| LinearRegression  | 2.37    | 2.74     | -1.002 |
+| RandomForest      | 1.32    | 1.68     | 0.250  |
+| XGBoost           | 1.12    | 1.56     | 0.353  |
+XGBoost is the best of the three on this split, and is kept for the reasons above. Linear Regression does worse than predicting the
+test mean on unseen stints. The test set is only 10 stints, so with 36 inputs the gap between Random Forest and XGBoost is close to noise.
+XGBoost's top inputs are session_FP2 (0.210), drs_open_pct (0.116), stint_avg_pace (0.087), full_throttle_pct (0.085) and i2_speed (0.069);
+tyre_age is 7th (0.030).
+Random Forest is led by i2_speed (0.151), duration_sector_2 (0.139) and full_throttle_pct (0.115).
+[TODO #13, P2, see diagnostic.md] Re-run the comparison with grouped CV for all three models and confirm (or change) the saved model.
 [TODO #27, P2, see diagnostic.md] Experiment more: naive baselines, more candidate models, hyperparameter tuning, smaller feature sets and
 a rollout comparison of the candidates. Then update the reasoning above to match: the claims about Random Forest's unstable rollouts and
 XGBoost's stable ones haven't been tested, since only XGBoost is ever rolled out.
@@ -432,9 +434,9 @@ Each prediction is fed back as the next lap's inputs:
 Speeds, segment counts, weather and the car-data aggregates stay at their medians.
 In the training rows, laps_since_stint_start runs from 2 to 13 (pit-out laps are cleaned out) and tyre_age from 2 to 18. Beyond these, the
 model's response to tyre age is flat, so changes later in a long stint come from the fed-back inputs only.
-Predictions stay within 97-102 s. Every compound and set age predicts about 99.5 s on stint lap 2 and about 101 s on lap 3, then stays at
-100.5-101.5 s to the end of the stint, all within about 0.4 s of each other. So the model has learnt almost no compound or tyre-age effect from
-the 153 training rows.
+Predictions stay within 97-101 s. Every compound and set age predicts 99.0-99.4 s on stint lap 2 and 99.9-100.5 s on lap 3, then stays at
+99.7-100.9 s to the end of the stint. The new sets are within about 0.3 s of each other and the used SOFT (age 6) is about 0.5 s slower.
+So the model has learnt almost no compound or tyre-age effect from the 153 training rows.
 Per-lap rollouts are saved to scripts/results/strategy_simulator/strategy_simulator_stint_rollouts.csv, and the summed fcp per compound,
 set age and stint length to strategy_simulator_stint_totals.csv.
 [TODO #12, P3, see diagnostic.md] The starting-compound setting in start_features is overwritten and has no effect.
@@ -455,25 +457,24 @@ compound sequence and set of pit laps, the fastest choice of the car's sets is k
 Results: scripts/results/strategy_simulator/ (strategy_simulator_all_strategy_results.csv with car_number and set_ages,
 strategy_simulator_best_strategy.json, strategy_simulator_final_summary.txt).
 Current output for SIM_DRIVER = 16 (set ages at the start of each stint in brackets):
-HARD(0)-SOFT(6), pit on lap 45, 5840.85 s (ties with SOFT(6)-HARD(0), pit on lap 12: the same two stints in reverse order).
-Neighbouring pit laps are 0.24 s slower, and the best 2-stop (SOFT(0)-SOFT(0)-HARD(0), pits on 16 and 34) is 13.75 s slower.
-Other cars differ only through their sets, e.g. car 44: SOFT(4)-HARD(0), pit on lap 14, 5840.39 s; car 30 (no MEDIUM left, 2,072
-strategies feasible): SOFT(3)-HARD(0), pit on lap 10, 5839.87 s.
+MEDIUM(0)-HARD(0), pit on lap 10, 5774.26 s. SOFT(0)-HARD(0) on the same lap is 0.02 s slower, and the reverse orders and neighbouring
+pit laps are 0.07-0.54 s slower. The best 2-stop (MEDIUM(0)-MEDIUM(0)-HARD(0), pits on 10 and 20) is 17.16 s slower. The used SOFT(6)
+set is in no kept strategy.
+Other cars differ only through their sets.
 Every lap carries the same race fuel term whatever the strategy, so a total depends only on which stints (compound, set age, length) it uses.
 1 stop wins because the rollouts are almost flat (step 2), so an extra stop can't win back its 22 s. The top strategies are within
-about 0.3 s, and the compounds barely differ, so the pit lap and compound choice are close to arbitrary. Every new stint also starts with
-a fast median seed lap, which narrows the gap to 2 stops. None of this is tyre physics yet.
-[TODO #18, P2, see diagnostic.md] The metrics behind this model come from a shuffled split, so this is not a valid recommendation yet.
+about 0.5 s, and the compounds barely differ, so the pit lap and compound choice are close to arbitrary. Every new stint also starts with
+a fast median seed lap, which narrows the gap to 2 stops. None of this is tyre physics yet, so this is not a valid recommendation.
 
 Future work: Dynamic Programming to prune inferior strategies and an optional Genetic Algorithm for deeper search across larger sequences.
 
 EVALUATION AND VALIDATION (validate_strategy.py)
 1. Model Validation
 Implemented:
-5-fold shuffled cross-validation (random_state 42) of the XGBoost configuration on next-lap fuel-corrected pace.
+5-fold cross-validation grouped by stint (GroupKFold on driver_number + stint_number, shuffled, random_state 42) of the XGBoost
+configuration on next-lap fuel-corrected pace. Each fold holds out 10 whole stints (23-41 rows), so the score is for stints the model hasn't seen.
 Missing inputs (stint_avg_pace on a stint's first lap) are filled with the training medians from the model bundle, as in train_model.py.
-Current result: CV MAE 1.13 s, CV RMSE 1.60 s.
-[TODO #18, P2, see diagnostic.md] The folds shuffle single laps, so a stint's laps land in both train and test folds. Use GroupKFold by stint.
+Current result: CV MAE 1.23 s, CV RMSE 1.70 s (per fold: MAE 0.75-1.68 s, RMSE 1.18-2.19 s).
 Residual plot (predicted vs residual) to check for systematic bias.
 [TODO #6, P2, see diagnostic.md] The plot uses the last fold's model on all rows, including its training rows. Use out-of-fold predictions.
 Feature importance from Random Forest and XGBoost, saved by train_model.py.
@@ -483,13 +484,13 @@ strategy, and its p-value changes from run to run.
 
 Rollout check (logged by strategy_simulator.py on every run): for a full-race-length stint of each compound and set age SIM_DRIVER has,
 fcp at stint laps 1, 18 and the last lap, and the largest lap-to-lap step.
-Current result for car 16 (57 laps): SOFT new 97.15 -> 101.03 -> 101.39, SOFT age 6 97.15 -> 101.05 -> 101.41,
-MEDIUM new 97.15 -> 101.12 -> 101.49, HARD new 97.15 -> 101.39 -> 101.37 s.
-Lap 1 is the seed's fcp (99.15 s raw minus 57 laps of fuel). The largest step is 2.28-2.60 s, on stint laps 1-3.
-No runaway drift: every rollout stays within 97.15-101.54 s.
-Smooth but nearly flat: after about 4 s over the first three laps (mostly the median seed lap being fast), every rollout gains well under
-1 s over the rest of the stint, and compounds and set ages differ by at most about 0.4 s. That is too little to be tyre physics: the model has
-learnt little about tyres from 153 training rows, and #18 is still open.
+Current result for car 16 (57 laps): SOFT new 97.15 -> 100.25 -> 99.97, SOFT age 6 97.15 -> 100.73 -> 100.67,
+MEDIUM new 97.15 -> 100.26 -> 99.76, HARD new 97.15 -> 100.04 -> 99.74 s.
+Lap 1 is the seed's fcp (99.15 s raw minus 57 laps of fuel). The largest step is 1.85-2.28 s, from stint lap 1 to 2.
+No runaway drift: every rollout stays within 97.15-100.87 s.
+Smooth but nearly flat: after about 3 s over the first three laps (mostly the median seed lap being fast), every rollout moves by at most
+0.6 s over the rest of the stint, and the new sets of each compound differ by at most about 0.3 s. That is too little to be tyre physics:
+the model has learnt little about tyres from 153 training rows.
 
 Planned critical checks:
 Feature influence aligns with expected tyre-degradation behaviour (e.g. tyre age, compound, track temperature matter most)

@@ -183,11 +183,11 @@ Predict **fuel-corrected pace on the next lap** rather than explicitly computing
 
 | Model | Reasoning | Test MAE | Test RMSE | Test R² |
 |-------|-----------|----------|-----------|---------|
-| Linear Regression | Underfits non-linear tyre behavior | 1.44 s | 1.90 s | 0.308 |
-| Random Forest | Noisy, stepwise predictions | 1.20 s | 1.68 s | 0.460 |
-| **XGBoost** | Chosen for non-linear learning and smooth predictions | 1.07 s | 1.60 s | 0.510 |
+| Linear Regression | Underfits non-linear tyre behavior | 2.37 s | 2.74 s | −1.002 |
+| Random Forest | Noisy, stepwise predictions | 1.32 s | 1.68 s | 0.250 |
+| **XGBoost** | Chosen for non-linear learning and smooth predictions | 1.12 s | 1.56 s | 0.353 |
 
-*MAE and RMSE are in seconds, from the current run (31 test rows). The split still shuffles single laps, so laps of one stint are in both train and test, which flatters these numbers (diagnostic.md #18); see [diagnostic.md](diagnostic.md).*
+*MAE and RMSE are in seconds, from the current run. The split is by stint, so the test set is 10 stints (25 rows) the model never saw; with so few, the gap between Random Forest and XGBoost is close to noise. See [diagnostic.md](diagnostic.md) (#13, #27).*
 
 **XGBoost Advantages:**
 - Captures non-linear tyre physics (warm-up, thermal degradation, cliff effects)
@@ -209,11 +209,11 @@ Built by `build_next_lap_target()` in `scripts/feature_config.py`: the same driv
 
 **3. Features and Split**
 - 36 inputs defined in `scripts/feature_config.py` (`MODEL_FEATURE_COLUMNS`), including the `session_FP1/2/3` one-hots and 10 car-data aggregates (`CARDATA_FEATURE_COLUMNS`)
-- Missing values filled with column medians; 80/20 shuffled train/test split (`random_state=42`)
+- Missing values filled with column medians; 80/20 train/test split by stint (`GroupShuffleSplit` on `driver_number` + `stint_number`, `random_state=42`), so a stint's laps are never on both sides
 - The saved bundle holds the model, the feature list, the training medians and each session's share of training rows (`{"model", "features", "medians", "session_weights"}`)
 
 **4. Validation**
-- 5-fold cross-validation
+- 5-fold cross-validation grouped by stint (`GroupKFold`)
 - Residual analysis for systematic bias
 - Random Forest and XGBoost feature importances
 
@@ -250,13 +250,13 @@ Minimize: Total Race Time (s) = Σ(stint lap times) + 22 s × number of pit stop
 ```
 
 Current output for `SIM_DRIVER=16` (set age at the start of each stint in brackets):
-- HARD(0)–SOFT(6), stop on lap 45, 5840.85 s (ties with SOFT(6)–HARD(0), stop on lap 12); best 2-stop 13.75 s slower
+- MEDIUM(0)–HARD(0), stop on lap 10, 5774.26 s (SOFT(0)–HARD(0) on the same lap is +0.02 s); best 2-stop 17.16 s slower
 
-Other cars give similar results from their own sets, e.g. car 44: SOFT(4)–HARD(0), stop on lap 14, 5840.39 s.
+Other cars give similar results from their own sets.
 
 Every race lap is summed once: "stop on lap p" means lap p is the in-lap and the next stint starts on lap p + 1, with the 22 s pit loss on top.
 
-None of this is tyre physics yet. 1 stop wins because every rollout is almost flat (about 101 s from stint lap 3 on, whatever the compound or set age), so an extra stop can't win back its 22 s. Neighbouring pit laps are 0.24 s slower and the compounds barely differ, so the pit lap and compound choice are close to arbitrary. The model is trained on only 153 rows, and its metrics still come from a shuffled split (#18), so this is not a valid recommendation yet.
+None of this is tyre physics yet. 1 stop wins because every rollout is almost flat (about 100 s from stint lap 3 on, whatever the compound or set age), so an extra stop can't win back its 22 s. The top strategies are within about 0.5 s and the compounds barely differ, so the pit lap and compound choice are close to arbitrary. The model is trained on only 153 rows, so this is not a valid recommendation yet.
 
 ### 4. Optimization Engine
 
@@ -269,7 +269,7 @@ None of this is tyre physics yet. 1 stop wins because every rollout is almost fl
 ## ✅ Evaluation & Validation
 
 ### Model Validation (`validate_strategy.py`)
-- **Cross-validation**: 5-fold CV on next-lap predictions (current: MAE 1.13 s, RMSE 1.60 s)
+- **Cross-validation**: 5-fold CV grouped by stint on next-lap predictions (current: MAE 1.23 s, RMSE 1.70 s)
 - **Residual analysis**: Check for systematic bias
 - **Feature importance**: Verify alignment with tyre physics
   - Expected top features: tyre age, compound, track temperature

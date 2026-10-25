@@ -2,14 +2,14 @@ import pandas as pd
 import numpy as np
 import joblib
 import matplotlib.pyplot as plt
-from sklearn.model_selection import KFold
+from sklearn.model_selection import GroupKFold
 from scipy.stats import ttest_ind
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import os
 import warnings
 from datetime import datetime
 
-from feature_config import build_next_lap_target
+from feature_config import TARGET_GROUP_COLUMNS, build_next_lap_target
 from env_config import env_str, env_int
 
 warnings.filterwarnings("ignore")
@@ -68,23 +68,27 @@ df = build_next_lap_target(df)
 # Fill missing inputs (e.g. stint_avg_pace on a stint's first lap) with the training medians, as train_model.py does
 X = df[FEATURES].replace([np.inf, -np.inf], np.nan).fillna(bundle["medians"]).values
 y = df["target_next_fcp"].values
+# One group per stint, so a stint's laps never sit in both the train and test folds
+groups = df.groupby(TARGET_GROUP_COLUMNS).ngroup().values
 
-log(f"Rows after target shift drop: {len(df)}")
+log(f"Rows after target shift drop: {len(df)} ({len(np.unique(groups))} stints)")
 
 
 # ============================================================
 # CROSS-VALIDATION
 # ============================================================
-kf = KFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
+kf = GroupKFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
 
 cv_mae = []
 cv_rmse = []
 
 fold_results = []
 
-log(f"\nRunning {CV_FOLDS}-fold cross-validation...")
+log(f"\nRunning {CV_FOLDS}-fold cross-validation grouped by stint...")
 
-for fold, (train_idx, test_idx) in enumerate(kf.split(X), 1):
+for fold, (train_idx, test_idx) in enumerate(kf.split(X, y, groups), 1):
+    test_stints = len(np.unique(groups[test_idx]))
+    shared = len(np.intersect1d(groups[train_idx], groups[test_idx]))
     model.fit(X[train_idx], y[train_idx])
     pred = model.predict(X[test_idx])
 
@@ -96,11 +100,16 @@ for fold, (train_idx, test_idx) in enumerate(kf.split(X), 1):
 
     fold_results.append({
         "fold": fold,
+        "test_stints": test_stints,
+        "test_rows": len(test_idx),
         "MAE": mae,
         "RMSE": rmse
     })
 
-    log(f" Fold {fold} → MAE={mae:.4f} s, RMSE={rmse:.4f} s")
+    log(
+        f" Fold {fold} → {test_stints} stints / {len(test_idx)} rows, {shared} shared, "
+        f"MAE={mae:.4f} s, RMSE={rmse:.4f} s"
+    )
 
 mean_mae = np.mean(cv_mae)
 mean_rmse = np.mean(cv_rmse)

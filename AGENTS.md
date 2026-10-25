@@ -73,8 +73,7 @@ python process_laps.py      # or run any single stage on its own
 `validate_strategy`. It aborts the whole run if any stage exits non-zero.
 
 **Known gaps (don't "fix" silently — confirm intent first):**
-- Open issues (train/test splits that mix laps of one stint, residual-plot leakage, the placeholder
-  t-test, the unconfirmed model choice, etc.) are listed in [diagnostic.md](diagnostic.md). Fixing them
+- Open issues (residual-plot leakage, the placeholder t-test, the unconfirmed model choice, etc.) are listed in [diagnostic.md](diagnostic.md). Fixing them
   changes results, so confirm before fixing, and update diagnostic.md when one is resolved.
 
 ## Data flow / hand-offs

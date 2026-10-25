@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GroupShuffleSplit
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
@@ -91,10 +91,20 @@ log("Saved feature snapshot.")
 # ======================================================
 # TRAIN/TEST SPLIT
 # ======================================================
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=TEST_SIZE, shuffle=True, random_state=RANDOM_STATE
+# Split by stint, not by lap: laps of one stint are highly correlated, and the
+# simulator predicts stints the model hasn't seen. TEST_SIZE is a share of stints.
+groups = df.groupby(TARGET_GROUP_COLUMNS).ngroup()
+gss = GroupShuffleSplit(n_splits=1, test_size=TEST_SIZE, random_state=RANDOM_STATE)
+train_idx, test_idx = next(gss.split(X, y, groups))
+X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+
+train_groups = set(groups.iloc[train_idx])
+test_groups = set(groups.iloc[test_idx])
+log(
+    f"Completed train/test split by stint: {len(train_groups)} stints / {len(train_idx)} rows train, "
+    f"{len(test_groups)} stints / {len(test_idx)} rows test, {len(train_groups & test_groups)} shared."
 )
-log("Completed train/test split.")
 
 
 # ======================================================

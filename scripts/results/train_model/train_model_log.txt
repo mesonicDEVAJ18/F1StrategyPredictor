@@ -5,7 +5,7 @@ Rows after target shift drop: 153
   → Dropped for a gap to the next lap: 91
 Session weights: {'session_FP1': 0.294, 'session_FP2': 0.66, 'session_FP3': 0.046}
 Saved feature snapshot.
-Completed train/test split.
+Completed train/test split by stint: 40 stints / 128 rows train, 10 stints / 25 rows test, 0 shared.
 
 Training models...
 Training LinearRegression...
@@ -14,9 +14,9 @@ Training XGBoost...
 
 Test metrics (MAE/RMSE in seconds):
                      MAE    RMSE      R2
-LinearRegression  1.4421  1.9002  0.3076
-RandomForest      1.1979  1.6775  0.4604
-XGBoost           1.0666  1.5987  0.5099
+LinearRegression  2.3687  2.7361 -1.0019
+RandomForest      1.3186  1.6754  0.2495
+XGBoost           1.1205  1.5559  0.3527
 Saved model metrics table.
 Saved feature importance CSVs.
 Saved trained XGB model.
