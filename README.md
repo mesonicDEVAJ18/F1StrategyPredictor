@@ -183,7 +183,7 @@ Predict **fuel-corrected pace on the next lap** rather than explicitly computing
 
 ### Model Selection: XGBoost
 
-`train_model.py` trains Linear Regression, Random Forest and XGBoost on the same split and saves XGBoost. K-Means was ruled out without being implemented.
+`train_model.py` trains one model, XGBoost, and saves it. The model is chosen in [explore/explore_master.py](explore/explore_master.py), which compares many candidates, hyperparameter grids, feature sets and target forms with nested CV grouped by stint, against naive baselines, and rolls each one out like the simulator (`cd explore; python explore_master.py`). The table below is the earlier three-model comparison on one split. K-Means was ruled out without being implemented.
 
 | Model | Reasoning | Test MAE | Test RMSE | Test R² |
 |-------|-----------|----------|-----------|---------|

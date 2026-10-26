@@ -386,9 +386,18 @@ seen, so a split by single laps would measure interpolation inside known stints 
 The medians and each session's share of the target rows (FP1 0.294, FP2 0.660, FP3 0.046) are saved with the model for the simulator.
 
 3. Model choice
-train_model.py fits and compares Linear Regression, Random Forest (200 trees) and XGBoost (300 trees, learning rate 0.05, max depth 7,
-subsample 0.8, colsample 0.8), and saves the XGBoost model as train_model_xgb_model.pkl, a joblib bundle with its feature list, the
-training medians and the session weights ({"model", "features", "medians", "session_weights"}).
+train_model.py fits one model, XGBoost (300 trees, learning rate 0.05, max depth 7, subsample 0.8, colsample 0.8), scores it on the
+held-out stints, and saves it as train_model_xgb_model.pkl, a joblib bundle with its feature list, the training medians and the session
+weights ({"model", "features", "medians", "session_weights"}).
+The model is chosen outside the pipeline, in explore/explore_master.py. It runs the data stages up to eda.py, then compares the
+candidates in its experiment block (linear models, a per-compound linear degradation model, Random Forest, ExtraTrees,
+HistGradientBoosting, XGBoost tuned and as configured now, SVR, k-nearest neighbours and an MLP) on several feature sets
+(all 36 inputs; without the 3 constant inputs; without the car-data aggregates; with eda.py's collinear groups cut to one member; only the
+inputs the simulator varies) and two target forms (next-lap fcp, or its change from lap t's time). Every configuration is scored with nested
+cross-validation grouped by stint (the hyperparameter search runs inside each outer training fold) against three naive forecasts
+(lap t's fcp, stint_avg_pace and the training mean), and each candidate's best configuration is rolled out like the simulator does.
+The winner goes into train_model.py's MODEL block and .env.
+The comparison below is the earlier one, when train_model.py fitted all three models on one split.
 K-Means was ruled out because it provides no predictive capability (only grouping), so it is not part of the pipeline.
 
 Reasoning:

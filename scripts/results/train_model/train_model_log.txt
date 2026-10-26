@@ -7,27 +7,19 @@ Session weights: {'session_FP1': 0.294, 'session_FP2': 0.66, 'session_FP3': 0.04
 Saved feature snapshot.
 Completed train/test split by stint: 40 stints / 128 rows train, 10 stints / 25 rows test, 0 shared.
 
-Training models...
-Training LinearRegression...
-Training RandomForest...
 Training XGBoost...
 
 Test metrics (MAE/RMSE in seconds):
-                     MAE    RMSE      R2
-LinearRegression  2.3687  2.7361 -1.0019
-RandomForest      1.3186  1.6754  0.2495
-XGBoost           1.1205  1.5559  0.3527
+            MAE    RMSE      R2
+XGBoost  1.1205  1.5559  0.3527
 Saved model metrics table.
-Saved feature importance CSVs.
-Saved trained XGB model.
-Saved all plots.
+Saved feature importance CSV.
+Saved trained XGBoost model.
+Saved prediction plot.
 
 Generated files:
   - train_model_feature_matrix_snapshot.csv
   - train_model_model_metrics.csv
-  - train_model_feature_importance_rf.csv
-  - train_model_feature_importance_xgb.csv
+  - train_model_feature_importance.csv
   - train_model_xgb_model.pkl
-  - train_model_prediction_overlay.png
-  - train_model_metric_bars.png
-  - train_model_xgb_vs_true.png
+  - train_model_pred_vs_true.png

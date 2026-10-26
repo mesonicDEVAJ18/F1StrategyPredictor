@@ -48,7 +48,7 @@ def main():
     pipeline_sequence = [
         "feature_engineer.py",      # Feature Engineering
         "eda.py",                   # Exploratory data analysis (reads the engineered dataset only)
-        "train_model.py",           # Training
+        "train_model.py",           # Training of the one chosen model (candidates are compared in ../explore/explore_master.py)
         "strategy_simulator.py",    # Simulation
         "validate_strategy.py"      # Validation
     ]

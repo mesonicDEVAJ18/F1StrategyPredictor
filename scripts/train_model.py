@@ -3,8 +3,6 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
 import matplotlib.pyplot as plt
 import joblib
@@ -111,33 +109,24 @@ log(
 
 
 # ======================================================
-# MODELS
+# MODEL (chosen in ../explore/explore_master.py)
 # ======================================================
-models = {
-    "LinearRegression": LinearRegression(),
-    "RandomForest": RandomForestRegressor(
-        n_estimators=env_int("RF_N_ESTIMATORS"), random_state=RANDOM_STATE, n_jobs=-1
-    ),
-    "XGBoost": XGBRegressor(
-        n_estimators=env_int("XGB_N_ESTIMATORS"),
-        learning_rate=env_float("XGB_LEARNING_RATE"),
-        max_depth=env_int("XGB_MAX_DEPTH"),
-        subsample=env_float("XGB_SUBSAMPLE"),
-        colsample_bytree=env_float("XGB_COLSAMPLE_BYTREE"),
-        random_state=RANDOM_STATE,
-        objective="reg:squarederror",
-    )
-}
+# The pipeline trains one model. Candidates, tuning and feature sets are
+# compared in explore/; the one picked there goes here, with its settings in .env
+MODEL_NAME = "XGBoost"
+model = XGBRegressor(
+    n_estimators=env_int("XGB_N_ESTIMATORS"),
+    learning_rate=env_float("XGB_LEARNING_RATE"),
+    max_depth=env_int("XGB_MAX_DEPTH"),
+    subsample=env_float("XGB_SUBSAMPLE"),
+    colsample_bytree=env_float("XGB_COLSAMPLE_BYTREE"),
+    random_state=RANDOM_STATE,
+    objective="reg:squarederror",
+)
 
-preds = {}
-fitted_models = {}
-
-log("\nTraining models...")
-for name, model in models.items():
-    log(f"Training {name}...")
-    model.fit(X_train, y_train)
-    fitted_models[name] = model
-    preds[name] = model.predict(X_test)
+log(f"\nTraining {MODEL_NAME}...")
+model.fit(X_train, y_train)
+pred = model.predict(X_test)
 
 
 # ======================================================
@@ -153,10 +142,7 @@ def compute_metrics(y_true, pred):
     }
 
 
-metrics_df = pd.DataFrame({
-    name: compute_metrics(y_test, preds[name])
-    for name in models
-}).T
+metrics_df = pd.DataFrame({MODEL_NAME: compute_metrics(y_test, pred)}).T
 
 metrics_file = f"{SCRIPT_NAME}_model_metrics.csv"
 metrics_df.to_csv(f"{RESULTS_DIR}/{metrics_file}")
@@ -170,27 +156,14 @@ log("Saved model metrics table.")
 # ======================================================
 # FEATURE IMPORTANCES
 # ======================================================
-if "RandomForest" in fitted_models:
-    rf_imp = pd.Series(
-        fitted_models["RandomForest"].feature_importances_,
-        index=FEATURES
-    )
+if hasattr(model, "feature_importances_"):
+    imp = pd.Series(model.feature_importances_, index=FEATURES)
 
-    rf_file = f"{SCRIPT_NAME}_feature_importance_rf.csv"
-    rf_imp.to_csv(f"{RESULTS_DIR}/{rf_file}")
-    generated_files.append(rf_file)
+    imp_file = f"{SCRIPT_NAME}_feature_importance.csv"
+    imp.to_csv(f"{RESULTS_DIR}/{imp_file}")
+    generated_files.append(imp_file)
 
-if "XGBoost" in fitted_models:
-    xgb_imp = pd.Series(
-        fitted_models["XGBoost"].feature_importances_,
-        index=FEATURES
-    )
-
-    xgb_file = f"{SCRIPT_NAME}_feature_importance_xgb.csv"
-    xgb_imp.to_csv(f"{RESULTS_DIR}/{xgb_file}")
-    generated_files.append(xgb_file)
-
-log("Saved feature importance CSVs.")
+    log("Saved feature importance CSV.")
 
 
 # ======================================================
@@ -200,7 +173,7 @@ os.makedirs(os.path.dirname(MODEL_BUNDLE_PATH), exist_ok=True)
 model_file = os.path.basename(MODEL_BUNDLE_PATH)
 joblib.dump(
     {
-        "model": fitted_models["XGBoost"],
+        "model": model,
         "features": FEATURES,
         "medians": medians.to_dict(),
         "session_weights": session_weights.to_dict(),
@@ -209,62 +182,26 @@ joblib.dump(
 )
 generated_files.append(model_file)
 
-log("Saved trained XGB model.")
+log(f"Saved trained {MODEL_NAME} model.")
 
 
 # ======================================================
 # PLOTS
 # ======================================================
-# 1 — Prediction overlay (first 300 samples)
-fig = plt.figure(figsize=(12, 6))
-plt.plot(y_test.values[:300], label="True", linewidth=2)
-for name in models:
-    plt.plot(preds[name][:300], label=name)
-plt.legend()
-plt.title("Model Predictions (First 300 Samples)")
-plt.xlabel("Index")
-plt.ylabel("Fuel Corrected Pace (s)")
-
-overlay_file = f"{SCRIPT_NAME}_prediction_overlay.png"
-plt.savefig(f"{RESULTS_DIR}/{overlay_file}", dpi=300)
-plt.close()
-generated_files.append(overlay_file)
-
-
-# 2 — Metric bar chart
-fig = plt.figure(figsize=(10, 6))
-bar_width = 0.25
-idx = np.arange(len(metrics_df))
-
-plt.bar(idx, metrics_df["MAE"], bar_width, label="MAE")
-plt.bar(idx + bar_width, metrics_df["RMSE"], bar_width, label="RMSE")
-plt.bar(idx + 2 * bar_width, metrics_df["R2"], bar_width, label="R²")
-
-plt.xticks(idx + bar_width, metrics_df.index)
-plt.title("Model Metrics")
-plt.ylabel("Value (MAE/RMSE in s)")
-plt.legend()
-
-metric_plot = f"{SCRIPT_NAME}_metric_bars.png"
-plt.savefig(f"{RESULTS_DIR}/{metric_plot}", dpi=300)
-plt.close()
-generated_files.append(metric_plot)
-
-
-# 3 — XGB vs true
+# Prediction vs true on the held-out stints (first 300 samples)
 fig = plt.figure(figsize=(10, 6))
 plt.plot(y_test.values[:300], label="True", linewidth=2)
-plt.plot(preds["XGBoost"][:300], label="XGBoost")
+plt.plot(pred[:300], label=MODEL_NAME)
 plt.legend()
-plt.title("XGB vs True (First 300 Samples)")
+plt.title(f"{MODEL_NAME} vs True (First 300 Samples)")
 plt.ylabel("Fuel Corrected Pace (s)")
 
-xgb_plot = f"{SCRIPT_NAME}_xgb_vs_true.png"
-plt.savefig(f"{RESULTS_DIR}/{xgb_plot}", dpi=300)
+pred_plot = f"{SCRIPT_NAME}_pred_vs_true.png"
+plt.savefig(f"{RESULTS_DIR}/{pred_plot}", dpi=300)
 plt.close()
-generated_files.append(xgb_plot)
+generated_files.append(pred_plot)
 
-log("Saved all plots.")
+log("Saved prediction plot.")
 
 
 # ======================================================
