@@ -2,7 +2,7 @@
 --- STRATEGY SIMULATOR START ---
 
 Loaded trained XGBoost model.
-Session weights for averaging predictions: {'session_FP1': 0.29411764705882354, 'session_FP2': 0.6601307189542484, 'session_FP3': 0.0457516339869281}
+Session weights for averaging predictions: {'session_FP1': 0.2564102564102564, 'session_FP2': 0.6996336996336996, 'session_FP3': 0.04395604395604396}
 Loaded tyre set inventory for car 16: SOFT [0, 0, 0, 0, 6, 6], MEDIUM [0, 0], HARD [0]
 Race weekend: 2025 Bahrain Grand Prix (2025_bahrain), 57 laps
 
@@ -10,18 +10,18 @@ Rolling out 4 (compound, set age) pairs: [('SOFT', 0), ('SOFT', 6), ('MEDIUM', 0
 Saved stint rollouts and stint totals.
 
 Rollout check (stint of 57 laps, fcp in s, by stint lap):
-  SOFT set age 0: lap 1: 97.15, lap 18: 100.25, lap 57: 99.97, max |lap-to-lap step|: 1.96
-  SOFT set age 6: lap 1: 97.15, lap 18: 100.73, lap 57: 100.67, max |lap-to-lap step|: 2.28
-  MEDIUM set age 0: lap 1: 97.15, lap 18: 100.26, lap 57: 99.76, max |lap-to-lap step|: 1.97
-  HARD set age 0: lap 1: 97.15, lap 18: 100.04, lap 57: 99.74, max |lap-to-lap step|: 1.85
+  SOFT set age 0: lap 1: 97.23, lap 18: 100.48, lap 57: 101.29, max |lap-to-lap step|: 2.66
+  SOFT set age 6: lap 1: 97.23, lap 18: 101.35, lap 57: 101.29, max |lap-to-lap step|: 2.43
+  MEDIUM set age 0: lap 1: 97.23, lap 18: 100.52, lap 57: 101.20, max |lap-to-lap step|: 2.73
+  HARD set age 0: lap 1: 97.23, lap 18: 100.49, lap 57: 101.24, max |lap-to-lap step|: 2.68
 Dropped 2109 strategies using fewer than 2 compounds.
 Total strategies to evaluate: 16206
 
 Car 16: 3996 strategies skipped (not enough sets of a compound), 12210 evaluated
-Car 16 best strategy: {'car_number': 16, 'best_compound_sequence': ('MEDIUM', 'HARD'), 'best_set_ages_at_start': (0, 0), 'best_pit_laps': [10], 'best_total_time': 5774.257375601575}
+Car 16 best strategy: {'car_number': 16, 'best_compound_sequence': ('MEDIUM', 'HARD'), 'best_set_ages_at_start': (0, 0), 'best_pit_laps': [33], 'best_total_time': 5819.518029488476}
 
 OPTIMIZATION COMPLETE
-Car 16: ('MEDIUM', 'HARD'), set ages (0, 0), pits [10], time 5774.26 s
+Car 16: ('MEDIUM', 'HARD'), set ages (0, 0), pits [33], time 5819.52 s
 
 FILES GENERATED:
   - strategy_simulator_stint_rollouts.csv

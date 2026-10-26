@@ -72,14 +72,17 @@ def apply_domain_filters(df, fname):
     log(f"[{fname}] Removed {removed} extreme lap-time outliers")
     removed_rows_summary.append([fname, "unrealistic_laptime", removed])
 
-    # Unrealistic speeds
+    # Unrealistic speeds: only a recorded speed can be too slow. NaN <= MIN_SPEED_KMH is False, so a lap
+    # with a missing speed trap is kept; the missing value gets the training median in train_model.py
     speed_cols = ["i1_speed", "i2_speed", "st_speed"]
     if all(col in df.columns for col in speed_cols):
         before = len(df)
-        df = df[(df[speed_cols] > MIN_SPEED_KMH).all(axis=1)]
+        df = df[~(df[speed_cols] <= MIN_SPEED_KMH).any(axis=1)]
         removed = before - len(df)
         log(f"[{fname}] Removed {removed} unrealistic-speed laps")
         removed_rows_summary.append([fname, "unrealistic_speed", removed])
+        missing = df[speed_cols].isna().any(axis=1).sum()
+        log(f"[{fname}] Kept {missing} laps with a missing speed trap (filled with the training medians in train_model.py)")
 
     return df
 

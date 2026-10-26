@@ -37,6 +37,7 @@ Items keep a stable ID (`#N`), which is also the item's GitHub issue number (ope
     - Outer-CV MAE: MLP (all inputs, delta target) 1.19 ± 0.21 s, SVR (all inputs) 1.20 ± 0.27, ExtraTrees 1.22, Random Forest 1.23, current XGBoost 1.25 ± 0.31, tuned XGBoost 1.30; linear models 1.44-1.62; training mean 1.59, persistence 1.82. The top ~20 configurations sit within the fold spread (about 0.09 s standard error), so the data doesn't separate them.
     - Feature sets: the constant inputs and the car-data aggregates can go without loss for the trees; the rollout-only set costs about 0.05-0.1 s. The delta target helps only the MLP and ExtraTrees.
     - Rollouts: every model reverts to roughly the training mean (~100-101 s) within a few laps, and the compounds barely separate. Trees are flat after lap 3 (0.03-0.06 s/lap); SVR rises then falls back; the MLP and the regularised linear models with the delta target climb 0.3-0.8 s/lap without limit. No model reproduces the per-compound degradation in eda.py (SOFT 0.17 s/lap, MEDIUM/HARD 0.04-0.05). The harness's rule picks SVR (stable, positive early slope), but its curve is hump-shaped, so the slope check needs tightening.
+  - **Since #29:** the data now has 273 target rows in 56 stints (was 153 / 50), so the run above and the row counts in this item predate it. The pipeline's XGBoost has grouped CV MAE 1.17 s (was 1.23 s), and no longer significantly beats persistence (Wilcoxon p = 0.052). Rerun `explore_master.py` before choosing a model.
   - **Depends on:** nothing left (#18, grouped CV, is fixed). #13 is merged into this item.
   - **readme.txt:** ML Modelling step 3, model choice, reasoning and results table.
 
@@ -74,24 +75,18 @@ Items keep a stable ID (`#N`), which is also the item's GitHub issue number (ope
 
 Ideas that could make more data usable, not confirmed bugs. Each one changes the results, so check the effect before adopting it.
 
-Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 467 (164 / 221 / 82), and only 153 rows survive the next-lap target shift in `train_model.py`. Removed by `process_laps.py`: 275 pit-out laps, 7 invalid-sector or extreme lap times, 102 for "unrealistic speed", 34 IQR outliers and 372 non-push laps.
-
-- [ ] **#29 Speed filter drops laps with a missing speed trap, not just slow ones**
-  - **Where:** `scripts/process_laps.py`: `df[(df[speed_cols] > MIN_SPEED_KMH).all(axis=1)]`.
-  - **Problem:** `NaN > MIN_SPEED_KMH` is False, so a lap missing any of `i1_speed` / `i2_speed` / `st_speed` is dropped as "unrealistic speed". The filter removes 102 laps (25 / 70 / 7). The non-pit-out raw laps with at least one missing speed number 24 / 71 / 7, so nearly all of the 102 are missing data, not slow laps.
-  - **Effect:** FP2, the session with the long runs, loses the most laps this way.
-  - **Idea:** drop a lap only when a speed is present and below the threshold, and let missing speeds fall through to the training medians. Or require only the speed columns the model actually uses. That would recover up to ~100 laps.
+Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 540 (182 / 271 / 87), and only 273 rows survive the next-lap target shift in `train_model.py`. Removed by `process_laps.py`: 275 pit-out laps, 7 invalid-sector or extreme lap times, 1 for "unrealistic speed" (102 before #29), 103 IQR outliers and 331 non-push laps.
 
 - [ ] **#30 Push-lap filter may be too strict for long runs**
   - **Where:** `scripts/process_laps.py`: `apply_push_lap_filter()`, `PUSH_LAP_MAX_BEST_RATIO=1.15` in `.env` (#20).
   - **Problem:** the cutoff is relative to the driver's best lap in the whole session, which is usually a low-fuel SOFT lap. Heavy-fuel long-run laps, which are what the race simulation needs, sit close to that cutoff.
-  - **Effect:** 372 laps (145 / 109 / 118) are removed, the largest single filter.
+  - **Effect:** 331 laps (146 / 65 / 120) are removed, the largest single filter (372 before #29, when FP2 lost 109 here; since #29 the IQR filter catches more of FP2's cool-down laps first).
   - **Idea:** try a looser ratio, or apply the ratio per stint (against the stint's best lap) so long runs are judged against themselves while cool-down laps are still removed.
 
 - [ ] **#31 Next-lap target loses most rows**
-  - **Where:** `build_next_lap_target()` in `scripts/feature_config.py`; `train_model.py` logs "Rows after target shift drop: 153".
+  - **Where:** `build_next_lap_target()` in `scripts/feature_config.py`; `train_model.py` logs "Rows after target shift drop: 273".
   - **Problem:** the target needs the same driver's lap `lap_number + 1` in the same stint, and that lap must also survive cleaning. Practice runs alternate push and cool-down laps, so dropping the cool-downs breaks most consecutive pairs.
-  - **Effect:** 467 cleaned laps give only 153 training pairs, about 120 after the train/test split.
+  - **Effect:** 540 cleaned laps give only 273 training pairs, 209 after the train/test split (467 laps and 153 pairs before #29).
   - **Idea:** allow the next *surviving* lap in the stint (lap *t+k*) as the target, with *k* as a feature, so the model learns pace k laps ahead. This is a bigger modelling change: the simulator's rollout would need to match, and every feature must still belong to lap *t* (no leakage).
 
 ---
@@ -340,6 +335,32 @@ Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 467 (
       - **Car 44:** SOFT(6)–MEDIUM(3), pit on lap 46, 5838.15 s (ties with the reverse, pit on lap 11). The best 2-stop is +11.21 s.
       - Neighbouring pit laps are within about 1 s. The rollouts are almost flat, so tyre age barely matters, and an extra stop can't win back its 22 s. The model has learnt almost no compound or tyre-age effect from 153 rows. Every new stint also gets a fast median seed lap, which narrows the gap to 2 stops.
       - The metrics still come from a shuffled split (#18). This is still **not** a valid recommendation.
+
+- [x] **#29 Speed filter drops laps with a missing speed trap, not just slow ones**
+  - **Where:** `scripts/process_laps.py`: `df[(df[speed_cols] > MIN_SPEED_KMH).all(axis=1)]` in `apply_domain_filters()`.
+  - **Problem:** `NaN > MIN_SPEED_KMH` is False, so a lap missing any of `i1_speed` / `i2_speed` / `st_speed` was dropped as "unrealistic speed". The filter removed 102 laps (25 / 70 / 7), but only 1 of them (FP1) had a recorded speed ≤ 50 km/h. The non-pit-out raw laps with a missing speed number 24 / 71 / 7 (`i1_speed` 18 / 44 / 3, `st_speed` 11 / 35 / 4, `i2_speed` never), so the rest were missing data, not slow laps. `readme.txt` described only the slow-lap rule.
+  - **Effect:** FP2, the session with the long runs, lost the most laps: the missing-speed laps there are mostly long-run laps (median 1.09× the driver's session best).
+  - **readme.txt:** Data Preparation step 2, laps cleaning.
+  - **Fixed:** the filter now drops a lap only when a recorded speed is ≤ `MIN_SPEED_KMH`: `df[~(df[speed_cols] <= MIN_SPEED_KMH).any(axis=1)]` (`NaN <= 50` is False, so missing speeds pass). It logs how many kept laps have a missing speed. The speeds are model inputs, so a missing one gets the training median, as other missing inputs do (`train_model.py`, the bundle `medians` in `validate_strategy.py`, `SimpleImputer` in `explore/`); the medians are 231 / 247 / 298 km/h (i1 / i2 / st). Nothing downstream changed.
+    - **Speed filter:** 102 → 1 lap removed (1 / 0 / 0). 24 / 70 / 7 laps are kept with a missing speed; in the engineered dataset `i1_speed` is missing on 61 laps (11.3%) and `st_speed` on 40 (7.4%).
+    - **Side effect on the IQR filter:** its bounds come from the whole session's residuals, so they depend on which laps reach it. In FP2 the extra long-run laps make the residuals denser: IQR 10.8 → 5.3 s, bounds [−33.1, +42.6] → [−16.4, +21.0] s, and the filter removes 95 laps instead of 31 (68 slow ones, most of which the push filter would have removed anyway, and 27 fast ones). FP1 goes 2 → 7, FP3 stays at 1. The non-push filter then removes 146 / 65 / 120 (was 145 / 109 / 118).
+      - 16 laps that used to be kept are now dropped (4 FP1, 12 FP2): fast laps (91.6–100.5 s, mostly 92–97 s) run between cool-down laps, whose 5-lap rolling median is a cool-down lap. That is a weakness of the session-wide IQR on residuals, not of this fix, and it was left as is.
+    - **Rows:** 467 → 540 cleaned laps (164 / 221 / 82 → 182 / 271 / 87): 89 laps added, all with a missing speed, and 16 lost. Median 98.4 / 99.0 / 94.9 s, 90th percentile 102.0 / 101.2 / 100.9 s.
+    - **Target rows:** 153 → 273 (219 are a stint's last lap, 48 have a gap to the next lap; was 223 and 91). 56 stints (was 50); FP1 70, FP2 191, FP3 12 rows; SOFT 131, MEDIUM 101, HARD 41. Session weights FP1 0.256, FP2 0.700, FP3 0.044 (was 0.294 / 0.660 / 0.046). In training, `laps_since_stint_start` runs 2–15 (was 2–13) and `tyre_age` 2–18.
+    - **Car data:** 448 → 515 laps (1–16 per driver and session); 25 of the 540 laps have none (was 19 of 467).
+    - **Checks:** no lap with a recorded speed ≤ 50 km/h is left in `data/processed/laps_combined_clean.csv`. Every added lap has a missing speed, and every lap lost is removed by the IQR filter. The model's input matrix has no NaN after the median fill. The pipeline ran end to end on Bahrain 2025 from the cache.
+    - **EDA:** the degradation slopes are +0.17 / +0.06 / +0.04 s/lap (SOFT / MEDIUM / HARD; was +0.17 / +0.04 / +0.05), from 31 / 31 / 21 multi-lap stints. Collinear groups: 3 (the mean-throttle / full-throttle pair dropped below 0.8). The strongest target correlations are now `i2_speed` (+0.36), `stint_avg_pace` (+0.35) and `session_FP2` (−0.29).
+    - **Effect on metrics:**
+      - Grouped 5-fold CV MAE 1.17 s, RMSE 1.64 s (was 1.23 / 1.70 s), per fold MAE 0.93–1.35 s (was 0.75–1.68 s). OOF MAE 1.16 s, RMSE 1.63 s, mean residual −0.25 s (was 1.18 / 1.69 / −0.20 s).
+      - Held-out split: 12 stints / 64 rows (was 10 / 25), MAE 1.35 s, RMSE 1.81 s, R² 0.074 (was 1.12 / 1.56 / 0.353). It is a different and larger test set, so the CV is the better guide; fold 1 again holds out the same stints.
+      - **Persistence test:** baseline MAE 1.45 s, RMSE 2.75 s. The model has the lower MAE in all 5 folds and is better on 33 of 56 stints, paired t p = 0.0017, but Wilcoxon p = 0.052 and median per-stint gain 0.06 s (was 0.011 and 0.14 s). Both tests must pass, so the model **no longer significantly beats persistence** at 0.05. Persistence got better too (1.80 → 1.45 s): the added long-run laps are steady, so lap *t* is a good guess for lap *t+1*.
+    - **Feature importance:** XGB's top five are `session_FP3` 0.134, `drs_open_pct` 0.082, `full_throttle_pct` 0.070, `duration_sector_3` 0.058 and `air_temperature` 0.055 (was led by `session_FP2` 0.210). `tyre_age` is 12th (0.032).
+    - **Rollout behaviour** (car 16, 57-lap stint, fcp in s):
+      - The seed is 99.23 s raw (was 99.15 s), so fcp 97.23 s on stint lap 1.
+      - Every compound and set age predicts 99.7–100.0 s on stint lap 2 and 100.3–100.6 s on lap 3, then 100.1–101.4 s to lap 57. The new sets are about 0.1 s apart on average (at most 0.45 s); the used SOFT(6) is no slower on average (−0.8 to +1.0 s lap by lap).
+      - The largest step is 2.43–2.73 s (stint lap 1 to 2), and every rollout stays within 97.23–101.40 s. Still nearly flat: no compound or tyre-age effect.
+    - **Effect on strategy (car 16):** MEDIUM(0)–HARD(0), pit on lap 33, 5819.52 s, tied with HARD(0)–MEDIUM(0) on lap 24 (was MEDIUM(0)–HARD(0) on lap 10, 5774.26 s). Neighbouring pit laps are +0.10–0.64 s, the best SOFT(0)–MEDIUM(0) +0.96 s, SOFT(0)–HARD(0) +2.56 s, the best 2-stop (MEDIUM(0)–HARD(0)–MEDIUM(0), pits on 19 and 36) +11.87 s, and the best with SOFT(6) +8.78 s. The total rose by 45 s because the rollouts sit about 0.8 s/lap higher. 1 stop still wins because the rollouts are flat; this is still **not** a valid recommendation.
+    - **Not rerun:** `explore/` (#27). Its first run used the 153-row data.
 
 ### P3: completeness and cleanup
 

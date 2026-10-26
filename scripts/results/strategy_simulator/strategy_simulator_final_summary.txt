@@ -1,1 +1,1 @@
-Car 16: ('MEDIUM', 'HARD'), set ages (0, 0), pits [10], time 5774.26 s
+Car 16: ('MEDIUM', 'HARD'), set ages (0, 0), pits [33], time 5819.52 s

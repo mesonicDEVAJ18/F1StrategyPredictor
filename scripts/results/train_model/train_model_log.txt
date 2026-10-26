@@ -1,17 +1,17 @@
 Loading engineered dataset...
-Dataset rows: 467
-Rows after target shift drop: 153
-  → Dropped as last lap of a stint: 223
-  → Dropped for a gap to the next lap: 91
-Session weights: {'session_FP1': 0.294, 'session_FP2': 0.66, 'session_FP3': 0.046}
+Dataset rows: 540
+Rows after target shift drop: 273
+  → Dropped as last lap of a stint: 219
+  → Dropped for a gap to the next lap: 48
+Session weights: {'session_FP1': 0.256, 'session_FP2': 0.7, 'session_FP3': 0.044}
 Saved feature snapshot.
-Completed train/test split by stint: 40 stints / 128 rows train, 10 stints / 25 rows test, 0 shared.
+Completed train/test split by stint: 44 stints / 209 rows train, 12 stints / 64 rows test, 0 shared.
 
 Training XGBoost...
 
 Test metrics (MAE/RMSE in seconds):
-            MAE    RMSE      R2
-XGBoost  1.1205  1.5559  0.3527
+            MAE    RMSE     R2
+XGBoost  1.3516  1.8071  0.074
 Saved model metrics table.
 Saved feature importance CSV.
 Saved trained XGBoost model.
