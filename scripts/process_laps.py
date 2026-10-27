@@ -33,8 +33,10 @@ def log(msg: str):
 # ============================================================
 data_dir = env_str("DATA_DIR")
 laps_dir = os.path.join(data_dir, env_str("LAPS_DIR"))
+stints_dir = os.path.join(data_dir, env_str("STINTS_DIR"))
 processed_dir = os.path.join(data_dir, env_str("PROCESSED_DIR"))
 laps_files = env_list("LAPS_FILES")
+stints_files = env_list("STINTS_FILES")   # same session order as LAPS_FILES
 cleaned_dfs = []
 
 # Cleaning thresholds (see .env)
@@ -45,6 +47,7 @@ ROLLING_MEDIAN_WINDOW = env_int("ROLLING_MEDIAN_WINDOW")
 IQR_LOWER_MULTIPLIER = env_float("IQR_LOWER_MULTIPLIER")
 IQR_UPPER_MULTIPLIER = env_float("IQR_UPPER_MULTIPLIER")
 PUSH_LAP_MAX_BEST_RATIO = env_float("PUSH_LAP_MAX_BEST_RATIO")
+PUSH_LAP_MAX_STINT_RATIO = env_float("PUSH_LAP_MAX_STINT_RATIO")
 
 removed_rows_summary = []
 list_fix_summary = []
@@ -125,18 +128,49 @@ def apply_iqr_residual_filter(df, fname):
     return df.drop(columns=["rolling_median", "residual", "best_ratio"], errors="ignore")
 
 
-def apply_push_lap_filter(df, fname):
-    """Drop non-push laps: slower than PUSH_LAP_MAX_BEST_RATIO x the driver's best lap
-    in this session. Each file is one session."""
-    best_lap = df.groupby("driver_number")["lap_duration"].transform("min")
+def assign_stints(df, stints, fname):
+    """Tags each lap with the driver's stint_number whose lap_start..lap_end holds it (as
+    feature_engineer.assign_stint_numbers(), within one session). Unmatched laps stay NaN."""
+    df["stint_number"] = np.nan
+    for _, row in stints.iterrows():
+        mask = (
+            (df["driver_number"] == row["driver_number"]) &
+            (df["lap_number"] >= row["lap_start"]) &
+            (df["lap_number"] <= row["lap_end"])
+        )
+        df.loc[mask, "stint_number"] = row["stint_number"]
+    log(f"[{fname}] Laps without a stint: {df['stint_number'].isna().sum()} (only the session test applies to them)")
+    return df
+
+
+def apply_push_lap_filter(df, fname, stints):
+    """Drop non-push laps (#30): slower than PUSH_LAP_MAX_BEST_RATIO x the driver's best lap in
+    this session, or than PUSH_LAP_MAX_STINT_RATIO x the driver's best lap in the same stint.
+    Each file is one session. Saves every lap's two ratios for explore/tune_push.py."""
+    df = assign_stints(df, stints, fname)
+    df["session_ratio"] = df["lap_duration"] / df.groupby("driver_number")["lap_duration"].transform("min")
+    df["stint_ratio"] = df["lap_duration"] / df.groupby(["driver_number", "stint_number"])["lap_duration"].transform("min")
+
+    ratio_cols = [c for c in ["session_key", "driver_number", "lap_number", "stint_number", "lap_duration",
+                              "session_ratio", "stint_ratio"] if c in df.columns]
+    ratio_name = f"{SCRIPT_NAME}_push_ratios_{fname.replace('.csv', '')}.csv"
+    df[ratio_cols].to_csv(os.path.join(RESULTS_DIR, ratio_name), index=False)
+    generated_files.append(ratio_name)
 
     before = len(df)
-    df = df[df["lap_duration"] <= PUSH_LAP_MAX_BEST_RATIO * best_lap]
+    df = df[df["session_ratio"] <= PUSH_LAP_MAX_BEST_RATIO]
     removed = before - len(df)
-    log(f"[{fname}] Removed {removed} non-push laps (> {PUSH_LAP_MAX_BEST_RATIO}x driver's session best)")
+    log(f"[{fname}] Removed {removed} non-push laps (> {PUSH_LAP_MAX_BEST_RATIO:g}x driver's session best)")
     removed_rows_summary.append([fname, "non_push", removed])
 
-    return df
+    # NaN stint_ratio (no stint) is kept
+    before = len(df)
+    df = df[~(df["stint_ratio"] > PUSH_LAP_MAX_STINT_RATIO)]
+    removed = before - len(df)
+    log(f"[{fname}] Removed {removed} non-push laps (> {PUSH_LAP_MAX_STINT_RATIO:g}x driver's stint best)")
+    removed_rows_summary.append([fname, "non_push_stint", removed])
+
+    return df.drop(columns=["stint_number", "session_ratio", "stint_ratio"])
 
 
 def session_name_from_file(file):
@@ -151,9 +185,10 @@ def session_name_from_file(file):
 # MAIN PROCESSING LOOP
 # ============================================================
 
-for file in laps_files:
+for file, stints_file in zip(laps_files, stints_files):
     file_path = os.path.join(laps_dir, file)
     df = pd.read_csv(file_path)
+    stints = pd.read_csv(os.path.join(stints_dir, stints_file))
     fname = file.replace(".csv", "")
     log(f"\nLoaded {file} with {len(df)} rows")
 
@@ -181,7 +216,7 @@ for file in laps_files:
     # Apply cleaning pipeline
     df = apply_domain_filters(df, file)
     df = apply_iqr_residual_filter(df, file)
-    df = apply_push_lap_filter(df, file)
+    df = apply_push_lap_filter(df, file, stints)
 
     # Lap times and speeds stay in physical units (s, km/h): the models are scale-invariant,
     # and per-session scaling would erase each session's pace level

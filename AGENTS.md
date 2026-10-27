@@ -44,8 +44,10 @@ explore/            # model selection (#27), kept out of the pipeline; run FROM 
   explore_master.py     # alternate master: data stages + the experiment block (candidates, grids, feature sets)
   explore_lib.py        # custom estimators, nested grouped CV, simulator-style rollout
   tune_iqr.py           # tunes process_laps.py's two IQR multipliers over many cached weekends (#32)
+  tune_push.py          # tunes process_laps.py's two push-lap ratios (session best, stint best) the same way (#30)
   results/explore_master/  # leaderboard, per-fold CV, best params, rollouts
   results/tune_iqr/        # label sweep, CV sweep, recommendation
+  results/tune_push/       # labelled laps, label sweep, CV sweep, recommendation
 data/
   raw/                  # the selected weekend's OpenF1 downloads (RAW_DIR), one folder per source (LAPS_DIR, STINTS_DIR, DRIVERS_DIR, WEATHER_DIR, CARDATA_DIR)
     laps/                 # laps_p1-3.csv
@@ -110,6 +112,19 @@ settings as environment variables, so while it runs it switches `data/raw/` betw
 those stages' `scripts/results/`; at the end it switches back to the `.env` weekend and reruns them at the `.env` values. Its
 outputs go to `explore/results/tune_iqr/`; the winner is copied into `.env` by hand, with the reasoning in the comment there.
 
+```bash
+cd explore
+python tune_push.py           # same weekends as tune_iqr.py
+python tune_push.py --quick   # smoke run: two weekends, small grid
+```
+
+`tune_push.py` picks `PUSH_LAP_MAX_BEST_RATIO` / `PUSH_LAP_MAX_STINT_RATIO` (#30) the same way, and is a copy of `tune_iqr.py`'s
+harness (keep the two in step). Its label doesn't use the ratios it tunes. `process_laps` runs with the push filter off and
+`process_cardata` with its z-score filter off, and each lap's `full_throttle_pct`, relative to the driver's 90th percentile in the
+session, labels it a push lap (≥ 0.8) or a cool-down lap (≤ 0.6). The label pick is the pair with the highest Youden J over
+`process_laps_push_ratios_*.csv`. The CV sweep, the switching of weekends and the final restore are as in `tune_iqr.py`. Outputs go
+to `explore/results/tune_push/`.
+
 **Known gaps (don't "fix" silently — confirm intent first):**
 - Open issues (the unconfirmed model choice, no statistical inference, etc.) are listed in [diagnostic.md](diagnostic.md). Fixing them
   changes results, so confirm before fixing, and update diagnostic.md when one is resolved.
@@ -134,7 +149,10 @@ Scripts communicate through CSVs in `data/processed/`, not by importing each oth
 - `process_laps.py`   → `data/processed/laps_combined_clean.csv`. Its residual filter has a separate multiplier for each side
   (`IQR_LOWER_MULTIPLIER` for fast laps, `IQR_UPPER_MULTIPLIER` for slow ones, tuned by `explore/tune_iqr.py`), and it saves
   every lap reaching that filter with its residual and `best_ratio` to `results/process_laps/process_laps_iqr_residuals_*.csv`
-  (diagnostic only; `tune_iqr.py` reads it)
+  (diagnostic only; `tune_iqr.py` reads it). Its push-lap filter drops a lap slower than `PUSH_LAP_MAX_BEST_RATIO` × the
+  driver's session best or `PUSH_LAP_MAX_STINT_RATIO` × the driver's best in that stint. Stints come from the raw
+  `data/raw/stints/`, matched by `lap_start` / `lap_end` as in `feature_engineer.py`. It saves every lap reaching that filter
+  with both ratios to `results/process_laps/process_laps_push_ratios_*.csv` (diagnostic only; `tune_push.py` reads it)
 - `process_stints.py` → `data/processed/stints_combined_clean.csv`
 - `tyre_sets.py`      → `data/processed/tyre_sets_race_inventory.csv` (one row per set every car in practice has
   left for the race: compound and age in laps). OpenF1 has no set ID, so sets are chained by compound and

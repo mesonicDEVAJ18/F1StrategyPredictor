@@ -213,6 +213,32 @@ Finally, removed non-push laps (cool-down, in- and traffic laps): laps slower th
 runs at <= 1.10x, and cool-down laps from about 1.3x, with a gap around 1.14-1.16x. The compound isn't known yet at this stage (it comes from
 the stints), but the gap between compounds (~1%) is well inside the margin. This removes 146 / 65 / 120 laps in FP1 / FP2 / FP3 and leaves
 573 laps, 188 / 298 / 87 (median 95-99 s, 90th percentile 101-102 s per session).
+A second test can also judge a lap against the driver's best lap in the same stint (PUSH_LAP_MAX_STINT_RATIO; stints matched from the raw
+stints by lap_start / lap_end). It is off (100), as explained below. Every lap reaching this filter is saved with both ratios
+(scripts/results/process_laps/process_laps_push_ratios_laps_p*.csv).
+
+Tuning the push-lap filter (explore/tune_push.py, diagnostic.md #30)
+The question. The cutoff is relative to the driver's session best, usually a low-fuel SOFT lap, so heavy-fuel long-run laps might sit
+close to it. Judging each lap against its own stint's best would let long runs be judged against themselves.
+Method. explore/tune_push.py, a copy of tune_iqr.py's harness, on the same 12 weekends. A lap is kept only if it passes both
+tests: lap <= r_session x session best and lap <= r_stint x stint best. Today's rule is (1.15, off).
+  A. Label sweep. The label must not use the ratios being tuned, so it comes from car data. process_laps.py runs with the filter off and
+     process_cardata.py with its z-score filter off, and each lap's full-throttle share divided by the driver's 90th percentile in the
+     session labels it a push lap (>= 0.8) or a cool-down lap (<= 0.6); in between is ambiguous. 11,418 laps: 6,353 push, 3,984
+     cool-down, 1,065 ambiguous, 16 without telemetry. Each pair in {1.10, 1.12, 1.15, 1.18, 1.20, 1.25, 1.30} x {1.04, 1.06, 1.08,
+     1.10, 1.12, off} is scored by Youden's J (push laps kept - cool-down laps kept, as shares).
+  B. CV sweep. As for the IQR fences, over {1.10, 1.12, 1.15, 1.20, 1.25, 1.30} x {1.06, 1.08, 1.10, 1.12, off}.
+Results (explore/results/tune_push/).
+  Label sweep: the best pair is (1.15, 1.10), push laps kept 99.4% and cool-down laps 0.8% (J 0.986), against 99.7% / 1.2% (J 0.984)
+  for (1.15, off). With the stint test off, 1.12 and 1.15 tie (J 0.986 / 0.984); looser ratios let in cool-down laps quickly (1.20: 3.3%,
+  1.30: 14.2%) and 1.10 loses 2.6% of push laps. So the session ratio already sits at the gap, and the stint test adds little.
+  CV sweep (536 stints, 2,691 common rows): MAE falls steadily as the filter tightens, and the strictest corner, (1.10, 1.06), wins
+  (per-stint MAE 0.52 s against 0.87 s for (1.15, off), both tests p < 0.0001). This is a bias, not a result: the common rows are the
+  strictest setting's own rows, so it trains on exactly the laps it is scored on, while looser settings also train on laps that never
+  reach the score. (For the IQR fences the winner was the loosest setting, so there the bias worked against it.) (1.10, 1.06) drops
+  580 laps, 170 of them labelled push laps and 61% of them from runs of 8+ laps: the long-run laps #30 set out to protect.
+  Decision: kept at (1.15, off). Heavy-fuel long-run laps are not lost at 1.15: (1.15, off) keeps 2,785 of the 2,789 labelled push laps in
+  runs of 8+ laps, and the label pick would remove only 0.4 points more of the cool-down laps. The Bahrain 2025 data is unchanged.
 
 Tuning the IQR fences (explore/tune_iqr.py, diagnostic.md #32)
 The problem. Until #32 one multiplier, 3, served both sides. A push lap run between cool-down laps (a fast lap with ~110 s laps either side)

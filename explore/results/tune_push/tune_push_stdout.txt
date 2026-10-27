@@ -1,0 +1,189 @@
+Tuning the push-lap filter on 12 weekends: 2025 bahrain, 2024 saudi_arabia, 2025 australia, 2025 japan, 2025 spain, 2025 austria, 2025 britain, 2025 netherlands, 2025 italy, 2025 singapore, 2024 hungary, 2024 spain
+
+=== A. Label sweep (full-throttle share / driver's q0.9: push >= 0.8, cool-down <= 0.6) ===
+
+2025 bahrain
+  2025 bahrain: in data/raw/, stints and weather processed (3s)
+  904 laps: push 464, cool 318, ambiguous 122, no_telemetry 0
+
+2024 saudi_arabia
+  2024 saudi_arabia: in data/raw/, stints and weather processed (3s)
+  971 laps: push 590, cool 331, ambiguous 50, no_telemetry 0
+
+2025 australia
+  2025 australia: in data/raw/, stints and weather processed (3s)
+  795 laps: push 517, cool 245, ambiguous 33, no_telemetry 0
+
+2025 japan
+  2025 japan: in data/raw/, stints and weather processed (3s)
+  678 laps: push 436, cool 216, ambiguous 26, no_telemetry 0
+
+2025 spain
+  2025 spain: in data/raw/, stints and weather processed (3s)
+  920 laps: push 444, cool 241, ambiguous 223, no_telemetry 12
+
+2025 austria
+  2025 austria: in data/raw/, stints and weather processed (3s)
+  1272 laps: push 774, cool 427, ambiguous 67, no_telemetry 4
+
+2025 britain
+  2025 britain: in data/raw/, stints and weather processed (3s)
+  928 laps: push 563, cool 289, ambiguous 76, no_telemetry 0
+
+2025 netherlands
+  2025 netherlands: in data/raw/, stints and weather processed (3s)
+  979 laps: push 576, cool 347, ambiguous 56, no_telemetry 0
+
+2025 italy
+  2025 italy: in data/raw/, stints and weather processed (3s)
+  1080 laps: push 556, cool 490, ambiguous 34, no_telemetry 0
+
+2025 singapore
+  2025 singapore: in data/raw/, stints and weather processed (3s)
+  925 laps: push 453, cool 415, ambiguous 57, no_telemetry 0
+
+2024 hungary
+  2024 hungary: in data/raw/, stints and weather processed (3s)
+  894 laps: push 453, cool 325, ambiguous 116, no_telemetry 0
+
+2024 spain
+  2024 spain: in data/raw/, stints and weather processed (3s)
+  1072 laps: push 527, cool 340, ambiguous 205, no_telemetry 0
+
+Labelled laps over all sessions: push 6353, cool-down 3984
+Label pick (1.15, 1.1): push kept 0.994, cool-down kept 0.008, J 0.986, laps kept 7133
+Current (1.15, off): push kept 0.997, cool-down kept 0.012, J 0.984, laps kept 7216
+Best pair per session: r_session 1.1: 2, 1.12: 5, 1.15: 9, 1.18: 5, 1.2: 6, 1.25: 1, 1.3: 8; r_stint 1.06: 1, 1.08: 3, 1.1: 5, 1.12: 8, off: 19
+Pooled, stint test off (r_session: push / cool-down kept):
+  1.1: 0.974 / 0.005, J 0.969
+  1.12: 0.992 / 0.007, J 0.986
+  1.15: 0.997 / 0.012, J 0.984
+  1.18: 0.998 / 0.023, J 0.975
+  1.2: 0.999 / 0.033, J 0.966
+  1.25: 0.999 / 0.078, J 0.921
+  1.3: 0.999 / 0.142, J 0.857
+Pooled, r_session 1.15 (r_stint: push / cool-down kept):
+  1.04: 0.969 / 0.006, J 0.963
+  1.06: 0.987 / 0.006, J 0.981
+  1.08: 0.992 / 0.007, J 0.985
+  1.1: 0.994 / 0.008, J 0.986
+  1.12: 0.995 / 0.011, J 0.985
+  off: 0.997 / 0.012, J 0.984
+
+=== B. CV sweep: r_session [1.1, 1.12, 1.15, 1.2, 1.25, 1.3] x r_stint [1.06, 1.08, 1.1, 1.12, 100.0], 5 stint folds x 2 ===
+
+2025 bahrain
+  2025 bahrain: in data/raw/, stints and weather processed (3s)
+  30 configurations, 27 distinct cleaned-lap sets
+  217 target rows common to every configuration (92 stints); MAE on them 0.464-1.437 s
+
+2024 saudi_arabia
+  2024 saudi_arabia: in data/raw/, stints and weather processed (3s)
+  30 configurations, 16 distinct cleaned-lap sets
+  248 target rows common to every configuration (107 stints); MAE on them 0.559-1.460 s
+
+2025 australia
+  2025 australia: in data/raw/, stints and weather processed (3s)
+  30 configurations, 19 distinct cleaned-lap sets
+  199 target rows common to every configuration (46 stints); MAE on them 0.453-0.813 s
+
+2025 japan
+  2025 japan: in data/raw/, stints and weather processed (3s)
+  30 configurations, 19 distinct cleaned-lap sets
+  170 target rows common to every configuration (67 stints); MAE on them 0.651-1.441 s
+
+2025 spain
+  2025 spain: in data/raw/, stints and weather processed (3s)
+  30 configurations, 23 distinct cleaned-lap sets
+  196 target rows common to every configuration (85 stints); MAE on them 0.313-1.121 s
+
+2025 austria
+  2025 austria: in data/raw/, stints and weather processed (3s)
+  30 configurations, 26 distinct cleaned-lap sets
+  366 target rows common to every configuration (93 stints); MAE on them 0.326-0.764 s
+
+2025 britain
+  2025 britain: in data/raw/, stints and weather processed (3s)
+  30 configurations, 21 distinct cleaned-lap sets
+  263 target rows common to every configuration (93 stints); MAE on them 0.376-0.953 s
+
+2025 netherlands
+  2025 netherlands: in data/raw/, stints and weather processed (3s)
+  30 configurations, 26 distinct cleaned-lap sets
+  251 target rows common to every configuration (81 stints); MAE on them 0.470-0.880 s
+
+2025 italy
+  2025 italy: in data/raw/, stints and weather processed (3s)
+  30 configurations, 26 distinct cleaned-lap sets
+  183 target rows common to every configuration (89 stints); MAE on them 0.664-1.230 s
+
+2025 singapore
+  2025 singapore: in data/raw/, stints and weather processed (3s)
+  30 configurations, 26 distinct cleaned-lap sets
+  120 target rows common to every configuration (75 stints); MAE on them 0.826-2.553 s
+
+2024 hungary
+  2024 hungary: in data/raw/, stints and weather processed (3s)
+  30 configurations, 27 distinct cleaned-lap sets
+  224 target rows common to every configuration (88 stints); MAE on them 0.340-1.015 s
+
+2024 spain
+  2024 spain: in data/raw/, stints and weather processed (3s)
+  30 configurations, 25 distinct cleaned-lap sets
+  254 target rows common to every configuration (100 stints); MAE on them 0.349-1.518 s
+
+Pooled over 12 weekends (536 stints, 2691 common rows):
+  (1.1, 1.06): stint MAE 0.5228 s, row MAE 0.4548 s, cleaned laps 6636, target rows 2691 (536 stints), removed slow-IQR/session/stint 977/4721/61
+  (1.1, 1.08): stint MAE 0.5438 s, row MAE 0.4665 s, cleaned laps 6676, target rows 2721 (547 stints), removed slow-IQR/session/stint 977/4721/21
+  (1.1, 1.1): stint MAE 0.5728 s, row MAE 0.4786 s, cleaned laps 6697, target rows 2732 (555 stints), removed slow-IQR/session/stint 977/4721/0
+  (1.1, 1.12): stint MAE 0.5728 s, row MAE 0.4786 s, cleaned laps 6697, target rows 2732 (555 stints), removed slow-IQR/session/stint 977/4721/0
+  (1.1, off): stint MAE 0.5728 s, row MAE 0.4786 s, cleaned laps 6697, target rows 2732 (555 stints), removed slow-IQR/session/stint 977/4721/0
+  (1.12, 1.06): stint MAE 0.5736 s, row MAE 0.5071 s, cleaned laps 6897, target rows 2981 (544 stints), removed slow-IQR/session/stint 977/4399/122
+  (1.12, 1.08): stint MAE 0.6283 s, row MAE 0.5361 s, cleaned laps 6951, target rows 3028 (557 stints), removed slow-IQR/session/stint 977/4399/68
+  (1.12, 1.1): stint MAE 0.6509 s, row MAE 0.5499 s, cleaned laps 6996, target rows 3054 (570 stints), removed slow-IQR/session/stint 977/4399/23
+  (1.12, 1.12): stint MAE 0.6826 s, row MAE 0.5593 s, cleaned laps 7019, target rows 3072 (579 stints), removed slow-IQR/session/stint 977/4399/0
+  (1.12, off): stint MAE 0.6826 s, row MAE 0.5593 s, cleaned laps 7019, target rows 3072 (579 stints), removed slow-IQR/session/stint 977/4399/0
+  (1.15, 1.06): stint MAE 0.6109 s, row MAE 0.5503 s, cleaned laps 6986, target rows 3080 (546 stints), removed slow-IQR/session/stint 977/4202/230
+  (1.15, 1.08): stint MAE 0.7093 s, row MAE 0.6282 s, cleaned laps 7076, target rows 3178 (560 stints), removed slow-IQR/session/stint 977/4202/140
+  (1.15, 1.1): stint MAE 0.7577 s, row MAE 0.6563 s, cleaned laps 7133, target rows 3216 (577 stints), removed slow-IQR/session/stint 977/4202/83
+  (1.15, 1.12): stint MAE 0.8184 s, row MAE 0.6793 s, cleaned laps 7181, target rows 3260 (599 stints), removed slow-IQR/session/stint 977/4202/35
+  (1.15, off): stint MAE 0.8654 s, row MAE 0.6959 s, cleaned laps 7216, target rows 3288 (619 stints), removed slow-IQR/session/stint 977/4202/0
+  (1.2, 1.06): stint MAE 0.6235 s, row MAE 0.5575 s, cleaned laps 7024, target rows 3087 (549 stints), removed slow-IQR/session/stint 977/3980/414
+  (1.2, 1.08): stint MAE 0.7257 s, row MAE 0.6438 s, cleaned laps 7135, target rows 3211 (564 stints), removed slow-IQR/session/stint 977/3980/303
+  (1.2, 1.1): stint MAE 0.7939 s, row MAE 0.6946 s, cleaned laps 7210, target rows 3271 (581 stints), removed slow-IQR/session/stint 977/3980/228
+  (1.2, 1.12): stint MAE 0.9070 s, row MAE 0.7648 s, cleaned laps 7278, target rows 3340 (603 stints), removed slow-IQR/session/stint 977/3980/160
+  (1.2, off): stint MAE 1.1074 s, row MAE 0.8574 s, cleaned laps 7438, target rows 3472 (701 stints), removed slow-IQR/session/stint 977/3980/0
+  (1.25, 1.06): stint MAE 0.6207 s, row MAE 0.5583 s, cleaned laps 7044, target rows 3089 (551 stints), removed slow-IQR/session/stint 977/3747/627
+  (1.25, 1.08): stint MAE 0.7338 s, row MAE 0.6536 s, cleaned laps 7156, target rows 3214 (567 stints), removed slow-IQR/session/stint 977/3747/515
+  (1.25, 1.1): stint MAE 0.7967 s, row MAE 0.6996 s, cleaned laps 7231, target rows 3274 (584 stints), removed slow-IQR/session/stint 977/3747/440
+  (1.25, 1.12): stint MAE 0.9164 s, row MAE 0.7717 s, cleaned laps 7302, target rows 3346 (607 stints), removed slow-IQR/session/stint 977/3747/369
+  (1.25, off): stint MAE 1.4064 s, row MAE 1.0376 s, cleaned laps 7671, target rows 3675 (833 stints), removed slow-IQR/session/stint 977/3747/0
+  (1.3, 1.06): stint MAE 0.6201 s, row MAE 0.5567 s, cleaned laps 7068, target rows 3089 (551 stints), removed slow-IQR/session/stint 977/3474/876
+  (1.3, 1.08): stint MAE 0.7370 s, row MAE 0.6540 s, cleaned laps 7180, target rows 3214 (567 stints), removed slow-IQR/session/stint 977/3474/764
+  (1.3, 1.1): stint MAE 0.7991 s, row MAE 0.7002 s, cleaned laps 7256, target rows 3275 (585 stints), removed slow-IQR/session/stint 977/3474/688
+  (1.3, 1.12): stint MAE 0.9142 s, row MAE 0.7713 s, cleaned laps 7327, target rows 3347 (608 stints), removed slow-IQR/session/stint 977/3474/617
+  (1.3, off): stint MAE 1.6367 s, row MAE 1.1842 s, cleaned laps 7944, target rows 3912 (1016 stints), removed slow-IQR/session/stint 977/3474/0
+
+Push-lap filter tuning over 12 weekends (2024_hungary, 2024_saudi_arabia, 2024_spain, 2025_australia, 2025_austria, 2025_bahrain, 2025_britain, 2025_italy, 2025_japan, 2025_netherlands, 2025_singapore, 2025_spain)
+
+A. Label sweep: pick (1.15, 1.1), push laps kept 0.994, cool-down laps kept 0.008 (J 0.986); current (1.15, off) 0.997 / 0.012 (J 0.984).
+B. CV sweep: (1.1, 1.06) beats the label pick (1.15, 1.1) on both paired tests (t p 0.0000, Wilcoxon p 0.0000).
+   Winner (1.1, 1.06): pooled per-stint MAE 0.5228 s, row MAE 0.4548 s, 6636 cleaned laps, 2691 target rows.
+   Current (1.15, off): pooled per-stint MAE 0.8654 s, row MAE 0.6959 s, 7216 cleaned laps, 3288 target rows.
+   Winner vs current: mean per-stint diff -0.3426 s, better on 398 of 536 stints, t p 0.0000, Wilcoxon p 0.0000.
+
+Copy into .env: PUSH_LAP_MAX_BEST_RATIO=1.1  PUSH_LAP_MAX_STINT_RATIO=1.06
+
+Restoring the .env weekend and data stages at the .env values...
+
+DONE in 4244s. Files generated:
+  - tune_push_labelled_laps.csv
+  - tune_push_label_sweep.csv
+  - tune_push_label_pooled.csv
+  - tune_push_label_sweep.png
+  - tune_push_cv_sweep.csv
+  - tune_push_cv_per_stint.csv
+  - tune_push_cv_pooled.csv
+  - tune_push_cv_heatmap.png
+  - tune_push_recommendation.txt
+  - tune_push_manifest.txt

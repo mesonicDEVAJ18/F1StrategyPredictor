@@ -127,7 +127,7 @@ Environmental conditions:
 - Unrealistic lap times (≤ 30s or ≥ 2× session median)
 - Aborted laps (a recorded `i1_speed`, `i2_speed` or `st_speed` ≤ 50 km/h; laps with a missing speed are kept, and the missing value gets the training median)
 - Rolling median residual filtering: residual = lap time − 5-lap centred rolling median per driver; removed laps below `Q1 − 60×IQR` (fast) or above `Q3 + 3×IQR` (slow). The two multipliers (`IQR_LOWER_MULTIPLIER`, `IQR_UPPER_MULTIPLIER`) were tuned over 12 weekends by `explore/tune_iqr.py` (#32): a fast lap in practice is a push lap run between cool-down laps, so the fast side is in effect off
-- Non-push laps (cool-down, in- and traffic laps): slower than 1.15× the driver's best lap in the session (`PUSH_LAP_MAX_BEST_RATIO`), which leaves 573 laps (Bahrain 2025)
+- Non-push laps (cool-down, in- and traffic laps): slower than 1.15× the driver's best lap in the session (`PUSH_LAP_MAX_BEST_RATIO`), which leaves 573 laps (Bahrain 2025). A second test against the driver's stint best (`PUSH_LAP_MAX_STINT_RATIO`) exists but is off: `explore/tune_push.py` (#30) found 1.15 already sits at the gap between push and cool-down laps (labelled from throttle telemetry over 12 weekends), and that a stricter filter mostly drops long-run laps
 
 *Stints:*
 - Logical validation: `lap_start ≤ lap_end`

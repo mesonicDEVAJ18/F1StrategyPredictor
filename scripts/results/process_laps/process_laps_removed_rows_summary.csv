@@ -6,6 +6,7 @@ laps_p1.csv,unrealistic_speed,1
 laps_p1.csv,iqr_residual_fast,0
 laps_p1.csv,iqr_residual_slow,1
 laps_p1.csv,non_push,146
+laps_p1.csv,non_push_stint,0
 laps_p2.csv,pit_out,89
 laps_p2.csv,invalid_sector,1
 laps_p2.csv,unrealistic_laptime,1
@@ -13,6 +14,7 @@ laps_p2.csv,unrealistic_speed,0
 laps_p2.csv,iqr_residual_fast,0
 laps_p2.csv,iqr_residual_slow,68
 laps_p2.csv,non_push,65
+laps_p2.csv,non_push_stint,0
 laps_p3.csv,pit_out,96
 laps_p3.csv,invalid_sector,5
 laps_p3.csv,unrealistic_laptime,0
@@ -20,3 +22,4 @@ laps_p3.csv,unrealistic_speed,0
 laps_p3.csv,iqr_residual_fast,0
 laps_p3.csv,iqr_residual_slow,1
 laps_p3.csv,non_push,120
+laps_p3.csv,non_push_stint,0

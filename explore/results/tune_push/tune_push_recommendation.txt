@@ -1,0 +1,9 @@
+Push-lap filter tuning over 12 weekends (2024_hungary, 2024_saudi_arabia, 2024_spain, 2025_australia, 2025_austria, 2025_bahrain, 2025_britain, 2025_italy, 2025_japan, 2025_netherlands, 2025_singapore, 2025_spain)
+
+A. Label sweep: pick (1.15, 1.1), push laps kept 0.994, cool-down laps kept 0.008 (J 0.986); current (1.15, off) 0.997 / 0.012 (J 0.984).
+B. CV sweep: (1.1, 1.06) beats the label pick (1.15, 1.1) on both paired tests (t p 0.0000, Wilcoxon p 0.0000).
+   Winner (1.1, 1.06): pooled per-stint MAE 0.5228 s, row MAE 0.4548 s, 6636 cleaned laps, 2691 target rows.
+   Current (1.15, off): pooled per-stint MAE 0.8654 s, row MAE 0.6959 s, 7216 cleaned laps, 3288 target rows.
+   Winner vs current: mean per-stint diff -0.3426 s, better on 398 of 536 stints, t p 0.0000, Wilcoxon p 0.0000.
+
+Copy into .env: PUSH_LAP_MAX_BEST_RATIO=1.1  PUSH_LAP_MAX_STINT_RATIO=1.06

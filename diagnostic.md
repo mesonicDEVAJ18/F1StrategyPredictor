@@ -77,12 +77,6 @@ Ideas that could make more data usable, not confirmed bugs. Each one changes the
 
 Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 573 (188 / 298 / 87), and only 273 rows survive the next-lap target shift in `train_model.py`. Removed by `process_laps.py`: 275 pit-out laps, 7 invalid-sector or extreme lap times, 1 for "unrealistic speed" (102 before #29), 70 IQR outliers (all slow; 103 before #32) and 331 non-push laps.
 
-- [ ] **#30 Push-lap filter may be too strict for long runs**
-  - **Where:** `scripts/process_laps.py`: `apply_push_lap_filter()`, `PUSH_LAP_MAX_BEST_RATIO=1.15` in `.env` (#20).
-  - **Problem:** the cutoff is relative to the driver's best lap in the whole session, which is usually a low-fuel SOFT lap. Heavy-fuel long-run laps, which are what the race simulation needs, sit close to that cutoff.
-  - **Effect:** 331 laps (146 / 65 / 120) are removed, the largest single filter (372 before #29, when FP2 lost 109 here; since #29 the IQR filter catches more of FP2's cool-down laps first).
-  - **Idea:** try a looser ratio, or apply the ratio per stint (against the stint's best lap) so long runs are judged against themselves while cool-down laps are still removed.
-
 - [ ] **#31 Next-lap target loses most rows**
   - **Where:** `build_next_lap_target()` in `scripts/feature_config.py`; `train_model.py` logs "Rows after target shift drop: 273".
   - **Problem:** the target needs the same driver's lap `lap_number + 1` in the same stint, and that lap must also survive cleaning. Practice runs alternate push and cool-down laps, so dropping the cool-downs breaks most consecutive pairs.
@@ -388,6 +382,21 @@ Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 573 (
     - **Effect on strategy (car 16):** MEDIUM(0)–HARD(0), pit on lap 29, 5819.18 s, tied with HARD(0)–MEDIUM(0) on lap 28 (was lap 33, 5819.52 s). Pit laps 27–31 are within 0.28 s, laps 26 and 32 about 2 s slower; best SOFT(0)–MEDIUM(0) +2.17 s, SOFT(0)–HARD(0) +3.15 s, best 2-stop (HARD(0)–MEDIUM(0)–MEDIUM(0), pits on 16 and 40) +12.86 s, best with SOFT(6) (a 2-stop) +15.63 s. Still **not** a valid recommendation (flat rollouts, #27).
     - **Not rerun:** `explore/explore_master.py` (#27).
     - **Docs:** readme.txt (Data Preparation step 2, a new "Tuning the IQR fences" subsection, and every count downstream), README.md, AGENTS.md.
+
+- [x] **#30 Push-lap filter may be too strict for long runs** (was under "Things to explore")
+  - **Where:** `scripts/process_laps.py`: `apply_push_lap_filter()`, `PUSH_LAP_MAX_BEST_RATIO=1.15` in `.env` (#20).
+  - **Problem:** the cutoff is relative to the driver's best lap in the whole session, which is usually a low-fuel SOFT lap. Heavy-fuel long-run laps, which are what the race simulation needs, might sit close to that cutoff.
+  - **Effect:** 331 laps (146 / 65 / 120) are removed, the largest single filter.
+  - **Fixed (investigated, filter kept):** a stint test was added and tuned over 12 weekends; the current rule was kept.
+    - **Code:** `apply_push_lap_filter()` tags each lap with its stint from the raw stints (`lap_start` / `lap_end`, as `feature_engineer.assign_stint_numbers()`). A lap must pass two tests: the session test as before, and `PUSH_LAP_MAX_STINT_RATIO` × the driver's best in that stint (new `.env` key; 100 = off). The removals are logged as `non_push` and `non_push_stint`, and every lap reaching the filter is saved with both ratios to `process_laps_push_ratios_laps_p*.csv`. With the stint test off, the cleaned laps are byte-identical.
+    - **Tuning:** `explore/tune_push.py` is a copy of `tune_iqr.py`'s harness, run on the same 12 weekends (4,244 s).
+      - **Label sweep:** the label is independent of the ratios being tuned. With the push filter and car data's z-score filter off, each lap's `full_throttle_pct` / the driver's 90th percentile in the session gives push ≥ 0.8 and cool-down ≤ 0.6. That is 11,418 laps: 6,353 push, 3,984 cool-down, 1,065 ambiguous, 16 without telemetry. Over {1.10 … 1.30} × {1.04 … 1.12, off}, the best Youden J is at (1.15, 1.10): push laps kept 99.4%, cool-down 0.8% (J 0.986). For (1.15, off) the figures are 99.7% / 1.2% (J 0.984). With the stint test off: 1.10 keeps 97.4% of push laps, 1.20 lets in 3.3% of cool-down laps, and 1.30 lets in 14.2%. The best pair per session varies widely (r_session 1.10–1.30; r_stint off in 19 of 36 sessions).
+      - **CV sweep:** {1.10, 1.12, 1.15, 1.20, 1.25, 1.30} × {1.06, 1.08, 1.10, 1.12, off}, on 536 stints and 2,691 common rows. MAE falls steadily as the filter tightens, and the harness's rule picks the strictest corner, (1.10, 1.06): per-stint MAE 0.52 s, against 0.87 s for (1.15, off), with t and Wilcoxon p < 0.0001. The label pick (1.15, 1.10) is 0.11 s better than (1.15, off) (p < 0.003).
+      - **Why the CV is not trusted here:** the common rows are the strictest configuration's own target rows. That configuration trains on exactly the laps it is scored on, while looser ones also train on laps that are never scored. In #32 the winner was the loosest setting, so the same bias worked against it; here it favours the winner. (1.10, 1.06) drops 580 laps, 170 of them labelled push laps and 61% of them from runs of 8+ laps (the base rate is 47%).
+    - **Decision:** keep `PUSH_LAP_MAX_BEST_RATIO=1.15` and `PUSH_LAP_MAX_STINT_RATIO=100` (off). #30's concern doesn't hold: at 1.15, 2,785 of the 2,789 labelled push laps in runs of 8+ laps are kept. The ratio already sits at the gap, and the stint test would remove only 0.4 points more of the cool-down laps.
+    - **Effect:** none on Bahrain 2025. The cleaned laps, target rows, model and strategy are unchanged, so nothing downstream was rerun.
+    - **Open:** to judge filters fairly, the CV needs a common evaluation set that doesn't depend on the strictest configuration, e.g. rows scored at their features under every configuration. `tune_push.py`'s winner rule has a caution comment about this. #32's result isn't affected, since its bias went against its winner.
+    - **Docs:** readme.txt (Data Preparation step 2, a new "Tuning the push-lap filter" subsection), README.md, AGENTS.md, `.env` comment.
 
 ### P3: completeness and cleanup
 
