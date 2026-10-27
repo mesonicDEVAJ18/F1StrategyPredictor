@@ -1,10 +1,10 @@
 stage,session,compound,rows,stints,drivers
-engineered,FP1,HARD,61,23,11
-engineered,FP1,MEDIUM,64,26,10
-engineered,FP1,SOFT,57,32,17
-engineered,FP2,HARD,21,5,3
-engineered,FP2,MEDIUM,104,22,13
-engineered,FP2,SOFT,146,41,18
+engineered,FP1,HARD,62,23,11
+engineered,FP1,MEDIUM,67,26,10
+engineered,FP1,SOFT,59,32,17
+engineered,FP2,HARD,25,6,3
+engineered,FP2,MEDIUM,119,30,14
+engineered,FP2,SOFT,154,46,19
 engineered,FP3,HARD,18,13,5
 engineered,FP3,MEDIUM,13,13,6
 engineered,FP3,SOFT,56,44,19

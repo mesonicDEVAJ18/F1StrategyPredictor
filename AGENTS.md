@@ -43,7 +43,9 @@ scripts/            # ALL pipeline code lives here; run scripts FROM this direct
 explore/            # model selection (#27), kept out of the pipeline; run FROM this directory
   explore_master.py     # alternate master: data stages + the experiment block (candidates, grids, feature sets)
   explore_lib.py        # custom estimators, nested grouped CV, simulator-style rollout
+  tune_iqr.py           # tunes process_laps.py's two IQR multipliers over many cached weekends (#32)
   results/explore_master/  # leaderboard, per-fold CV, best params, rollouts
+  results/tune_iqr/        # label sweep, CV sweep, recommendation
 data/
   raw/                  # the selected weekend's OpenF1 downloads (RAW_DIR), one folder per source (LAPS_DIR, STINTS_DIR, DRIVERS_DIR, WEATHER_DIR, CARDATA_DIR)
     laps/                 # laps_p1-3.csv
@@ -94,6 +96,20 @@ each candidate's best configuration out the way `strategy_simulator.rollout_stin
 `explore/results/explore_master/`: no hand-off file, and the bundle is untouched. The winner is copied into
 `train_model.py`'s MODEL block and `.env` by hand.
 
+```bash
+cd explore
+python tune_iqr.py           # every weekend in its TUNE_WEEKENDS (downloads what data/cache/ lacks)
+python tune_iqr.py --quick   # smoke run: two weekends, small grid
+```
+
+`tune_iqr.py` picks `IQR_LOWER_MULTIPLIER` / `IQR_UPPER_MULTIPLIER` (#32) with two methods: a label sweep over
+`process_laps.py`'s `process_laps_iqr_residuals_*.csv` (how many push laps, `best_ratio <= PUSH_LAP_MAX_BEST_RATIO`, each fence
+removes at each k), and a CV sweep that reruns `process_laps` → `process_cardata` → `feature_engineer` for each pair of multipliers
+and scores XGBoost on the target rows common to every pair, with the same stint folds. It runs the stages from `scripts/` with the
+settings as environment variables, so while it runs it switches `data/raw/` between weekends and rewrites `data/processed/` and
+those stages' `scripts/results/`; at the end it switches back to the `.env` weekend and reruns them at the `.env` values. Its
+outputs go to `explore/results/tune_iqr/`; the winner is copied into `.env` by hand, with the reasoning in the comment there.
+
 **Known gaps (don't "fix" silently — confirm intent first):**
 - Open issues (the unconfirmed model choice, no statistical inference, etc.) are listed in [diagnostic.md](diagnostic.md). Fixing them
   changes results, so confirm before fixing, and update diagnostic.md when one is resolved.
@@ -115,7 +131,10 @@ Scripts communicate through CSVs in `data/processed/`, not by importing each oth
   `data/cache/<weekend>/` and, for the active weekend, from `data/raw/` too. The `WEEKENDS` table is hardcoded data
   (meeting key, FP1-3 session keys, scheduled race laps); sprint weekends are rejected. Each run's source and file
   counts are in `results/race_weekend/race_weekend_summary.csv`.
-- `process_laps.py`   → `data/processed/laps_combined_clean.csv`
+- `process_laps.py`   → `data/processed/laps_combined_clean.csv`. Its residual filter has a separate multiplier for each side
+  (`IQR_LOWER_MULTIPLIER` for fast laps, `IQR_UPPER_MULTIPLIER` for slow ones, tuned by `explore/tune_iqr.py`), and it saves
+  every lap reaching that filter with its residual and `best_ratio` to `results/process_laps/process_laps_iqr_residuals_*.csv`
+  (diagnostic only; `tune_iqr.py` reads it)
 - `process_stints.py` → `data/processed/stints_combined_clean.csv`
 - `tyre_sets.py`      → `data/processed/tyre_sets_race_inventory.csv` (one row per set every car in practice has
   left for the race: compound and age in laps). OpenF1 has no set ID, so sets are chained by compound and

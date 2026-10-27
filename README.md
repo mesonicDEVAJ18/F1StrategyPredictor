@@ -126,8 +126,8 @@ Environmental conditions:
 - Missing or non-positive sector times
 - Unrealistic lap times (≤ 30s or ≥ 2× session median)
 - Aborted laps (a recorded `i1_speed`, `i2_speed` or `st_speed` ≤ 50 km/h; laps with a missing speed are kept, and the missing value gets the training median)
-- Rolling median residual filtering: residual = lap time − 5-lap centred rolling median per driver; removed laps outside `[Q1 - 3×IQR, Q3 + 3×IQR]`
-- Non-push laps (cool-down, in- and traffic laps): slower than 1.15× the driver's best lap in the session (`PUSH_LAP_MAX_BEST_RATIO`), which leaves 540 laps (Bahrain 2025)
+- Rolling median residual filtering: residual = lap time − 5-lap centred rolling median per driver; removed laps below `Q1 − 60×IQR` (fast) or above `Q3 + 3×IQR` (slow). The two multipliers (`IQR_LOWER_MULTIPLIER`, `IQR_UPPER_MULTIPLIER`) were tuned over 12 weekends by `explore/tune_iqr.py` (#32): a fast lap in practice is a push lap run between cool-down laps, so the fast side is in effect off
+- Non-push laps (cool-down, in- and traffic laps): slower than 1.15× the driver's best lap in the session (`PUSH_LAP_MAX_BEST_RATIO`), which leaves 573 laps (Bahrain 2025)
 
 *Stints:*
 - Logical validation: `lap_start ≤ lap_end`
@@ -155,7 +155,7 @@ Environmental conditions:
 |---------|---------|---------|
 | `stint_number` | Stints numbered 1, 2, 3… per driver across all sessions | Track tyre degradation per stint |
 | weather join | nearest weather sample to each lap's `date_start` (`merge_asof`, 5 min tolerance) | Give each lap the conditions it was driven in |
-| car-data join | lap `t`'s per-lap telemetry aggregates, merged on `session_key`, `driver_number`, `lap_number` (515 of 540 laps; the rest filled with medians) | Describe how lap `t` was driven (speed, throttle, braking, rpm, gears, DRS) |
+| car-data join | lap `t`'s per-lap telemetry aggregates, merged on `session_key`, `driver_number`, `lap_number` (550 of 573 laps; the rest filled with medians) | Describe how lap `t` was driven (speed, throttle, braking, rpm, gears, DRS) |
 | `laps_since_stint_start` | `lap_number - lap_start + 1` | Measure tyre age in current stint |
 | `tyre_age` | `tyre_age_at_start + laps_since_stint_start` | Real age of the set (laps on it including lap `t`), so used sets are told apart from new ones |
 | `session_FP1/2/3` | One-hot of the practice session | Separate session-level pace offsets |
@@ -166,7 +166,7 @@ Environmental conditions:
 
 ### Exploratory Data Analysis (`eda.py`)
 
-Runs after `feature_engineer.py` and describes the engineered dataset before it is modelled; outputs go to `scripts/results/eda/`. It covers summary statistics and missing values per session, lap-time and fuel-corrected-pace distributions by session and compound, pace against tyre age (raw, and with each stint's mean removed so driver and session offsets drop out), correlations between the inputs and with the next-lap target (flagging pairs at |r| ≥ `EDA_COLLINEAR_THRESHOLD`), and row coverage before and after the next-lap target shift. On Bahrain 2025, within-stint pace rises by about 0.17 s/lap on SOFT and 0.04–0.06 s/lap on MEDIUM/HARD, but only 273 of 540 laps (12 in FP3) survive the target shift, and the session one-hots and weather inputs form one collinear group.
+Runs after `feature_engineer.py` and describes the engineered dataset before it is modelled; outputs go to `scripts/results/eda/`. It covers summary statistics and missing values per session, lap-time and fuel-corrected-pace distributions by session and compound, pace against tyre age (raw, and with each stint's mean removed so driver and session offsets drop out), correlations between the inputs and with the next-lap target (flagging pairs at |r| ≥ `EDA_COLLINEAR_THRESHOLD`), and row coverage before and after the next-lap target shift. On Bahrain 2025, within-stint pace rises by about 0.16 s/lap on SOFT and 0.05–0.06 s/lap on MEDIUM/HARD, but only 273 of 573 laps (12 in FP3) survive the target shift, and the session one-hots and weather inputs form one collinear group.
 
 ---
 
@@ -205,7 +205,7 @@ Predict **fuel-corrected pace on the next lap** rather than explicitly computing
 ```python
 y = fuel_corrected_pace_next_lap
 ```
-Built by `build_next_lap_target()` in `scripts/feature_config.py`: the same driver's lap `lap_number + 1` in the same stint. The last lap of each stint and laps followed by a cleaning gap are dropped (540 → 273 rows: practice runs alternate push and cool-down laps, so removing the cool-down laps breaks most pairs).
+Built by `build_next_lap_target()` in `scripts/feature_config.py`: the same driver's lap `lap_number + 1` in the same stint. The last lap of each stint and laps followed by a cleaning gap are dropped (573 → 273 rows: practice runs alternate push and cool-down laps, so removing the cool-down laps breaks most pairs).
 
 **2. Removed Dependent Variables**
 - `lap_duration` (sum of sector times)
@@ -254,7 +254,7 @@ Minimize: Total Race Time (s) = Σ(stint lap times) + 22 s × number of pit stop
 ```
 
 Current output for `SIM_DRIVER=16` (set age at the start of each stint in brackets):
-- MEDIUM(0)–HARD(0), stop on lap 33, 5819.52 s (tied with HARD(0)–MEDIUM(0) stopping on lap 24; neighbouring laps +0.10–0.64 s, best SOFT(0)–MEDIUM(0) +0.96 s); best 2-stop 11.87 s slower
+- MEDIUM(0)–HARD(0), stop on lap 29, 5819.18 s (tied with HARD(0)–MEDIUM(0) stopping on lap 28; laps 27–31 within 0.28 s, best SOFT(0)–MEDIUM(0) +2.17 s); best 2-stop 12.86 s slower
 
 Other cars give similar results from their own sets.
 
@@ -277,9 +277,9 @@ None of this is tyre physics yet. 1 stop wins because every rollout is almost fl
 - **Residual analysis**: Check for systematic bias
 - **Feature importance**: Verify alignment with tyre physics
   - Expected top features: tyre age, compound, track temperature
-- **Baseline test**: per-stint paired t-test and Wilcoxon test of the model's out-of-fold error against a persistence baseline (lap *t+1* = lap *t*). Current: baseline MAE 1.45 s, model better on 33 of 56 stints, p = 0.0017 (t) / 0.052 (Wilcoxon), median gain 0.06 s, so the model does not significantly beat persistence at 0.05 (both tests must pass)
+- **Baseline test**: per-stint paired t-test and Wilcoxon test of the model's out-of-fold error against a persistence baseline (lap *t+1* = lap *t*). Current: baseline MAE 1.45 s, model better on 33 of 56 stints, p = 0.0017 (t) / 0.041 (Wilcoxon), median gain 0.08 s, so the model beats persistence at 0.05 (both tests must pass), though only just
 - **Simulation stability** (logged by `strategy_simulator.py`): fcp at stint laps 1, 18 and 57 of a full-length rollout for each compound and set age, plus the largest lap-to-lap step.
-  - No runaway drift (car 16, Bahrain 2025): every rollout stays within 97.23–101.40 s, and the largest lap-to-lap step is 2.43–2.73 s (stint laps 1–2).
+  - No runaway drift (car 16, Bahrain 2025): every rollout stays within 97.23–101.54 s, and the largest lap-to-lap step is 2.43–2.76 s (stint laps 1–2).
   - Smooth but nearly flat: about 99.7–100.0 s on stint lap 2 and 100.3–100.6 s on lap 3, then 100.1–101.4 s to lap 57. The new sets are within about 0.1 s of each other on average (at most 0.45 s), so the model shows almost no tyre degradation yet.
 
 ### Strategy Validation *(planned, not implemented yet)*

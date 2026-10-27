@@ -1,28 +1,28 @@
 Loaded model and feature metadata.
-Loaded dataset with 540 rows.
+Loaded dataset with 573 rows.
 Rows after target shift drop: 273 (56 stints)
 
 Running 5-fold cross-validation grouped by stint...
- Fold 1 → 12 stints / 64 rows, 0 shared, MAE=1.3516 s, RMSE=1.8071 s, baseline MAE=1.5179 s
- Fold 2 → 11 stints / 51 rows, 0 shared, MAE=1.1347 s, RMSE=1.4626 s, baseline MAE=1.2020 s
- Fold 3 → 11 stints / 47 rows, 0 shared, MAE=1.2632 s, RMSE=1.7096 s, baseline MAE=1.6594 s
- Fold 4 → 11 stints / 41 rows, 0 shared, MAE=1.1597 s, RMSE=1.8276 s, baseline MAE=1.8291 s
- Fold 5 → 11 stints / 70 rows, 0 shared, MAE=0.9267 s, RMSE=1.3923 s, baseline MAE=1.2039 s
+ Fold 1 → 12 stints / 64 rows, 0 shared, MAE=1.3384 s, RMSE=1.8031 s, baseline MAE=1.5179 s
+ Fold 2 → 11 stints / 51 rows, 0 shared, MAE=1.1369 s, RMSE=1.4634 s, baseline MAE=1.2020 s
+ Fold 3 → 11 stints / 47 rows, 0 shared, MAE=1.2650 s, RMSE=1.7093 s, baseline MAE=1.6594 s
+ Fold 4 → 11 stints / 41 rows, 0 shared, MAE=1.1835 s, RMSE=1.8366 s, baseline MAE=1.8291 s
+ Fold 5 → 11 stints / 70 rows, 0 shared, MAE=0.9189 s, RMSE=1.3919 s, baseline MAE=1.2039 s
 
-CV MAE = 1.1671513063001142 s
-CV RMSE = 1.6398236501522985 s
+CV MAE = 1.1685484791735117 s
+CV RMSE = 1.6408574552285924 s
 Out-of-fold predictions: 273 rows, each predicted once
 
 Generating residual plot...
-OOF MAE = 1.1581 s, OOF RMSE = 1.6331 s, mean residual = -0.2527 s
+OOF MAE = 1.1573 s, OOF RMSE = 1.6336 s, mean residual = -0.2517 s
 Residual plot saved.
 
 Testing the model against the persistence baseline (lap t+1 = lap t)...
 Baseline MAE = 1.4495 s, baseline RMSE = 2.7474 s
-Stints: 56, model better on 33; per-stint MAE difference mean -1.3069 s, median -0.0648 s
-Paired t-test (one-sided): t = -3.0604, p = 0.001707
-Wilcoxon signed-rank (one-sided): p = 0.052267
-Model does NOT significantly beat the persistence baseline at alpha = 0.05
+Stints: 56, model better on 33; per-stint MAE difference mean -1.3045 s, median -0.0810 s
+Paired t-test (one-sided): t = -3.0681, p = 0.001670
+Wilcoxon signed-rank (one-sided): p = 0.041153
+Model beats the persistence baseline on unseen stints at alpha = 0.05
 
 Validation summary saved.
 

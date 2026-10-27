@@ -1,0 +1,10 @@
+IQR fence tuning over 12 weekends (2024_hungary, 2024_saudi_arabia, 2024_spain, 2025_australia, 2025_austria, 2025_bahrain, 2025_britain, 2025_italy, 2025_japan, 2025_netherlands, 2025_singapore, 2025_spain)
+
+A. Label sweep: largest lower k needed 49.71 (2025_spain FP2); floor 60 (>= 1.2x). Largest upper k needed 4.21.
+   At k=3 the lower fence removes 488 push / 11 non-push laps, the upper fence 1 push / 976 non-push.
+B. CV sweep: no configuration beats the reference (60, 3) on both paired tests at p < 0.05, so the reference is kept.
+   Winner (60, 3): pooled per-stint MAE 1.2273 s, row MAE 0.8969 s, 7216 cleaned laps, 3288 target rows.
+   Current (3, 3): pooled per-stint MAE 1.2417 s, row MAE 0.9154 s, 6761 cleaned laps, 3308 target rows.
+   Winner vs current: mean per-stint diff -0.0144 s, better on 276 of 615 stints, t p 0.0167, Wilcoxon p 0.0028.
+
+Copy into .env: IQR_LOWER_MULTIPLIER=60  IQR_UPPER_MULTIPLIER=3

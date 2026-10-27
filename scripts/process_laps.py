@@ -42,7 +42,8 @@ LAP_MIN_DURATION_S = env_float("LAP_MIN_DURATION_S")
 LAP_MAX_MEDIAN_MULTIPLE = env_float("LAP_MAX_MEDIAN_MULTIPLE")
 MIN_SPEED_KMH = env_float("MIN_SPEED_KMH")
 ROLLING_MEDIAN_WINDOW = env_int("ROLLING_MEDIAN_WINDOW")
-IQR_MULTIPLIER = env_float("IQR_MULTIPLIER")
+IQR_LOWER_MULTIPLIER = env_float("IQR_LOWER_MULTIPLIER")
+IQR_UPPER_MULTIPLIER = env_float("IQR_UPPER_MULTIPLIER")
 PUSH_LAP_MAX_BEST_RATIO = env_float("PUSH_LAP_MAX_BEST_RATIO")
 
 removed_rows_summary = []
@@ -88,7 +89,8 @@ def apply_domain_filters(df, fname):
 
 
 def apply_iqr_residual_filter(df, fname):
-    """IQR on lap_duration - rolling_median."""
+    """IQR on lap_duration - rolling_median, with a separate multiplier for the fast (lower)
+    and slow (upper) side. Saves every lap's residual for explore/tune_iqr.py."""
     if "driver_number" not in df.columns:
         df["driver_number"] = 1  # fallback grouping
 
@@ -97,19 +99,30 @@ def apply_iqr_residual_filter(df, fname):
     )
     df["residual"] = df["lap_duration"] - df["rolling_median"]
 
+    # Lap / driver's best among the laps reaching this filter: the push-lap label tune_iqr.py scores the fences against
+    df["best_ratio"] = df["lap_duration"] / df.groupby("driver_number")["lap_duration"].transform("min")
+    residual_cols = [c for c in ["session_key", "driver_number", "lap_number", "lap_duration",
+                                 "rolling_median", "residual", "best_ratio"] if c in df.columns]
+    residual_name = f"{SCRIPT_NAME}_iqr_residuals_{fname.replace('.csv', '')}.csv"
+    df[residual_cols].to_csv(os.path.join(RESULTS_DIR, residual_name), index=False)
+    generated_files.append(residual_name)
+
     Q1 = df["residual"].quantile(0.25)
     Q3 = df["residual"].quantile(0.75)
     IQR = Q3 - Q1
-    lower = Q1 - IQR_MULTIPLIER * IQR
-    upper = Q3 + IQR_MULTIPLIER * IQR
+    lower = Q1 - IQR_LOWER_MULTIPLIER * IQR
+    upper = Q3 + IQR_UPPER_MULTIPLIER * IQR
+    log(f"[{fname}] Residual Q1 {Q1:.2f} s, Q3 {Q3:.2f} s, IQR {IQR:.2f} s; bounds [{lower:.2f}, {upper:.2f}] s "
+        f"(k_lower {IQR_LOWER_MULTIPLIER:g}, k_upper {IQR_UPPER_MULTIPLIER:g})")
 
-    before = len(df)
+    fast = int((df["residual"] < lower).sum())
+    slow = int((df["residual"] > upper).sum())
     df = df[(df["residual"] >= lower) & (df["residual"] <= upper)]
-    removed = before - len(df)
-    log(f"[{fname}] Removed {removed} IQR-residual outliers")
-    removed_rows_summary.append([fname, "iqr_residual", removed])
+    log(f"[{fname}] Removed {fast + slow} IQR-residual outliers ({fast} fast, {slow} slow)")
+    removed_rows_summary.append([fname, "iqr_residual_fast", fast])
+    removed_rows_summary.append([fname, "iqr_residual_slow", slow])
 
-    return df.drop(columns=["rolling_median", "residual"], errors="ignore")
+    return df.drop(columns=["rolling_median", "residual", "best_ratio"], errors="ignore")
 
 
 def apply_push_lap_filter(df, fname):

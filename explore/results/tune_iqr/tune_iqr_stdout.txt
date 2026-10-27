@@ -1,0 +1,190 @@
+Tuning the IQR fences on 12 weekends: 2025 bahrain, 2024 saudi_arabia, 2025 australia, 2025 japan, 2025 spain, 2025 austria, 2025 britain, 2025 netherlands, 2025 italy, 2025 singapore, 2024 hungary, 2024 spain
+
+=== A. Label sweep (push lap = best_ratio <= 1.15) ===
+
+2025 bahrain
+  2025 bahrain: in data/raw/, stints and weather processed (3s)
+  FP1: 335 laps (188 push), IQR 16.27 s; k needed lower 3.73, upper 0.00
+  FP2: 431 laps (298 push), IQR 5.34 s; k needed lower 11.96, upper 0.25
+  FP3: 208 laps (87 push), IQR 20.65 s; k needed lower 2.66, upper 0.00
+
+2024 saudi_arabia
+  2024 saudi_arabia: in data/raw/, stints and weather processed (3s)
+  FP1: 397 laps (227 push), IQR 13.86 s; k needed lower 2.87, upper 0.00
+  FP2: 451 laps (285 push), IQR 4.26 s; k needed lower 11.28, upper 0.30
+  FP3: 211 laps (102 push), IQR 13.94 s; k needed lower 4.88, upper 0.00
+
+2025 australia
+  2025 australia: in data/raw/, stints and weather processed (689s)
+  FP1: 281 laps (166 push), IQR 23.82 s; k needed lower 2.36, upper 0.00
+  FP2: 405 laps (289 push), IQR 3.14 s; k needed lower 15.57, upper 1.11
+  FP3: 193 laps (94 push), IQR 24.41 s; k needed lower 2.05, upper 0.00
+
+2025 japan
+  2025 japan: in data/raw/, stints and weather processed (616s)
+  FP1: 408 laps (241 push), IQR 14.35 s; k needed lower 3.73, upper 0.00
+  FP2: 83 laps (66 push), IQR 1.65 s; k needed lower 16.72, upper 4.21
+  FP3: 229 laps (153 push), IQR 9.79 s; k needed lower 5.11, upper 0.00
+
+2025 spain
+  2025 spain: in data/raw/, stints and weather processed (459s)
+  FP1: 408 laps (245 push), IQR 8.17 s; k needed lower 6.14, upper 0.00
+  FP2: 464 laps (324 push), IQR 1.22 s; k needed lower 49.71, upper 2.50
+  FP3: 184 laps (82 push), IQR 11.17 s; k needed lower 3.81, upper 0.00
+
+2025 austria
+  2025 austria: in data/raw/, stints and weather processed (457s)
+  FP1: 536 laps (314 push), IQR 9.03 s; k needed lower 5.52, upper 0.00
+  FP2: 544 laps (365 push), IQR 3.69 s; k needed lower 12.67, upper 0.29
+  FP3: 304 laps (126 push), IQR 17.61 s; k needed lower 3.36, upper 0.00
+
+2025 britain
+  2025 britain: in data/raw/, stints and weather processed (488s)
+  FP1: 417 laps (240 push), IQR 11.16 s; k needed lower 5.67, upper 0.00
+  FP2: 438 laps (287 push), IQR 4.10 s; k needed lower 14.89, upper 0.60
+  FP3: 181 laps (96 push), IQR 25.82 s; k needed lower 2.22, upper 0.00
+
+2025 netherlands
+  2025 netherlands: in data/raw/, stints and weather processed (462s)
+  FP1: 430 laps (277 push), IQR 8.57 s; k needed lower 5.21, upper 0.00
+  FP2: 325 laps (203 push), IQR 3.45 s; k needed lower 12.53, upper 0.16
+  FP3: 319 laps (134 push), IQR 20.78 s; k needed lower 2.05, upper 0.00
+
+2025 italy
+  2025 italy: in data/raw/, stints and weather processed (409s)
+  FP1: 367 laps (159 push), IQR 18.35 s; k needed lower 2.89, upper 0.00
+  FP2: 412 laps (263 push), IQR 12.46 s; k needed lower 3.28, upper 0.00
+  FP3: 320 laps (147 push), IQR 17.25 s; k needed lower 3.21, upper 0.00
+
+2025 singapore
+  2025 singapore: in data/raw/, stints and weather processed (346s)
+  FP1: 390 laps (207 push), IQR 13.01 s; k needed lower 4.36, upper 0.00
+  FP2: 250 laps (109 push), IQR 26.38 s; k needed lower 1.82, upper 0.00
+  FP3: 327 laps (178 push), IQR 10.80 s; k needed lower 5.62, upper 0.00
+
+2024 hungary
+  2024 hungary: in data/raw/, stints and weather processed (306s)
+  FP1: 408 laps (239 push), IQR 10.18 s; k needed lower 5.67, upper 0.00
+  FP2: 340 laps (219 push), IQR 3.80 s; k needed lower 16.28, upper 0.08
+  FP3: 232 laps (103 push), IQR 16.10 s; k needed lower 3.25, upper 0.00
+
+2024 spain
+  2024 spain: in data/raw/, stints and weather processed (307s)
+  FP1: 420 laps (252 push), IQR 9.62 s; k needed lower 4.16, upper 0.00
+  FP2: 477 laps (314 push), IQR 4.39 s; k needed lower 12.76, upper 0.00
+  FP3: 270 laps (138 push), IQR 12.46 s; k needed lower 4.27, upper 0.00
+
+Largest lower k needed: 49.71 (2025_spain FP2, IQR 1.22 s, push residual -60.9 s)
+Largest upper k needed: 4.21
+Lower-side floor: 60 (smallest K_GRID value >= 1.2 x 49.71)
+Laps removed over all sessions (push / non-push):
+  lower: k=1 1336/49, k=1.5 1010/34, k=2 775/23, k=3 488/11, k=4 351/6, k=6 204/4, k=8 148/2, k=10 89/1, k=12 38/1, k=15 18/1, k=20 14/1
+  upper: k=1 15/2063, k=1.5 4/1633, k=2 3/1340, k=3 1/976, k=4 1/744, k=6 0/471, k=8 0/325, k=10 0/234, k=12 0/165, k=15 0/115, k=20 0/81
+
+=== B. CV sweep: k_lower [3, 6, 10, 20, 60.0] x k_upper [1.5, 2, 3, 5], 5 stint folds x 2 ===
+
+2025 bahrain
+  2025 bahrain: in data/raw/, stints and weather processed (3s)
+  20 configurations, 4 distinct cleaned-lap sets
+  273 target rows common to every configuration (56 stints); MAE on them 1.187-1.188 s
+
+2024 saudi_arabia
+  2024 saudi_arabia: in data/raw/, stints and weather processed (3s)
+  20 configurations, 4 distinct cleaned-lap sets
+  272 target rows common to every configuration (64 stints); MAE on them 0.977-0.980 s
+
+2025 australia
+  2025 australia: in data/raw/, stints and weather processed (3s)
+  20 configurations, 4 distinct cleaned-lap sets
+  221 target rows common to every configuration (39 stints); MAE on them 0.660-0.662 s
+
+2025 japan
+  2025 japan: in data/raw/, stints and weather processed (3s)
+  20 configurations, 6 distinct cleaned-lap sets
+  188 target rows common to every configuration (45 stints); MAE on them 1.249-1.260 s
+
+2025 spain
+  2025 spain: in data/raw/, stints and weather processed (3s)
+  20 configurations, 17 distinct cleaned-lap sets
+  350 target rows common to every configuration (64 stints); MAE on them 0.649-0.767 s
+
+2025 austria
+  2025 austria: in data/raw/, stints and weather processed (3s)
+  20 configurations, 4 distinct cleaned-lap sets
+  402 target rows common to every configuration (55 stints); MAE on them 0.660-0.670 s
+
+2025 britain
+  2025 britain: in data/raw/, stints and weather processed (3s)
+  20 configurations, 4 distinct cleaned-lap sets
+  297 target rows common to every configuration (62 stints); MAE on them 0.860-0.875 s
+
+2025 netherlands
+  2025 netherlands: in data/raw/, stints and weather processed (3s)
+  20 configurations, 4 distinct cleaned-lap sets
+  276 target rows common to every configuration (46 stints); MAE on them 0.684-0.737 s
+
+2025 italy
+  2025 italy: in data/raw/, stints and weather processed (3s)
+  20 configurations, 2 distinct cleaned-lap sets
+  205 target rows common to every configuration (39 stints); MAE on them 1.028-1.028 s
+
+2025 singapore
+  2025 singapore: in data/raw/, stints and weather processed (3s)
+  20 configurations, 2 distinct cleaned-lap sets
+  152 target rows common to every configuration (43 stints); MAE on them 2.090-2.090 s
+
+2024 hungary
+  2024 hungary: in data/raw/, stints and weather processed (3s)
+  20 configurations, 4 distinct cleaned-lap sets
+  270 target rows common to every configuration (44 stints); MAE on them 0.713-0.718 s
+
+2024 spain
+  2024 spain: in data/raw/, stints and weather processed (3s)
+  20 configurations, 4 distinct cleaned-lap sets
+  374 target rows common to every configuration (64 stints); MAE on them 0.798-0.851 s
+
+Pooled over 12 weekends (615 stints, 3280 common rows):
+  (3, 1.5): stint MAE 1.2368 s, row MAE 0.9079 s, cleaned laps 6751, target rows 3295, fast/slow/non-push removed 499/1637/3508
+  (3, 2): stint MAE 1.2358 s, row MAE 0.9072 s, cleaned laps 6752, target rows 3296, fast/slow/non-push removed 499/1343/3801
+  (3, 3): stint MAE 1.2417 s, row MAE 0.9154 s, cleaned laps 6761, target rows 3308, fast/slow/non-push removed 499/977/4158
+  (3, 5): stint MAE 1.2420 s, row MAE 0.9178 s, cleaned laps 6764, target rows 3311, fast/slow/non-push removed 499/579/4553
+  (6, 1.5): stint MAE 1.2262 s, row MAE 0.8968 s, cleaned laps 7015, target rows 3288, fast/slow/non-push removed 208/1637/3535
+  (6, 2): stint MAE 1.2251 s, row MAE 0.8962 s, cleaned laps 7016, target rows 3289, fast/slow/non-push removed 208/1343/3828
+  (6, 3): stint MAE 1.2303 s, row MAE 0.9032 s, cleaned laps 7023, target rows 3298, fast/slow/non-push removed 208/977/4187
+  (6, 5): stint MAE 1.2287 s, row MAE 0.9020 s, cleaned laps 7025, target rows 3300, fast/slow/non-push removed 208/579/4583
+  (10, 1.5): stint MAE 1.2248 s, row MAE 0.8949 s, cleaned laps 7124, target rows 3285, fast/slow/non-push removed 90/1637/3544
+  (10, 2): stint MAE 1.2253 s, row MAE 0.8958 s, cleaned laps 7125, target rows 3286, fast/slow/non-push removed 90/1343/3837
+  (10, 3): stint MAE 1.2281 s, row MAE 0.8995 s, cleaned laps 7128, target rows 3289, fast/slow/non-push removed 90/977/4200
+  (10, 5): stint MAE 1.2283 s, row MAE 0.8995 s, cleaned laps 7129, target rows 3289, fast/slow/non-push removed 90/579/4597
+  (20, 1.5): stint MAE 1.2255 s, row MAE 0.8945 s, cleaned laps 7199, target rows 3285, fast/slow/non-push removed 15/1637/3544
+  (20, 2): stint MAE 1.2262 s, row MAE 0.8952 s, cleaned laps 7200, target rows 3286, fast/slow/non-push removed 15/1343/3837
+  (20, 3): stint MAE 1.2273 s, row MAE 0.8969 s, cleaned laps 7202, target rows 3288, fast/slow/non-push removed 15/977/4201
+  (20, 5): stint MAE 1.2276 s, row MAE 0.8969 s, cleaned laps 7203, target rows 3288, fast/slow/non-push removed 15/579/4598
+  (60, 1.5): stint MAE 1.2255 s, row MAE 0.8945 s, cleaned laps 7213, target rows 3285, fast/slow/non-push removed 0/1637/3545
+  (60, 2): stint MAE 1.2262 s, row MAE 0.8952 s, cleaned laps 7214, target rows 3286, fast/slow/non-push removed 0/1343/3838
+  (60, 3): stint MAE 1.2273 s, row MAE 0.8969 s, cleaned laps 7216, target rows 3288, fast/slow/non-push removed 0/977/4202
+  (60, 5): stint MAE 1.2276 s, row MAE 0.8969 s, cleaned laps 7217, target rows 3288, fast/slow/non-push removed 0/579/4599
+
+IQR fence tuning over 12 weekends (2024_hungary, 2024_saudi_arabia, 2024_spain, 2025_australia, 2025_austria, 2025_bahrain, 2025_britain, 2025_italy, 2025_japan, 2025_netherlands, 2025_singapore, 2025_spain)
+
+A. Label sweep: largest lower k needed 49.71 (2025_spain FP2); floor 60 (>= 1.2x). Largest upper k needed 4.21.
+   At k=3 the lower fence removes 488 push / 11 non-push laps, the upper fence 1 push / 976 non-push.
+B. CV sweep: no configuration beats the reference (60, 3) on both paired tests at p < 0.05, so the reference is kept.
+   Winner (60, 3): pooled per-stint MAE 1.2273 s, row MAE 0.8969 s, 7216 cleaned laps, 3288 target rows.
+   Current (3, 3): pooled per-stint MAE 1.2417 s, row MAE 0.9154 s, 6761 cleaned laps, 3308 target rows.
+   Winner vs current: mean per-stint diff -0.0144 s, better on 276 of 615 stints, t p 0.0167, Wilcoxon p 0.0028.
+
+Copy into .env: IQR_LOWER_MULTIPLIER=60  IQR_UPPER_MULTIPLIER=3
+
+Restoring the .env weekend and data stages at the .env values...
+
+DONE in 5201s. Files generated:
+  - tune_iqr_label_sweep.csv
+  - tune_iqr_k_needed.csv
+  - tune_iqr_label_sweep.png
+  - tune_iqr_cv_sweep.csv
+  - tune_iqr_cv_per_stint.csv
+  - tune_iqr_cv_pooled.csv
+  - tune_iqr_cv_heatmap.png
+  - tune_iqr_recommendation.txt
+  - tune_iqr_manifest.txt

@@ -8,7 +8,8 @@ Loaded laps_p1.csv with 426 rows
 [laps_p1.csv] Removed 0 extreme lap-time outliers
 [laps_p1.csv] Removed 1 unrealistic-speed laps
 [laps_p1.csv] Kept 24 laps with a missing speed trap (filled with the training medians in train_model.py)
-[laps_p1.csv] Removed 7 IQR-residual outliers
+[laps_p1.csv] Residual Q1 -0.72 s, Q3 15.55 s, IQR 16.27 s; bounds [-976.83, 64.36] s (k_lower 60, k_upper 3)
+[laps_p1.csv] Removed 1 IQR-residual outliers (0 fast, 1 slow)
 [laps_p1.csv] Removed 146 non-push laps (> 1.15x driver's session best)
 [laps_p1.csv] Kept lap_duration, sector times and speeds unscaled (s, km/h)
 [laps_p1.csv] Tagged session_name = FP1
@@ -23,7 +24,8 @@ Loaded laps_p2.csv with 522 rows
 [laps_p2.csv] Removed 1 extreme lap-time outliers
 [laps_p2.csv] Removed 0 unrealistic-speed laps
 [laps_p2.csv] Kept 70 laps with a missing speed trap (filled with the training medians in train_model.py)
-[laps_p2.csv] Removed 95 IQR-residual outliers
+[laps_p2.csv] Residual Q1 -0.35 s, Q3 5.00 s, IQR 5.34 s; bounds [-320.87, 21.02] s (k_lower 60, k_upper 3)
+[laps_p2.csv] Removed 68 IQR-residual outliers (0 fast, 68 slow)
 [laps_p2.csv] Removed 65 non-push laps (> 1.15x driver's session best)
 [laps_p2.csv] Kept lap_duration, sector times and speeds unscaled (s, km/h)
 [laps_p2.csv] Tagged session_name = FP2
@@ -38,7 +40,8 @@ Loaded laps_p3.csv with 309 rows
 [laps_p3.csv] Removed 0 extreme lap-time outliers
 [laps_p3.csv] Removed 0 unrealistic-speed laps
 [laps_p3.csv] Kept 7 laps with a missing speed trap (filled with the training medians in train_model.py)
-[laps_p3.csv] Removed 1 IQR-residual outliers
+[laps_p3.csv] Residual Q1 -3.78 s, Q3 16.87 s, IQR 20.65 s; bounds [-1242.93, 78.83] s (k_lower 60, k_upper 3)
+[laps_p3.csv] Removed 1 IQR-residual outliers (0 fast, 1 slow)
 [laps_p3.csv] Removed 120 non-push laps (> 1.15x driver's session best)
 [laps_p3.csv] Kept lap_duration, sector times and speeds unscaled (s, km/h)
 [laps_p3.csv] Tagged session_name = FP3
@@ -48,8 +51,11 @@ Saved combined dataset: process_laps_combined_cleaned.csv
 Saved hand-off dataset: ../data\processed\laps_combined_clean.csv
 
 PROCESS COMPLETED. Files generated:
+  - process_laps_iqr_residuals_laps_p1.csv
   - process_laps_cleaned_laps_p1.csv
+  - process_laps_iqr_residuals_laps_p2.csv
   - process_laps_cleaned_laps_p2.csv
+  - process_laps_iqr_residuals_laps_p3.csv
   - process_laps_cleaned_laps_p3.csv
   - process_laps_combined_cleaned.csv
   - process_laps_removed_rows_summary.csv

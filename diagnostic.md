@@ -75,7 +75,7 @@ Items keep a stable ID (`#N`), which is also the item's GitHub issue number (ope
 
 Ideas that could make more data usable, not confirmed bugs. Each one changes the results, so check the effect before adopting it.
 
-Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 540 (182 / 271 / 87), and only 273 rows survive the next-lap target shift in `train_model.py`. Removed by `process_laps.py`: 275 pit-out laps, 7 invalid-sector or extreme lap times, 1 for "unrealistic speed" (102 before #29), 103 IQR outliers and 331 non-push laps.
+Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 573 (188 / 298 / 87), and only 273 rows survive the next-lap target shift in `train_model.py`. Removed by `process_laps.py`: 275 pit-out laps, 7 invalid-sector or extreme lap times, 1 for "unrealistic speed" (102 before #29), 70 IQR outliers (all slow; 103 before #32) and 331 non-push laps.
 
 - [ ] **#30 Push-lap filter may be too strict for long runs**
   - **Where:** `scripts/process_laps.py`: `apply_push_lap_filter()`, `PUSH_LAP_MAX_BEST_RATIO=1.15` in `.env` (#20).
@@ -86,7 +86,7 @@ Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 540 (
 - [ ] **#31 Next-lap target loses most rows**
   - **Where:** `build_next_lap_target()` in `scripts/feature_config.py`; `train_model.py` logs "Rows after target shift drop: 273".
   - **Problem:** the target needs the same driver's lap `lap_number + 1` in the same stint, and that lap must also survive cleaning. Practice runs alternate push and cool-down laps, so dropping the cool-downs breaks most consecutive pairs.
-  - **Effect:** 540 cleaned laps give only 273 training pairs, 209 after the train/test split (467 laps and 153 pairs before #29).
+  - **Effect:** 573 cleaned laps give only 273 training pairs, 209 after the train/test split (467 laps and 153 pairs before #29; #32 added 33 laps and no pairs, because a push lap between cool-down laps has no surviving lap *t+1*).
   - **Idea:** allow the next *surviving* lap in the stint (lap *t+k*) as the target, with *k* as a feature, so the model learns pace k laps ahead. This is a bigger modelling change: the simulator's rollout would need to match, and every feature must still belong to lap *t* (no leakage).
 
 ---
@@ -344,7 +344,7 @@ Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 540 (
   - **Fixed:** the filter now drops a lap only when a recorded speed is ≤ `MIN_SPEED_KMH`: `df[~(df[speed_cols] <= MIN_SPEED_KMH).any(axis=1)]` (`NaN <= 50` is False, so missing speeds pass). It logs how many kept laps have a missing speed. The speeds are model inputs, so a missing one gets the training median, as other missing inputs do (`train_model.py`, the bundle `medians` in `validate_strategy.py`, `SimpleImputer` in `explore/`); the medians are 231 / 247 / 298 km/h (i1 / i2 / st). Nothing downstream changed.
     - **Speed filter:** 102 → 1 lap removed (1 / 0 / 0). 24 / 70 / 7 laps are kept with a missing speed; in the engineered dataset `i1_speed` is missing on 61 laps (11.3%) and `st_speed` on 40 (7.4%).
     - **Side effect on the IQR filter:** its bounds come from the whole session's residuals, so they depend on which laps reach it. In FP2 the extra long-run laps make the residuals denser: IQR 10.8 → 5.3 s, bounds [−33.1, +42.6] → [−16.4, +21.0] s, and the filter removes 95 laps instead of 31 (68 slow ones, most of which the push filter would have removed anyway, and 27 fast ones). FP1 goes 2 → 7, FP3 stays at 1. The non-push filter then removes 146 / 65 / 120 (was 145 / 109 / 118).
-      - 16 laps that used to be kept are now dropped (4 FP1, 12 FP2): fast laps (91.6–100.5 s, mostly 92–97 s) run between cool-down laps, whose 5-lap rolling median is a cool-down lap. That is a weakness of the session-wide IQR on residuals, not of this fix, and it was left as is.
+      - 16 laps that used to be kept are now dropped (4 FP1, 12 FP2): fast laps (91.6–100.5 s, mostly 92–97 s) run between cool-down laps, whose 5-lap rolling median is a cool-down lap. That is a weakness of the session-wide IQR on residuals, not of this fix; #32 fixed it (the 16 laps are back).
     - **Rows:** 467 → 540 cleaned laps (164 / 221 / 82 → 182 / 271 / 87): 89 laps added, all with a missing speed, and 16 lost. Median 98.4 / 99.0 / 94.9 s, 90th percentile 102.0 / 101.2 / 100.9 s.
     - **Target rows:** 153 → 273 (219 are a stint's last lap, 48 have a gap to the next lap; was 223 and 91). 56 stints (was 50); FP1 70, FP2 191, FP3 12 rows; SOFT 131, MEDIUM 101, HARD 41. Session weights FP1 0.256, FP2 0.700, FP3 0.044 (was 0.294 / 0.660 / 0.046). In training, `laps_since_stint_start` runs 2–15 (was 2–13) and `tyre_age` 2–18.
     - **Car data:** 448 → 515 laps (1–16 per driver and session); 25 of the 540 laps have none (was 19 of 467).
@@ -361,6 +361,33 @@ Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 540 (
       - The largest step is 2.43–2.73 s (stint lap 1 to 2), and every rollout stays within 97.23–101.40 s. Still nearly flat: no compound or tyre-age effect.
     - **Effect on strategy (car 16):** MEDIUM(0)–HARD(0), pit on lap 33, 5819.52 s, tied with HARD(0)–MEDIUM(0) on lap 24 (was MEDIUM(0)–HARD(0) on lap 10, 5774.26 s). Neighbouring pit laps are +0.10–0.64 s, the best SOFT(0)–MEDIUM(0) +0.96 s, SOFT(0)–HARD(0) +2.56 s, the best 2-stop (MEDIUM(0)–HARD(0)–MEDIUM(0), pits on 19 and 36) +11.87 s, and the best with SOFT(6) +8.78 s. The total rose by 45 s because the rollouts sit about 0.8 s/lap higher. 1 stop still wins because the rollouts are flat; this is still **not** a valid recommendation.
     - **Not rerun:** `explore/` (#27). Its first run used the 153-row data.
+
+- [x] **#32 IQR residual filter drops fast push laps run between cool-down laps**
+  - **Where:** `scripts/process_laps.py`: `apply_iqr_residual_filter()` (`ROLLING_MEDIAN_WINDOW=5`, then `IQR_MULTIPLIER=3` in `.env`).
+  - **Problem:**
+    - The residual is lap time minus the driver's 5-lap centred rolling median, taken over the whole session rather than per stint. When a push lap sits among cool-down laps (~110 s and up), its rolling median is a cool-down time, so a normal ~93 s push lap gets a residual of about −17 s.
+    - The bounds come from the whole session's residuals, so they shift with the session's mix of laps. Since #29 kept FP2's long-run laps (residuals near 0), FP2's IQR fell from 10.8 to 5.3 s and the bounds from [−33.1, +42.6] to [−16.4, +21.0] s, so those push laps now fall outside.
+  - **Effect:** the filter removed 7 / 95 / 1 laps (2 / 31 / 1 before #29). In FP2 that was 68 slow laps, most of which the non-push filter would remove anyway, and 27 fast ones. 16 laps kept before #29 were dropped (4 FP1, 12 FP2), mostly 92–97 s push laps.
+  - **Fixed:** one multiplier per side, tuned over 12 weekends.
+    - **Code:** `IQR_MULTIPLIER` is replaced by `IQR_LOWER_MULTIPLIER` (fast side) and `IQR_UPPER_MULTIPLIER` (slow side) in `.env`. `apply_iqr_residual_filter()` logs each session's Q1, Q3, IQR and bounds and the laps removed on each side (`iqr_residual_fast` / `iqr_residual_slow` in `process_laps_removed_rows_summary.csv`), and saves every lap reaching the filter with its `residual` and `best_ratio` (lap / driver's best) to `process_laps_iqr_residuals_laps_p*.csv`.
+    - **Tuning:** `explore/tune_iqr.py` runs two methods on 12 non-sprint weekends (2024 Hungary, Saudi Arabia, Spain; 2025 Australia, Austria, Bahrain, Britain, Italy, Japan, Netherlands, Singapore, Spain; 36 sessions), running the pipeline stages with the multipliers as environment variables. Ten weekends were downloaded into `data/cache/` for it.
+      - **Label sweep:** a lap is a push lap when `best_ratio <= PUSH_LAP_MAX_BEST_RATIO` (1.15). At k = 3 the lower fence removed 488 push laps and 11 others; the upper fence 976 laps, 1 of them a push lap. The k at which the lower fence starts removing push laps is 2.4–6.1 in FP1 and 2.1–5.6 in FP3, but 11.3–16.7 in FP2 on 10 of 12 weekends and 49.71 on Spain 2025 FP2 (IQR 1.22 s, a push lap 60.9 s under its rolling median). Floor = the grid value at least 1.2× the largest: 60. The upper fence needs at most 4.21 (Japan 2025 FP2).
+      - **CV sweep:** k_lower {3, 6, 10, 20, 60} × k_upper {1.5, 2, 3, 5}; `process_laps` → `process_cardata` → `feature_engineer` rerun per pair and weekend; train_model.py's XGBoost scored by 5-fold stint-grouped CV × 2 seeds, on the 3,280 target rows common to every pair (615 stints), with the same stint folds for every pair. Pooled per-stint MAE: 1.2417 s at (3, 3), 1.2273 s at (60, 3), a gain of 0.014 s (one-sided t p = 0.017, Wilcoxon p = 0.003). No pair beats (60, 3) on both tests (closest: (10, 1.5), t p 0.14 / Wilcoxon p 0.06); k_upper 1.5–2 is ~0.002 s better, not significantly.
+      - **Rejected:** a medcouple-adjusted boxplot. The residuals are right-skewed, so it narrows the lower fence to ~0.07×IQR and removes 34–76 push laps per session.
+    - **Winner:** `IQR_LOWER_MULTIPLIER=60`, `IQR_UPPER_MULTIPLIER=3`, copied into `.env` by hand with the reasoning in its comment. At 60 the fast side removes nothing on any of the 36 sessions, so it is in effect switched off. The k needed grew as weekends were added (12 → 16 → 50), so rerun `tune_iqr.py` when weekends are added.
+    - **Removals (Bahrain 2025):** the IQR filter removes 1 / 68 / 1 laps, all slow (was 7 / 95 / 1). The non-push filter is unchanged at 146 / 65 / 120.
+    - **Rows:** 540 → 573 cleaned laps (182 / 271 / 87 → 188 / 298 / 87): the 33 laps the fast side used to remove, all push laps. 219 → 233 stints, 136 → 137 with a single clean lap. **Target rows: 273, unchanged** (same 56 stints, same session and compound split): a push lap between cool-down laps has no surviving lap *t+1* (#31), so the rescued laps reach the model only through `stint_avg_pace` and the training medians. Gaps to the next lap 48 → 67.
+    - **Car data:** 515 → 550 laps; 23 of 573 have none (was 25 of 540).
+    - **EDA:** degradation slopes +0.16 / +0.05 / +0.06 s/lap (SOFT / MEDIUM / HARD; was +0.17 / +0.06 / +0.04), from 35 / 38 / 23 multi-lap stints. Still 3 collinear groups. Target correlations: `i2_speed` +0.36, `session_FP2` −0.29, `stint_avg_pace` +0.28 (was +0.35).
+    - **Effect on metrics:**
+      - Grouped 5-fold CV MAE 1.17 s, RMSE 1.64 s (unchanged to two decimals), per fold MAE 0.92–1.34 s. OOF MAE 1.157 s, RMSE 1.634 s, mean residual −0.25 s.
+      - Held-out split (12 stints / 64 rows): MAE 1.34 s, RMSE 1.80 s, R² 0.078 (was 1.35 / 1.81 / 0.074).
+      - **Persistence test:** model better on 33 of 56 stints, paired t p = 0.0017, Wilcoxon p = 0.041 (was 0.052), median per-stint gain 0.08 s. Both tests pass, so the model now **beats persistence at 0.05**, though only just.
+    - **Feature importance:** XGB's top five are `session_FP3` 0.153, `full_throttle_pct` 0.073, `duration_sector_3` 0.059, `drs_open_pct` 0.059 and `air_temperature` 0.057. `tyre_age` is 10th (0.032).
+    - **Rollout behaviour** (car 16, 57-lap stint, fcp in s): seed unchanged (97.23 s on stint lap 1); 99.7–100.0 s on lap 2, 100.4–100.6 s on lap 3, then 100.1–101.5 s to lap 57. New sets within 0.15 s of each other on average (at most 0.86 s); SOFT(6) +0.05 s on average. Largest step 2.43–2.76 s (lap 1 to 2). Still nearly flat.
+    - **Effect on strategy (car 16):** MEDIUM(0)–HARD(0), pit on lap 29, 5819.18 s, tied with HARD(0)–MEDIUM(0) on lap 28 (was lap 33, 5819.52 s). Pit laps 27–31 are within 0.28 s, laps 26 and 32 about 2 s slower; best SOFT(0)–MEDIUM(0) +2.17 s, SOFT(0)–HARD(0) +3.15 s, best 2-stop (HARD(0)–MEDIUM(0)–MEDIUM(0), pits on 16 and 40) +12.86 s, best with SOFT(6) (a 2-stop) +15.63 s. Still **not** a valid recommendation (flat rollouts, #27).
+    - **Not rerun:** `explore/explore_master.py` (#27).
+    - **Docs:** readme.txt (Data Preparation step 2, a new "Tuning the IQR fences" subsection, and every count downstream), README.md, AGENTS.md.
 
 ### P3: completeness and cleanup
 
