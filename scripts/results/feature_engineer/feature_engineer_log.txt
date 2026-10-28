@@ -25,6 +25,7 @@ Merging per-lap car data (session_key, driver_number, lap_number)...
 Engineering features...
   → Session one-hot rows: {'session_FP1': 188, 'session_FP2': 298, 'session_FP3': 87}
   → tyre_age range: 2-19 laps
+  → run_laps range: 3-18 laps
   → Missing inputs filled with the median of the stint's earlier laps:
            column  missing  filled_from_stint  still_missing
          i1_speed       61                 51             10

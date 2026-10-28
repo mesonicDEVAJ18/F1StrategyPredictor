@@ -11,11 +11,12 @@ The reference weekend is **Bahrain 2025**; any non-sprint 2024 or 2025 weekend c
 model is trained on the whole field; the race is simulated for one car, `SIM_DRIVER` in `.env`
 (default 16, Ferrari), using that car's tyre sets. All raw data comes from the free [OpenF1 API](https://openf1.org/).
 
-The core idea: rather than labelling a "degradation rate" directly (circular and leak-prone),
-an XGBoost model is trained to predict the **next lap's fuel-corrected pace**. Degradation then
-emerges as the falling trend when the model is rolled forward autoregressively. A simulator
-enumerates legal pit/compound strategies, simulates each lap-by-lap, and ranks them by total
-race time.
+The core idea (#31): the model learns **tyre fall-off with age**. Each lap's fuel-corrected pace is split into a
+level for its stint (driver, session, fuel plan, run type: everything constant over a run) and a fall-off that depends
+on the compound, the tyre age and the conditions. A linear stage fits the stint levels, an XGBoost model learns the
+fall-off from what is left, and a second linear stage gives the gap between compounds on a new set. A simulator
+enumerates legal pit/compound strategies, prices each stint from the fall-off curve of its set, and ranks them by
+total race time.
 
 Read [readme.txt](readme.txt) for the full, authoritative narrative (problem statement, data
 dictionary, cleaning rules, feature-engineering rationale, and modelling decisions). When the
@@ -28,24 +29,24 @@ scripts/            # ALL pipeline code lives here; run scripts FROM this direct
   master.py             # orchestrator — runs the whole pipeline in order
   race_weekend.py       # weekend table (session keys, race laps); puts the selected weekend in data/raw/ (cache or OpenF1)
   env_config.py         # loads ../.env into os.environ; env_str/env_int/env_float/env_list getters
-  feature_config.py     # shared column lists (MODEL_FEATURE_COLUMNS, SIM_FEATURE_COLUMNS, SESSION_COLUMNS)
+  feature_config.py     # shared column lists (MODEL_FEATURE_COLUMNS, LAP_TIMING_COLUMNS, ...) and the fall-off helpers
   process_laps.py       # clean lap data (kept in s / km/h, not scaled), tag session_name FP1-3
   process_stints.py     # clean stints, one-hot encode compound
   tyre_sets.py          # infer every car's tyre sets from practice stints -> race inventory
   process_weather.py    # clean + scale weather
-  process_cardata.py    # clean car telemetry (whole field), aggregate per lap, unscaled; model inputs
+  process_cardata.py    # clean car telemetry (whole field), aggregate per lap, unscaled (EDA, tune_push label; not model inputs)
   feature_engineer.py   # merge laps+stints+weather+car data, build engineered features
   eda.py                # exploratory data analysis of the engineered dataset (read-only, no hand-off)
   train_model.py        # train the one chosen model (XGBoost for now), persist the bundle
   strategy_simulator.py # enumerate + simulate strategies, pick best
-  validate_strategy.py  # cross-validation, residual plot, model-vs-persistence test (strategy robustness is planned, not built)
+  validate_strategy.py  # cross-validation of the fall-off curve, residual plot, tests vs flat/linear baselines (strategy robustness is planned, not built)
   results/<script>/     # per-script outputs (logs, intermediate CSVs, plots, model)
 explore/            # model selection (#27), kept out of the pipeline; run FROM this directory
   explore_master.py     # alternate master: data stages + the experiment block (candidates, grids, feature sets)
-  explore_lib.py        # custom estimators, nested grouped CV, simulator-style rollout
+  explore_lib.py        # custom estimators, nested grouped CV, fall-off target and shape scoring
   tune_iqr.py           # tunes process_laps.py's two IQR multipliers over many cached weekends (#32)
   tune_push.py          # tunes process_laps.py's two push-lap ratios (session best, stint best) the same way (#30)
-  results/explore_master/  # leaderboard, per-fold CV, best params, rollouts
+  results/explore_master/  # leaderboard, per-fold CV and curves, best params, fall-off curves
   results/tune_iqr/        # label sweep, CV sweep, recommendation
   results/tune_push/       # labelled laps, label sweep, CV sweep, recommendation
 data/
@@ -86,17 +87,22 @@ The model is chosen separately, in `explore/`:
 ```bash
 cd explore
 python explore_master.py                   # data stages (race_weekend .. eda), then the experiment
-python explore_master.py --skip-pipeline   # reuse data/processed/ and scripts/results/eda/
+python explore_master.py --skip-pipeline   # reuse data/processed/
 python explore_master.py --skip-pipeline --quick   # smoke run
 ```
 
 `explore_master.py` runs `master.py`'s stages up to `eda.py` from `scripts/`, then compares the candidates in its
-experiment block (models, search grids, feature sets, target modes: plain code at the top of the file, by design, not
-`.env`) with nested CV grouped by stint, against the persistence, `stint_avg_pace` and training-mean baselines, and rolls
-each candidate's best configuration out the way `strategy_simulator.rollout_stint()` does (reimplemented in
-`explore_lib.py`, since the simulator loads the bundle at import; keep the two in step). It writes only to
-`explore/results/explore_master/`: no hand-off file, and the bundle is untouched. The winner is copied into
-`train_model.py`'s MODEL block and `.env` by hand.
+experiment block (models, search grids, feature sets: plain code at the top of the file, by design, not `.env`) on the
+fall-off target, with nested CV grouped by stint. Stage 1 (stint levels) is fitted per outer fold, and the score is the
+shape of the curve within each held-out stint (`stint_shape_errors()`), against the flat (no fall-off) and linear
+(stage-1 slope per compound) baselines. Each fold's curve at a few tyre ages is saved (its spread is the curve's
+uncertainty), and each candidate's best configuration is drawn with `fall_off_curve()` and given a compound gap with
+`fit_compound_gap()`, the same shared helpers the pipeline uses, so explore can't drift from the simulator. A candidate
+is recommended only if it beats both baselines and its curve has steps ≤ `PLAUSIBLE_MAX_STEP_S`, rises on every
+compound and doesn't get faster with age over the race length (`MIN_MONOTONE_SHARE`; an RBF SVR reverts past the
+oldest tyre in training). The feature
+sets must never touch `LAP_TIMING_COLUMNS` (asserted). It writes only to `explore/results/explore_master/`: no hand-off
+file, and the bundle is untouched. The winner is copied into `train_model.py`'s MODEL block and `.env` by hand.
 
 ```bash
 cd explore
@@ -107,7 +113,8 @@ python tune_iqr.py --quick   # smoke run: two weekends, small grid
 `tune_iqr.py` picks `IQR_LOWER_MULTIPLIER` / `IQR_UPPER_MULTIPLIER` (#32) with two methods: a label sweep over
 `process_laps.py`'s `process_laps_iqr_residuals_*.csv` (how many push laps, `best_ratio <= PUSH_LAP_MAX_BEST_RATIO`, each fence
 removes at each k), and a CV sweep that reruns `process_laps` → `process_cardata` → `feature_engineer` for each pair of multipliers
-and scores XGBoost on the target rows common to every pair, with the same stint folds. It runs the stages from `scripts/` with the
+and scores XGBoost's fall-off (stage 1 per fold) by within-stint shape MAE on the rows common to every pair, with the
+same stint folds. It runs the stages from `scripts/` with the
 settings as environment variables, so while it runs it switches `data/raw/` between weekends and rewrites `data/processed/` and
 those stages' `scripts/results/`; at the end it switches back to the `.env` weekend and reruns them at the `.env` values. Its
 outputs go to `explore/results/tune_iqr/`; the winner is copied into `.env` by hand, with the reasoning in the comment there.
@@ -169,37 +176,41 @@ Scripts communicate through CSVs in `data/processed/`, not by importing each oth
   the aggregates are left unscaled, in physical units)
 - `feature_engineer.py` reads the laps, stints, weather and car data above → `data/processed/final_engineered_dataset.csv`
   (and a copy under `results/feature_engineer/`). It keeps `session_key` and `driver_number` as
-  identifiers only; they are not in `MODEL_FEATURE_COLUMNS`. The session reaches the model only as the
-  `session_FP1/FP2/FP3` one-hot, built from `process_laps.py`'s `session_name`. The car-data aggregates
-  (`CARDATA_FEATURE_COLUMNS`) are left-merged on lap *t*'s keys. Missing inputs in `STINT_FILL_COLUMNS` (speed traps,
-  segment counts, car data) are filled with the median of the same stint's *earlier* laps (causal: a whole-stint median
-  would include lap *t+1*, the target), and `stint_avg_pace` on a stint's first lap is lap *t*'s own lap time. Whatever is
-  still NaN gets the training-row medians in `train_model.py`; the simulator holds speeds and car data at those medians.
+  identifiers only; they are not in `MODEL_FEATURE_COLUMNS`. It builds the `session_FP1/FP2/FP3` one-hot from
+  `process_laps.py`'s `session_name` and `run_laps` (`lap_end − lap_start + 1`, the run's length, a control in
+  train_model.py's compound-gap fit). The car-data aggregates (`CARDATA_FEATURE_COLUMNS`) are left-merged on the lap's
+  keys. Missing values in `STINT_FILL_COLUMNS` (speed traps, segment counts, car data) are filled with the median of the
+  same stint's *earlier* laps, and `stint_avg_pace` on a stint's first lap is its own lap time. Since #31 none of
+  these is a model input (`LAP_TIMING_COLUMNS`); they stay for eda.py and tune_push.py.
 - `eda.py` reads the engineered dataset and writes only to `results/eda/` (no hand-off file, nothing in the pipeline
-  reads it; `explore/` reads its collinear groups): summary statistics and missing values, pace distributions by session and compound, pace against
-  tyre age (raw and with each stint's mean removed), input/target correlations with collinear groups
-  (`EDA_COLLINEAR_THRESHOLD`), and row coverage before and after `build_next_lap_target()`. `lap_duration` is
+  reads it): summary statistics and missing values, pace distributions by session and compound, pace against
+  tyre age (raw, and the within-stint slope with each stint's mean pace and age removed, = train_model.py's stage 1),
+  correlations of the candidate inputs with within-stint pace, with collinear groups (`EDA_COLLINEAR_THRESHOLD`), and
+  row coverage of all laps and of the multi-lap stints (the fall-off rows). `lap_duration` is
   rebuilt from `fuel_corrected_pace` with `FUEL_EFFECT_K`. Descriptive only; tests on the data are #26.
-- `train_model.py` reads the engineered dataset, fits the one model in its MODEL block (no comparison: that is
-  `explore/`'s job) and scores it on a held-out 20% of stints → `results/train_model/train_model_xgb_model.pkl`
-  (a joblib bundle: `{"model": ..., "features": [...], "medians": {...}, "session_weights": {...}}`;
-  `medians` are the medians of the training split's rows, fitted after the split and used for `fillna`, and
-  `session_weights` is each session's share of the target rows). `validate_strategy.py` fits its own fill per CV fold
-  from that fold's training rows, not the bundle's `medians`
-- `strategy_simulator.py` and `validate_strategy.py` load that `.pkl` bundle. The simulator starts from
-  `medians` (inputs are in physical units, so 0 is not "average") and averages each lap's prediction over
-  the session one-hots with `session_weights`, because the race is not a practice session. Each stint is
-  rolled out autoregressively from stint lap 1, once per (compound, set age at start, stint length), with
-  `tyre_age` = set age + stint lap and the seed lap's `stint_avg_pace` = its own lap time: every predicted fcp is turned back into a raw lap time with
-  `FUEL_EFFECT_K` (feature_config.py) and fed into the next lap's sector times and running `stint_avg_pace`.
+- `train_model.py` reads the engineered dataset, splits it 80/20 by stint, and on the training side fits stage 1
+  (`fit_stint_levels()`: stint levels + a linear slope per compound, on the multi-lap stints), the one model in its
+  MODEL block on `fcp − level` (no comparison: that is `explore/`'s job), and stage 3 (`fit_compound_gap()`: compound
+  gap on a new set + driver-session levels, all training laps). It scores the held-out stints on curve shape against
+  the flat and linear baselines → `results/train_model/train_model_xgb_model.pkl` (a joblib bundle: `{"model",
+  "features", "medians", "anchor_age", "compound_gap", "levels", "linear_slopes"}`; `medians` are the training rows'
+  medians, used for `fillna` and as the simulator's conditions). `validate_strategy.py` fits its own stage 1 and fill per
+  CV fold from that fold's training rows, not the bundle's
+- `strategy_simulator.py` and `validate_strategy.py` load that `.pkl` bundle. The simulator prices each (compound, set
+  age at start) the car has with one curve over stint laps 1..race laps: fcp = race pace level (mean of `SIM_DRIVER`'s
+  driver-session levels) + compound gap + `fall_off_curve()` at tyre age = set age + stint lap, with the conditions at
+  `medians`. Nothing is fed back between laps; a stint of L laps costs the cumulative sum of its first L laps.
   Strategies are optimised for the one car in `SIM_DRIVER` from its tyre-set inventory (an unknown car number
   raises): each set is fitted at most once, and the fastest choice of sets is kept for each compound sequence
   and pit-lap plan.
 
-The **model target** is next-lap `fuel_corrected_pace`: the same driver's lap `lap_number + 1` in the
-same stint, built by `build_next_lap_target()` in `feature_config.py` (shared by `train_model.py` and
-`validate_strategy.py`, so the target can't diverge between them). `lap_duration` and `laps_remaining` are
-dependent variables and are deliberately excluded from model inputs to avoid leakage.
+The **model target** is the fall-off within a stint: `fuel_corrected_pace − level[stint]`, with the levels from stage 1
+fitted on the training rows only (`fit_stint_levels()` / `fall_off_target()` in `feature_config.py`, shared by
+`train_model.py`, `validate_strategy.py`, `eda.py` and `explore/`, so the target can't diverge between them). Only stints
+with two or more clean laps carry fall-off (`multi_lap_rows()`). A held-out stint's level is unknown by construction, so
+validation scores the shape of the curve (`stint_shape_errors()`: residual minus the stint's mean residual). The target
+is the lap's own pace, so nothing measured on the lap may be an input: `lap_duration`, sector times, speed traps,
+segment counts, car data and `stint_avg_pace` (`LAP_TIMING_COLUMNS`) are excluded, and `feature_config.py` asserts it.
 The target, every prediction, the simulator's totals and the error metrics are in **seconds**: lap times
 are not scaled. Don't reintroduce a per-session scaler on lap or car-data columns.
 
@@ -217,9 +228,8 @@ Every pipeline script follows the same house style — match it when adding or e
   script name and written into that script's results dir. Track generated paths in the
   `generated_files` list.
 - **Shared feature order**: never hard-code the model's feature list. Import it from
-  [feature_config.py](scripts/feature_config.py) (`MODEL_FEATURE_COLUMNS` /
-  `SIM_FEATURE_COLUMNS`). If you change the feature set, change it there so training,
-  simulation, and validation stay consistent.
+  [feature_config.py](scripts/feature_config.py) (`MODEL_FEATURE_COLUMNS`). If you change the feature
+  set, change it there so training, simulation, and validation stay consistent.
 - **Settings live in `.env`**: never hard-code a tunable value or a path/file name in a script. Add a
   commented key to the repo-root `.env` and read it once at module level with the getters from
   [env_config.py](scripts/env_config.py). A missing key raises (there are no silent defaults), and an
@@ -249,8 +259,9 @@ Every pipeline script follows the same house style — match it when adding or e
   the three practice sessions. Don't broaden scope (extra sessions, race data) unless asked.
 - Running another weekend rewrites the tracked `data/raw/`, `data/processed/` and `scripts/results/`. Switch back to
   2025 `bahrain` (loaded from `data/cache/` with no requests) before committing, unless the change is intended.
-- Guard against **target leakage** above all else — it's the central design constraint. Any new
-  feature must belong to lap *t* when predicting lap *t+1*.
+- Guard against **target leakage** above all else — it's the central design constraint. The target is the lap's
+  own pace, so no model input may come from the lap's own timing or telemetry (`LAP_TIMING_COLUMNS`); tyre and
+  condition columns only.
 - When adding a new pipeline stage, wire it into `master.py`'s sequence and give it its own
   `results/<name>/` directory and log, following the pattern above.
 - Prefer editing the existing scripts over introducing new frameworks; this is a plain

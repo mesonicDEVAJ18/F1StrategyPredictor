@@ -2,7 +2,6 @@ import sys
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import GroupShuffleSplit
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from xgboost import XGBRegressor
 import matplotlib.pyplot as plt
 import joblib
@@ -11,7 +10,10 @@ import warnings
 from datetime import datetime
 
 from feature_config import MODEL_FEATURE_COLUMNS as FEATURES
-from feature_config import SESSION_COLUMNS, TARGET_GROUP_COLUMNS, build_next_lap_target
+from feature_config import (
+    COMPOUNDS, FALL_OFF_ANCHOR_AGE, STINT_GROUP_COLUMNS, fall_off_curve, fall_off_rows, fall_off_target,
+    fit_compound_gap, fit_stint_levels, linear_fall_off, multi_lap_rows, stint_shape_errors,
+)
 from env_config import env_str, env_int, env_float
 
 warnings.filterwarnings("ignore")
@@ -54,55 +56,46 @@ df = pd.read_csv(DATASET_PATH)
 log(f"Dataset rows: {len(df)}")
 
 # ======================================================
-# BUILD TARGET
-# ======================================================
-rows_before = len(df)
-n_stints = df.groupby(TARGET_GROUP_COLUMNS).ngroups
-df = build_next_lap_target(df)
-
-log(f"Rows after target shift drop: {len(df)}")
-log(f"  → Dropped as last lap of a stint: {n_stints}")
-log(f"  → Dropped for a gap to the next lap: {rows_before - len(df) - n_stints}")
-
-
-# ======================================================
-# FEATURES / TARGET
-# ======================================================
-X = df[FEATURES].copy()
-y = df["target_next_fcp"]
-
-# Clean (the median fill comes after the split, so held-out rows don't feed it)
-X.replace([np.inf, -np.inf], np.nan, inplace=True)
-
-# Share of training rows per practice session; the simulator averages its
-# predictions over the session one-hots with these weights (the race is no session)
-session_weights = df[SESSION_COLUMNS].mean()
-log(f"Session weights: {session_weights.round(3).to_dict()}")
-
-
-# ======================================================
 # TRAIN/TEST SPLIT
 # ======================================================
 # Split by stint, not by lap: laps of one stint are highly correlated, and the
-# simulator predicts stints the model hasn't seen. TEST_SIZE is a share of stints.
-groups = df.groupby(TARGET_GROUP_COLUMNS).ngroup()
+# simulator prices stints the model hasn't seen. TEST_SIZE is a share of stints.
+groups = df.groupby(STINT_GROUP_COLUMNS).ngroup()
 gss = GroupShuffleSplit(n_splits=1, test_size=TEST_SIZE, random_state=RANDOM_STATE)
-train_idx, test_idx = next(gss.split(X, y, groups))
-X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
-y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
-
-train_groups = set(groups.iloc[train_idx])
-test_groups = set(groups.iloc[test_idx])
+train_idx, test_idx = next(gss.split(df, groups=groups))
+train_all, test_all = df.iloc[train_idx], df.iloc[test_idx]
 log(
-    f"Completed train/test split by stint: {len(train_groups)} stints / {len(train_idx)} rows train, "
-    f"{len(test_groups)} stints / {len(test_idx)} rows test, {len(train_groups & test_groups)} shared."
+    f"Completed train/test split by stint: {train_all.groupby(STINT_GROUP_COLUMNS).ngroups} stints / "
+    f"{len(train_all)} laps train, {test_all.groupby(STINT_GROUP_COLUMNS).ngroups} stints / {len(test_all)} laps test, "
+    f"{len(set(groups.iloc[train_idx]) & set(groups.iloc[test_idx]))} shared."
 )
 
-# Inputs still missing after feature_engineer.py's stint fill get the median of the training
-# rows only; the simulator starts from these medians too (#33)
+
+# ======================================================
+# TARGET: FALL-OFF WITHIN THE STINT (#31)
+# ======================================================
+# fcp = level[stint] + fall_off(compound, tyre_age, conditions). Stage 1 fits the stint levels
+# (and one linear slope per compound) on the training stints; the model learns fcp - level.
+# Only stints with two or more clean laps carry fall-off.
+train = multi_lap_rows(train_all)
+test = multi_lap_rows(test_all)
+log(f"Fall-off rows (stints with >= 2 clean laps): {len(train)} laps / "
+    f"{train.groupby(STINT_GROUP_COLUMNS).ngroups} stints train, {len(test)} laps / "
+    f"{test.groupby(STINT_GROUP_COLUMNS).ngroups} stints test")
+
+levels, linear_slopes = fit_stint_levels(train)
+log("Stage 1, linear fall-off per compound (s per lap of tyre age): "
+    + ", ".join(f"{c} {linear_slopes[c]:+.3f}" for c in COMPOUNDS))
+
+X_train = train[FEATURES].replace([np.inf, -np.inf], np.nan)
+X_test = test[FEATURES].replace([np.inf, -np.inf], np.nan)
+y_train = fall_off_target(train, levels)
+
+# Inputs still missing get the median of the training rows only; the simulator holds the
+# conditions at these medians
 medians = X_train.median(numeric_only=True)
 log(f"Inputs median-filled: {int(X_train.isna().any(axis=1).sum())} train rows, "
-    f"{int(X_test.isna().any(axis=1).sum())} test rows; per column: {X.isna().sum()[X.isna().sum() > 0].to_dict()}")
+    f"{int(X_test.isna().any(axis=1).sum())} test rows")
 X_train = X_train.fillna(medians)
 X_test = X_test.fillna(medians)
 
@@ -136,27 +129,60 @@ pred = model.predict(X_test)
 
 
 # ======================================================
-# METRICS
+# METRICS (shape of the curve within each held-out stint)
 # ======================================================
-def compute_metrics(y_true, pred):
-    mse = mean_squared_error(y_true, pred)
-    rmse = np.sqrt(mse)
-    return {
-        "MAE": mean_absolute_error(y_true, pred),
-        "RMSE": rmse,
-        "R2": r2_score(y_true, pred),
-    }
-
-
-metrics_df = pd.DataFrame({MODEL_NAME: compute_metrics(y_test, pred)}).T
+# A held-out stint's level is unknown, so each stint's mean residual is removed and only the
+# change with tyre age is scored. R2_within: share of the within-stint variation explained.
+test_stints = test.groupby(STINT_GROUP_COLUMNS).ngroup().to_numpy()
+fcp_test = test["fuel_corrected_pace"].to_numpy()
+shape = {
+    MODEL_NAME: stint_shape_errors(fcp_test, pred, test_stints),
+    "baseline_flat": stint_shape_errors(fcp_test, np.zeros(len(test)), test_stints),
+    "baseline_linear": stint_shape_errors(fcp_test, linear_fall_off(test, linear_slopes), test_stints),
+}
+flat_sse = np.sum(shape["baseline_flat"] ** 2)
+metrics_df = pd.DataFrame({
+    name: {"MAE": np.mean(np.abs(e)), "RMSE": np.sqrt(np.mean(e ** 2)), "R2_within": 1 - np.sum(e ** 2) / flat_sse}
+    for name, e in shape.items()
+}).T
 
 metrics_file = f"{SCRIPT_NAME}_model_metrics.csv"
 metrics_df.to_csv(f"{RESULTS_DIR}/{metrics_file}")
 generated_files.append(metrics_file)
 
-log("\nTest metrics (MAE/RMSE in seconds):")
+log("\nHeld-out within-stint shape metrics (MAE/RMSE in seconds):")
 log(metrics_df.round(4).to_string())
 log("Saved model metrics table.")
+
+
+# ======================================================
+# FALL-OFF CURVES AND COMPOUND GAP
+# ======================================================
+conditions = medians.to_dict()
+curve_ages = np.arange(1, int(df["tyre_age"].max()) + 2)
+curves = {c: fall_off_curve(model, FEATURES, c, curve_ages, conditions) for c in COMPOUNDS}
+table = pd.DataFrame({
+    "tyre_age": curve_ages,
+    **{f"{c}_model": curves[c] for c in COMPOUNDS},
+    **{f"{c}_linear": linear_slopes[c] * (curve_ages - FALL_OFF_ANCHOR_AGE) for c in COMPOUNDS},
+})
+curves_file = f"{SCRIPT_NAME}_fall_off_curves.csv"
+table.to_csv(f"{RESULTS_DIR}/{curves_file}", index=False)
+generated_files.append(curves_file)
+log(f"\nFall-off from a new set's first lap (s), training-median conditions; tyre_age in training "
+    f"{int(train['tyre_age'].min())}-{int(train['tyre_age'].max())}:")
+for c in COMPOUNDS:
+    at = ", ".join(f"age {a}: {curves[c][a - 1]:+.2f} (linear {linear_slopes[c] * (a - FALL_OFF_ANCHOR_AGE):+.2f})"
+                   for a in (5, 10, 15) if a <= len(curve_ages))
+    log(f"  {c}: {at}")
+
+# Stage 3: the gap between compounds on a new set, net of the model's fall-off, from every
+# training lap (one-lap stints too), with run_laps as a control for the run type
+gap_fall_off = fall_off_rows(model, FEATURES, train_all, conditions)
+compound_gap, pace_levels, run_coef = fit_compound_gap(train_all, gap_fall_off)
+log(f"Stage 3, compound gap on a new set (s, vs SOFT): MEDIUM {compound_gap['MEDIUM']:+.3f}, "
+    f"HARD {compound_gap['HARD']:+.3f}; run_laps {run_coef:+.3f} s per lap of run; "
+    f"{len(pace_levels)} driver-session levels from {len(train_all)} laps")
 
 
 # ======================================================
@@ -182,7 +208,10 @@ joblib.dump(
         "model": model,
         "features": FEATURES,
         "medians": medians.to_dict(),
-        "session_weights": session_weights.to_dict(),
+        "anchor_age": FALL_OFF_ANCHOR_AGE,
+        "compound_gap": compound_gap,
+        "levels": pace_levels.to_dict(),
+        "linear_slopes": linear_slopes,
     },
     MODEL_BUNDLE_PATH
 )
@@ -194,20 +223,24 @@ log(f"Saved trained {MODEL_NAME} model.")
 # ======================================================
 # PLOTS
 # ======================================================
-# Prediction vs true on the held-out stints (first 300 samples)
+# Fall-off curve of each compound: the model against the stage-1 linear slope
 fig = plt.figure(figsize=(10, 6))
-plt.plot(y_test.values[:300], label="True", linewidth=2)
-plt.plot(pred[:300], label=MODEL_NAME)
+colours = {"SOFT": "tab:red", "MEDIUM": "goldenrod", "HARD": "dimgray"}
+for c in COMPOUNDS:
+    plt.plot(curve_ages, curves[c], color=colours[c], label=f"{c} {MODEL_NAME}")
+    plt.plot(curve_ages, table[f"{c}_linear"], color=colours[c], linestyle="--", label=f"{c} linear")
+plt.axvspan(train["tyre_age"].max(), curve_ages.max(), color="0.9", label="beyond training ages")
 plt.legend()
-plt.title(f"{MODEL_NAME} vs True (First 300 Samples)")
-plt.ylabel("Fuel Corrected Pace (s)")
+plt.title("Fall-off from a new set's first lap (training-median conditions)")
+plt.xlabel("Tyre age (laps)")
+plt.ylabel("Fall-off (s)")
 
-pred_plot = f"{SCRIPT_NAME}_pred_vs_true.png"
+pred_plot = f"{SCRIPT_NAME}_fall_off_curves.png"
 plt.savefig(f"{RESULTS_DIR}/{pred_plot}", dpi=300)
 plt.close()
 generated_files.append(pred_plot)
 
-log("Saved prediction plot.")
+log("Saved fall-off plot.")
 
 
 # ======================================================

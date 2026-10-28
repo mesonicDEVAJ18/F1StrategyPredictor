@@ -1,5 +1,6 @@
 train_model_feature_matrix_snapshot.csv
 train_model_model_metrics.csv
+train_model_fall_off_curves.csv
 train_model_feature_importance.csv
 train_model_xgb_model.pkl
-train_model_pred_vs_true.png
+train_model_fall_off_curves.png

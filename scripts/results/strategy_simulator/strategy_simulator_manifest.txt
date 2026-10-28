@@ -1,4 +1,4 @@
-strategy_simulator_stint_rollouts.csv
+strategy_simulator_stint_curves.csv
 strategy_simulator_stint_totals.csv
 strategy_simulator_all_strategy_results.csv
 strategy_simulator_best_strategy.json

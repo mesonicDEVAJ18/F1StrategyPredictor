@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 import os
 import warnings
 
-from feature_config import MODEL_FEATURE_COLUMNS as FEATURES
-from feature_config import CARDATA_FEATURE_COLUMNS, SESSION_COLUMNS, TARGET_GROUP_COLUMNS
-from feature_config import FUEL_EFFECT_K, build_next_lap_target
+from feature_config import MODEL_FEATURE_COLUMNS, STINT_FILL_COLUMNS, SECTOR_COLUMNS
+from feature_config import SESSION_COLUMNS, STINT_GROUP_COLUMNS
+from feature_config import FUEL_EFFECT_K, multi_lap_rows
 from env_config import env_str, env_float
 
 warnings.filterwarnings("ignore")
@@ -57,10 +57,16 @@ COMPOUNDS = ["SOFT", "MEDIUM", "HARD"]
 COMPOUND_COLUMNS = [f"compound_{c}" for c in COMPOUNDS]
 COMPOUND_COLORS = {"SOFT": "tab:red", "MEDIUM": "goldenrod", "HARD": "dimgray"}
 SESSIONS = [c.replace("session_", "") for c in SESSION_COLUMNS]
-SECTOR_COLUMNS = ["duration_sector_1", "duration_sector_2", "duration_sector_3"]
 # Scaled by process_weather.py (StandardScaler); wind_direction is left in degrees
 SCALED_WEATHER_COLUMNS = ["air_temperature", "humidity", "pressure", "rainfall", "track_temperature", "wind_speed"]
+WEATHER_COLUMNS = SCALED_WEATHER_COLUMNS + ["wind_direction"]
 PACE_COLUMNS = ["lap_duration", "fuel_corrected_pace"]
+TYRE_COLUMNS = ["tyre_age_at_start", "laps_since_stint_start", "tyre_age", "run_laps"]
+# Every per-lap column described in section 1 (the lap's own timing too, though it isn't a model input)
+DESCRIBE_COLUMNS = SECTOR_COLUMNS + STINT_FILL_COLUMNS + TYRE_COLUMNS + COMPOUND_COLUMNS + SESSION_COLUMNS + WEATHER_COLUMNS
+# Inputs a fall-off model may use (#31): tyre and conditions, never the lap's own timing; the
+# pool explore/ draws its feature sets from
+CANDIDATE_INPUTS = COMPOUND_COLUMNS + ["tyre_age_at_start", "laps_since_stint_start", "tyre_age"] + WEATHER_COLUMNS
 
 
 # ============================================================
@@ -90,9 +96,7 @@ log(
     "wind_direction in degrees."
 )
 
-# Next-lap target rows, the ones the model actually trains on
-target_df = build_next_lap_target(df)
-log(f"Rows after the next-lap target shift: {len(target_df)} (from {len(df)})")
+log(f"Model inputs (train_model.py): {', '.join(MODEL_FEATURE_COLUMNS)}")
 
 
 # ============================================================
@@ -100,7 +104,7 @@ log(f"Rows after the next-lap target shift: {len(target_df)} (from {len(df)})")
 # ============================================================
 log("\n=== 1. Summary statistics and missing values ===")
 
-summary_cols = FEATURES + PACE_COLUMNS
+summary_cols = DESCRIBE_COLUMNS + PACE_COLUMNS
 
 stats = [df[summary_cols].describe().T.assign(session="ALL")]
 for session in SESSIONS:
@@ -132,8 +136,8 @@ for _, r in missing_all.sort_values("missing", ascending=False).iterrows():
     )
     log(f"  {r['column']}: {r['missing']} ({r['missing_share']:.1%}); {by_session}")
 
-constant_cols = [c for c in FEATURES if df[c].nunique(dropna=True) <= 1]
-log(f"Constant inputs (no information for the model): {constant_cols if constant_cols else 'none'}")
+constant_cols = [c for c in DESCRIBE_COLUMNS if df[c].nunique(dropna=True) <= 1]
+log(f"Constant columns (no information for a model): {constant_cols if constant_cols else 'none'}")
 
 
 # ============================================================
@@ -180,12 +184,16 @@ for _, r in pace_df[pace_df["column"] == "fuel_corrected_pace"].iterrows():
 # ============================================================
 # 3. PACE AGAINST TYRE AGE (the degradation the model should learn)
 # ============================================================
-log("\n=== 3. Fuel-corrected pace against tyre age ===")
+log("\n=== 3. Fuel-corrected pace against tyre age (the fall-off the model learns) ===")
 
 # Raw pace mixes drivers, sessions and run plans; subtracting each stint's mean leaves
 # the change within a stint, which is where degradation shows
-df["fcp_stint_demeaned"] = df["fuel_corrected_pace"] - df.groupby(TARGET_GROUP_COLUMNS)["fuel_corrected_pace"].transform("mean")
-stint_laps = df.groupby(TARGET_GROUP_COLUMNS)["lap_number"].transform("size")
+df["fcp_stint_demeaned"] = df["fuel_corrected_pace"] - df.groupby(STINT_GROUP_COLUMNS)["fuel_corrected_pace"].transform("mean")
+# Tyre age is de-meaned too: with pace de-meaned and age raw, the spread of age between stints
+# (zero pace change) pulls the slope towards 0. This is the within-stint slope, the same as
+# train_model.py's stage-1 slope per compound (#31)
+df["age_stint_demeaned"] = df["tyre_age"] - df.groupby(STINT_GROUP_COLUMNS)["tyre_age"].transform("mean")
+stint_laps = df.groupby(STINT_GROUP_COLUMNS)["lap_number"].transform("size")
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 slope_rows = []
@@ -196,20 +204,20 @@ for compound in COMPOUNDS:
 
     # Single-lap stints de-mean to exactly 0 and carry no within-stint information
     multi = part[stint_laps[part.index] > 1]
-    axes[1].scatter(multi["tyre_age"], multi["fcp_stint_demeaned"], s=8, alpha=0.5, color=color, label=compound)
+    axes[1].scatter(multi["age_stint_demeaned"], multi["fcp_stint_demeaned"], s=8, alpha=0.5, color=color, label=compound)
 
     slope = np.nan
     intercept = np.nan
     if multi["tyre_age"].nunique() > 1:
-        slope, intercept = np.polyfit(multi["tyre_age"], multi["fcp_stint_demeaned"], 1)
-        xs = np.array([multi["tyre_age"].min(), multi["tyre_age"].max()])
+        slope, intercept = np.polyfit(multi["age_stint_demeaned"], multi["fcp_stint_demeaned"], 1)
+        xs = np.array([multi["age_stint_demeaned"].min(), multi["age_stint_demeaned"].max()])
         axes[1].plot(xs, intercept + slope * xs, color=color, linewidth=2)
 
     slope_rows.append({
         "compound": compound,
         "laps": len(part),
-        "stints": part.groupby(TARGET_GROUP_COLUMNS).ngroups,
-        "multi_lap_stints": multi.groupby(TARGET_GROUP_COLUMNS).ngroups,
+        "stints": part.groupby(STINT_GROUP_COLUMNS).ngroups,
+        "multi_lap_stints": multi.groupby(STINT_GROUP_COLUMNS).ngroups,
         "laps_in_multi_lap_stints": len(multi),
         "tyre_age_min": part["tyre_age"].min(),
         "tyre_age_max": part["tyre_age"].max(),
@@ -222,8 +230,8 @@ axes[0].set_xlabel("Tyre age (laps)")
 axes[0].set_ylabel("Fuel-corrected pace (s)")
 axes[0].legend()
 axes[1].axhline(0, color="black", linewidth=0.8)
-axes[1].set_title("Within-stint pace vs tyre age (stint mean removed, linear fit)")
-axes[1].set_xlabel("Tyre age (laps)")
+axes[1].set_title("Within-stint pace vs tyre age (stint means removed, linear fit)")
+axes[1].set_xlabel("Tyre age - stint mean tyre age (laps)")
 axes[1].set_ylabel("fcp - stint mean fcp (s)")
 axes[1].legend()
 save_plot("pace_vs_tyre_age")
@@ -243,25 +251,31 @@ for _, r in slope_df.iterrows():
 # ============================================================
 # 4. CORRELATIONS AND COLLINEAR GROUPS
 # ============================================================
-log("\n=== 4. Correlations between model inputs and with the target ===")
+log("\n=== 4. Correlations between candidate inputs and with within-stint pace ===")
 
-corr_cols = [c for c in FEATURES if target_df[c].nunique(dropna=True) > 1]
-dropped = [c for c in FEATURES if c not in corr_cols]
-log(f"Correlations on the {len(target_df)} target rows; constant inputs left out: {dropped if dropped else 'none'}")
+# The model learns fall-off within the stint, so the target here is fcp minus its stint's mean,
+# on the laps of stints with two or more clean laps. Inputs constant within a stint (compound,
+# tyre_age_at_start) correlate with it only by chance: their effect lives in the stint level
+target_df = multi_lap_rows(df)
+target_df["fall_off_target"] = target_df["fcp_stint_demeaned"]
+corr_cols = [c for c in CANDIDATE_INPUTS if target_df[c].nunique(dropna=True) > 1]
+dropped = [c for c in CANDIDATE_INPUTS if c not in corr_cols]
+log(f"Correlations on the {len(target_df)} laps of multi-lap stints; constant inputs left out: "
+    f"{dropped if dropped else 'none'}")
 
-pearson = target_df[corr_cols + ["target_next_fcp"]].corr(method="pearson")
-spearman = target_df[corr_cols + ["target_next_fcp"]].corr(method="spearman")
+pearson = target_df[corr_cols + ["fall_off_target"]].corr(method="pearson")
+spearman = target_df[corr_cols + ["fall_off_target"]].corr(method="spearman")
 save_csv(pearson, "correlation_matrix", index=True)
 save_csv(spearman, "correlation_matrix_spearman", index=True)
 
-fig, ax = plt.subplots(figsize=(14, 12))
+fig, ax = plt.subplots(figsize=(10, 9))
 im = ax.imshow(pearson.values, cmap="coolwarm", vmin=-1, vmax=1)
 ax.set_xticks(range(len(pearson.columns)))
 ax.set_yticks(range(len(pearson.columns)))
 ax.set_xticklabels(pearson.columns, rotation=90, fontsize=7)
 ax.set_yticklabels(pearson.columns, fontsize=7)
 fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="Pearson r")
-ax.set_title(f"Pearson correlation, model inputs and target ({len(target_df)} target rows)")
+ax.set_title(f"Pearson correlation, candidate inputs and within-stint pace ({len(target_df)} laps)")
 save_plot("correlation_heatmap")
 
 pair_rows = []
@@ -297,61 +311,54 @@ save_csv(pairs_df, "collinear_pairs")
 log(f"Input pairs with |Pearson r| >= {EDA_COLLINEAR_THRESHOLD}: {len(pairs_df)}, in {len(collinear_groups)} groups")
 for n, g in enumerate(collinear_groups, 1):
     log(f"  Group {n} ({len(g)}): {', '.join(g)}")
-cardata_grouped = [c for c in CARDATA_FEATURE_COLUMNS if c in group_id]
-log(f"Car-data aggregates in a collinear group: {len(cardata_grouped)} of {len(CARDATA_FEATURE_COLUMNS)}")
 
 target_corr = pd.DataFrame({
     "feature": corr_cols,
-    "pearson_r": [pearson.loc[c, "target_next_fcp"] for c in corr_cols],
-    "spearman_r": [spearman.loc[c, "target_next_fcp"] for c in corr_cols],
+    "pearson_r": [pearson.loc[c, "fall_off_target"] for c in corr_cols],
+    "spearman_r": [spearman.loc[c, "fall_off_target"] for c in corr_cols],
     "non_missing_rows": [int(target_df[c].notna().sum()) for c in corr_cols]
 }).sort_values("pearson_r", key=lambda s: s.abs(), ascending=False)
 save_csv(target_corr, "target_correlations")
 
-log("Strongest correlations with target_next_fcp (Pearson / Spearman):")
-for _, r in target_corr.head(10).iterrows():
+log("Correlations with within-stint pace (Pearson / Spearman):")
+for _, r in target_corr.iterrows():
     log(f"  {r['feature']:<24} {r['pearson_r']:+.3f} / {r['spearman_r']:+.3f}")
-for col in ["tyre_age", "laps_since_stint_start", *COMPOUND_COLUMNS]:
-    if col in target_corr["feature"].values:
-        r = target_corr[target_corr["feature"] == col].iloc[0]
-        log(f"  (tyre) {col:<17} {r['pearson_r']:+.3f} / {r['spearman_r']:+.3f}")
 
 
 # ============================================================
-# 5. ROW COVERAGE BEFORE AND AFTER THE TARGET SHIFT
+# 5. ROW COVERAGE: THE LAPS THAT CARRY FALL-OFF
 # ============================================================
-log("\n=== 5. Row coverage before and after the next-lap target shift ===")
+log("\n=== 5. Row coverage: all laps and the laps of multi-lap stints (the fall-off rows) ===")
 
 def coverage(frame, stage):
-    frame = frame.assign(stint_id=frame.groupby(TARGET_GROUP_COLUMNS).ngroup())
+    frame = frame.assign(stint_id=frame.groupby(STINT_GROUP_COLUMNS).ngroup())
     out = frame.groupby(["session", "compound"]).agg(
         rows=("lap_number", "size"),
         stints=("stint_id", "nunique"),
-        drivers=("driver_number", "nunique")
+        drivers=("driver_number", "nunique"),
+        tyre_age_min=("tyre_age", "min"),
+        tyre_age_max=("tyre_age", "max")
     ).reset_index()
     out.insert(0, "stage", stage)
     return out
 
-target_df["session"] = target_df[SESSION_COLUMNS].idxmax(axis=1).str.replace("session_", "", regex=False)
-target_df["compound"] = target_df[COMPOUND_COLUMNS].idxmax(axis=1).str.replace("compound_", "", regex=False)
-
-coverage_df = pd.concat([coverage(df, "engineered"), coverage(target_df, "after_target_shift")], ignore_index=True)
+coverage_df = pd.concat([coverage(df, "engineered"), coverage(target_df, "multi_lap_stints")], ignore_index=True)
 save_csv(coverage_df, "row_coverage")
 
-for stage, frame in [("engineered", df), ("after_target_shift", target_df)]:
+for stage, frame in [("engineered", df), ("multi_lap_stints", target_df)]:
     per_session = ", ".join(f"{s} {int((frame['session'] == s).sum())}" for s in SESSIONS)
     per_compound = ", ".join(f"{c} {int((frame['compound'] == c).sum())}" for c in COMPOUNDS)
-    n_stints = frame.groupby(TARGET_GROUP_COLUMNS).ngroups
+    n_stints = frame.groupby(STINT_GROUP_COLUMNS).ngroups
     log(f"  {stage}: {len(frame)} rows, {n_stints} stints; by session {per_session}; by compound {per_compound}")
 
-stint_len = df.groupby(TARGET_GROUP_COLUMNS).agg(
+stint_len = df.groupby(STINT_GROUP_COLUMNS).agg(
     laps=("lap_number", "size"),
     session=("session", "first"),
     compound=("compound", "first")
 ).reset_index()
 log(
     f"Clean laps per stint: median {stint_len['laps'].median():.0f}, max {stint_len['laps'].max()}; "
-    f"{int((stint_len['laps'] == 1).sum())} of {len(stint_len)} stints have a single clean lap (no target row)"
+    f"{int((stint_len['laps'] == 1).sum())} of {len(stint_len)} stints have a single clean lap (no fall-off)"
 )
 
 fig, ax = plt.subplots(figsize=(9, 4))

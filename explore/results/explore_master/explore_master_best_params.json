@@ -1,540 +1,303 @@
 {
-  "MLP": {
-    "feature_set": "all",
-    "target_mode": "delta",
+  "SVR": {
+    "feature_set": "plus_stint_lap",
     "features": [
-      "duration_sector_1",
-      "duration_sector_2",
-      "duration_sector_3",
-      "i1_speed",
-      "i2_speed",
-      "st_speed",
-      "segments_sector_1",
-      "segments_sector_2",
-      "segments_sector_3",
-      "tyre_age_at_start",
       "compound_HARD",
       "compound_MEDIUM",
       "compound_SOFT",
-      "session_FP1",
-      "session_FP2",
-      "session_FP3",
-      "air_temperature",
-      "humidity",
-      "pressure",
-      "rainfall",
-      "track_temperature",
-      "wind_direction",
-      "wind_speed",
-      "mean_speed",
-      "max_speed",
-      "mean_throttle",
-      "full_throttle_pct",
-      "brake_pct",
-      "mean_rpm",
-      "max_rpm",
-      "mean_gear",
-      "gear_changes",
-      "drs_open_pct",
-      "laps_since_stint_start",
       "tyre_age",
-      "stint_avg_pace"
+      "track_temperature",
+      "air_temperature",
+      "laps_since_stint_start"
     ],
     "params": {
-      "regressor__solver": "lbfgs",
-      "regressor__learning_rate_init": 0.01,
+      "gamma": 0.1,
+      "epsilon": 0.1,
+      "C": 10
+    },
+    "cv_MAE": 1.0257273488064382,
+    "cv_MAE_std": 0.25030483144788535,
+    "compound_gap": {
+      "SOFT": 0.0,
+      "MEDIUM": 2.054450740368189,
+      "HARD": 0.7847420390461775
+    }
+  },
+  "Ridge": {
+    "feature_set": "tyre_only",
+    "features": [
+      "compound_HARD",
+      "compound_MEDIUM",
+      "compound_SOFT",
+      "tyre_age"
+    ],
+    "params": {
+      "alpha": 43.28761281083057
+    },
+    "cv_MAE": 1.0477639183272371,
+    "cv_MAE_std": 0.24634798361033539,
+    "compound_gap": {
+      "SOFT": 0.0,
+      "MEDIUM": 0.14604347445739307,
+      "HARD": 0.3523786322408391
+    }
+  },
+  "MLP": {
+    "feature_set": "plus_age_at_start",
+    "features": [
+      "compound_HARD",
+      "compound_MEDIUM",
+      "compound_SOFT",
+      "tyre_age",
+      "track_temperature",
+      "air_temperature",
+      "tyre_age_at_start"
+    ],
+    "params": {
+      "regressor__solver": "adam",
+      "regressor__learning_rate_init": 0.001,
       "regressor__hidden_layer_sizes": [
-        16
+        32
       ],
       "regressor__alpha": 10.0
     },
-    "cv_MAE": 1.1900203439208392,
-    "cv_MAE_std": 0.21170675993510302
-  },
-  "SVR": {
-    "feature_set": "all",
-    "target_mode": "level",
-    "features": [
-      "duration_sector_1",
-      "duration_sector_2",
-      "duration_sector_3",
-      "i1_speed",
-      "i2_speed",
-      "st_speed",
-      "segments_sector_1",
-      "segments_sector_2",
-      "segments_sector_3",
-      "tyre_age_at_start",
-      "compound_HARD",
-      "compound_MEDIUM",
-      "compound_SOFT",
-      "session_FP1",
-      "session_FP2",
-      "session_FP3",
-      "air_temperature",
-      "humidity",
-      "pressure",
-      "rainfall",
-      "track_temperature",
-      "wind_direction",
-      "wind_speed",
-      "mean_speed",
-      "max_speed",
-      "mean_throttle",
-      "full_throttle_pct",
-      "brake_pct",
-      "mean_rpm",
-      "max_rpm",
-      "mean_gear",
-      "gear_changes",
-      "drs_open_pct",
-      "laps_since_stint_start",
-      "tyre_age",
-      "stint_avg_pace"
-    ],
-    "params": {
-      "gamma": "scale",
-      "epsilon": 0.3,
-      "C": 3
-    },
-    "cv_MAE": 1.1991754293053456,
-    "cv_MAE_std": 0.2715617991095548
+    "cv_MAE": 1.0483037255364756,
+    "cv_MAE_std": 0.23941155615935633,
+    "compound_gap": {
+      "SOFT": 0.0,
+      "MEDIUM": 0.6637596120287377,
+      "HARD": 0.5072173684511387
+    }
   },
   "ExtraTrees": {
-    "feature_set": "no_cardata",
-    "target_mode": "delta",
+    "feature_set": "plus_age_at_start",
     "features": [
-      "duration_sector_1",
-      "duration_sector_2",
-      "duration_sector_3",
-      "i1_speed",
-      "i2_speed",
-      "st_speed",
-      "segments_sector_3",
-      "tyre_age_at_start",
       "compound_HARD",
       "compound_MEDIUM",
       "compound_SOFT",
-      "session_FP1",
-      "session_FP2",
-      "session_FP3",
-      "air_temperature",
-      "humidity",
-      "pressure",
-      "track_temperature",
-      "wind_direction",
-      "wind_speed",
-      "laps_since_stint_start",
       "tyre_age",
-      "stint_avg_pace"
+      "track_temperature",
+      "air_temperature",
+      "tyre_age_at_start"
     ],
     "params": {
-      "min_samples_leaf": 1,
-      "max_features": 0.3,
-      "max_depth": 8
+      "min_samples_leaf": 3,
+      "max_features": 0.6,
+      "max_depth": 5
     },
-    "cv_MAE": 1.2227657316231393,
-    "cv_MAE_std": 0.2668915265714135
+    "cv_MAE": 1.0526093962701266,
+    "cv_MAE_std": 0.22977683696976503,
+    "compound_gap": {
+      "SOFT": 0.0,
+      "MEDIUM": 1.319903877158275,
+      "HARD": 0.606342642048503
+    }
   },
-  "RandomForest": {
-    "feature_set": "no_constant",
-    "target_mode": "level",
+  "PerCompoundFallOff": {
+    "feature_set": "tyre_only",
     "features": [
-      "duration_sector_1",
-      "duration_sector_2",
-      "duration_sector_3",
-      "i1_speed",
-      "i2_speed",
-      "st_speed",
-      "segments_sector_3",
-      "tyre_age_at_start",
       "compound_HARD",
       "compound_MEDIUM",
       "compound_SOFT",
-      "session_FP1",
-      "session_FP2",
-      "session_FP3",
-      "air_temperature",
-      "humidity",
-      "pressure",
-      "track_temperature",
-      "wind_direction",
-      "wind_speed",
-      "mean_speed",
-      "max_speed",
-      "mean_throttle",
-      "full_throttle_pct",
-      "brake_pct",
-      "mean_rpm",
-      "max_rpm",
-      "mean_gear",
-      "gear_changes",
-      "drs_open_pct",
-      "laps_since_stint_start",
+      "tyre_age"
+    ],
+    "params": {
+      "degree": 1,
+      "min_rows": 10
+    },
+    "cv_MAE": 1.0638174276456103,
+    "cv_MAE_std": 0.22998645116804667,
+    "compound_gap": {
+      "SOFT": 0.0,
+      "MEDIUM": 0.8770739403754462,
+      "HARD": 0.5267467332991149
+    }
+  },
+  "RandomForest": {
+    "feature_set": "plus_stint_lap",
+    "features": [
+      "compound_HARD",
+      "compound_MEDIUM",
+      "compound_SOFT",
       "tyre_age",
-      "stint_avg_pace"
+      "track_temperature",
+      "air_temperature",
+      "laps_since_stint_start"
     ],
     "params": {
       "min_samples_leaf": 3,
       "max_features": 0.3,
       "max_depth": null
     },
-    "cv_MAE": 1.2297984423750041,
-    "cv_MAE_std": 0.3189949817670833
+    "cv_MAE": 1.068573903270347,
+    "cv_MAE_std": 0.21735343453802763,
+    "compound_gap": {
+      "SOFT": 0.0,
+      "MEDIUM": 1.197534890337323,
+      "HARD": 0.7745696029728801
+    }
   },
-  "XGBoost_current": {
-    "feature_set": "all",
-    "target_mode": "level",
+  "XGBoost_monotone": {
+    "feature_set": "plus_stint_lap",
     "features": [
-      "duration_sector_1",
-      "duration_sector_2",
-      "duration_sector_3",
-      "i1_speed",
-      "i2_speed",
-      "st_speed",
-      "segments_sector_1",
-      "segments_sector_2",
-      "segments_sector_3",
-      "tyre_age_at_start",
       "compound_HARD",
       "compound_MEDIUM",
       "compound_SOFT",
-      "session_FP1",
-      "session_FP2",
-      "session_FP3",
-      "air_temperature",
-      "humidity",
-      "pressure",
-      "rainfall",
+      "tyre_age",
       "track_temperature",
-      "wind_direction",
-      "wind_speed",
-      "mean_speed",
-      "max_speed",
-      "mean_throttle",
-      "full_throttle_pct",
-      "brake_pct",
-      "mean_rpm",
-      "max_rpm",
-      "mean_gear",
-      "gear_changes",
-      "drs_open_pct",
-      "laps_since_stint_start",
-      "tyre_age",
-      "stint_avg_pace"
-    ],
-    "params": {},
-    "cv_MAE": 1.2544806646972133,
-    "cv_MAE_std": 0.3084283619693859
-  },
-  "HistGradientBoosting": {
-    "feature_set": "no_collinear",
-    "target_mode": "level",
-    "features": [
-      "duration_sector_1",
-      "duration_sector_2",
-      "duration_sector_3",
-      "i1_speed",
-      "i2_speed",
-      "st_speed",
-      "segments_sector_3",
-      "tyre_age_at_start",
-      "compound_HARD",
-      "compound_MEDIUM",
-      "compound_SOFT",
-      "session_FP1",
-      "session_FP2",
-      "session_FP3",
-      "wind_direction",
-      "wind_speed",
-      "full_throttle_pct",
-      "brake_pct",
-      "mean_rpm",
-      "max_rpm",
-      "mean_gear",
-      "gear_changes",
-      "drs_open_pct",
-      "laps_since_stint_start",
-      "tyre_age",
-      "stint_avg_pace"
-    ],
-    "params": {
-      "min_samples_leaf": 5,
-      "max_iter": 300,
-      "max_depth": 3,
-      "learning_rate": 0.03,
-      "l2_regularization": 1.0
-    },
-    "cv_MAE": 1.2584034192338949,
-    "cv_MAE_std": 0.2706021443290218
-  },
-  "XGBoost": {
-    "feature_set": "no_constant",
-    "target_mode": "level",
-    "features": [
-      "duration_sector_1",
-      "duration_sector_2",
-      "duration_sector_3",
-      "i1_speed",
-      "i2_speed",
-      "st_speed",
-      "segments_sector_3",
-      "tyre_age_at_start",
-      "compound_HARD",
-      "compound_MEDIUM",
-      "compound_SOFT",
-      "session_FP1",
-      "session_FP2",
-      "session_FP3",
       "air_temperature",
-      "humidity",
-      "pressure",
-      "track_temperature",
-      "wind_direction",
-      "wind_speed",
-      "mean_speed",
-      "max_speed",
-      "mean_throttle",
-      "full_throttle_pct",
-      "brake_pct",
-      "mean_rpm",
-      "max_rpm",
-      "mean_gear",
-      "gear_changes",
-      "drs_open_pct",
-      "laps_since_stint_start",
-      "tyre_age",
-      "stint_avg_pace"
+      "laps_since_stint_start"
     ],
     "params": {
       "subsample": 0.7,
-      "reg_lambda": 1,
+      "reg_lambda": 5,
       "reg_alpha": 0,
-      "n_estimators": 300,
-      "min_child_weight": 1,
-      "max_depth": 4,
-      "learning_rate": 0.05,
-      "colsample_bytree": 1.0
+      "n_estimators": 100,
+      "min_child_weight": 3,
+      "max_depth": 7,
+      "learning_rate": 0.02,
+      "colsample_bytree": 0.8
     },
-    "cv_MAE": 1.2982881299078353,
-    "cv_MAE_std": 0.3085958640479191
+    "cv_MAE": 1.0705968705948883,
+    "cv_MAE_std": 0.2261738289764609,
+    "compound_gap": {
+      "SOFT": 0.0,
+      "MEDIUM": 0.6122801214211755,
+      "HARD": 0.342322392505098
+    }
+  },
+  "XGBoost": {
+    "feature_set": "plus_age_at_start",
+    "features": [
+      "compound_HARD",
+      "compound_MEDIUM",
+      "compound_SOFT",
+      "tyre_age",
+      "track_temperature",
+      "air_temperature",
+      "tyre_age_at_start"
+    ],
+    "params": {
+      "subsample": 0.7,
+      "reg_lambda": 20,
+      "reg_alpha": 0.5,
+      "n_estimators": 300,
+      "min_child_weight": 5,
+      "max_depth": 2,
+      "learning_rate": 0.05,
+      "colsample_bytree": 0.5
+    },
+    "cv_MAE": 1.0760298075059795,
+    "cv_MAE_std": 0.23113628509839523,
+    "compound_gap": {
+      "SOFT": 0.0,
+      "MEDIUM": 0.656375317724148,
+      "HARD": 0.8536770354087793
+    }
+  },
+  "HistGB_monotone": {
+    "feature_set": "plus_stint_lap",
+    "features": [
+      "compound_HARD",
+      "compound_MEDIUM",
+      "compound_SOFT",
+      "tyre_age",
+      "track_temperature",
+      "air_temperature",
+      "laps_since_stint_start"
+    ],
+    "params": {
+      "min_samples_leaf": 10,
+      "max_iter": 100,
+      "max_depth": 3,
+      "learning_rate": 0.03,
+      "l2_regularization": 10.0
+    },
+    "cv_MAE": 1.0761288572447372,
+    "cv_MAE_std": 0.22920229268456419,
+    "compound_gap": {
+      "SOFT": 0.0,
+      "MEDIUM": 0.8779780844021374,
+      "HARD": 0.7235947940471306
+    }
+  },
+  "HistGradientBoosting": {
+    "feature_set": "tyre_only",
+    "features": [
+      "compound_HARD",
+      "compound_MEDIUM",
+      "compound_SOFT",
+      "tyre_age"
+    ],
+    "params": {
+      "min_samples_leaf": 10,
+      "max_iter": 300,
+      "max_depth": 2,
+      "learning_rate": 0.03,
+      "l2_regularization": 0.0
+    },
+    "cv_MAE": 1.082706639582938,
+    "cv_MAE_std": 0.22794462656231917,
+    "compound_gap": {
+      "SOFT": 0.0,
+      "MEDIUM": 1.759844190146147,
+      "HARD": 1.8227638461135474
+    }
+  },
+  "PerCompoundIsotonic": {
+    "feature_set": "tyre_only",
+    "features": [
+      "compound_HARD",
+      "compound_MEDIUM",
+      "compound_SOFT",
+      "tyre_age"
+    ],
+    "params": {
+      "min_rows": 10
+    },
+    "cv_MAE": 1.0849795814623704,
+    "cv_MAE_std": 0.23496133896066165,
+    "compound_gap": {
+      "SOFT": 0.0,
+      "MEDIUM": 1.9594831924494542,
+      "HARD": 1.9889262441906084
+    }
   },
   "KNeighbors": {
-    "feature_set": "all",
-    "target_mode": "level",
+    "feature_set": "tyre_only",
     "features": [
-      "duration_sector_1",
-      "duration_sector_2",
-      "duration_sector_3",
-      "i1_speed",
-      "i2_speed",
-      "st_speed",
-      "segments_sector_1",
-      "segments_sector_2",
-      "segments_sector_3",
-      "tyre_age_at_start",
       "compound_HARD",
       "compound_MEDIUM",
       "compound_SOFT",
-      "session_FP1",
-      "session_FP2",
-      "session_FP3",
-      "air_temperature",
-      "humidity",
-      "pressure",
-      "rainfall",
-      "track_temperature",
-      "wind_direction",
-      "wind_speed",
-      "mean_speed",
-      "max_speed",
-      "mean_throttle",
-      "full_throttle_pct",
-      "brake_pct",
-      "mean_rpm",
-      "max_rpm",
-      "mean_gear",
-      "gear_changes",
-      "drs_open_pct",
-      "laps_since_stint_start",
-      "tyre_age",
-      "stint_avg_pace"
+      "tyre_age"
     ],
     "params": {
-      "n_neighbors": 12,
-      "weights": "distance"
+      "n_neighbors": 20,
+      "weights": "uniform"
     },
-    "cv_MAE": 1.32822181189571,
-    "cv_MAE_std": 0.28943018173924356
+    "cv_MAE": 1.0918085243848912,
+    "cv_MAE_std": 0.22329809866845277,
+    "compound_gap": {
+      "SOFT": 0.0,
+      "MEDIUM": 1.5098760368802715,
+      "HARD": 1.5193234644138585
+    }
   },
-  "Ridge": {
-    "feature_set": "no_collinear",
-    "target_mode": "delta",
+  "XGBoost_current": {
+    "feature_set": "tyre_only",
     "features": [
-      "duration_sector_1",
-      "duration_sector_2",
-      "duration_sector_3",
-      "i1_speed",
-      "i2_speed",
-      "st_speed",
-      "segments_sector_3",
-      "tyre_age_at_start",
       "compound_HARD",
       "compound_MEDIUM",
       "compound_SOFT",
-      "session_FP1",
-      "session_FP2",
-      "session_FP3",
-      "wind_direction",
-      "wind_speed",
-      "full_throttle_pct",
-      "brake_pct",
-      "mean_rpm",
-      "max_rpm",
-      "mean_gear",
-      "gear_changes",
-      "drs_open_pct",
-      "laps_since_stint_start",
-      "tyre_age",
-      "stint_avg_pace"
-    ],
-    "params": {
-      "alpha": 123.28467394420659
-    },
-    "cv_MAE": 1.4348009588631214,
-    "cv_MAE_std": 0.2996781417563987
-  },
-  "ElasticNet": {
-    "feature_set": "no_collinear",
-    "target_mode": "delta",
-    "features": [
-      "duration_sector_1",
-      "duration_sector_2",
-      "duration_sector_3",
-      "i1_speed",
-      "i2_speed",
-      "st_speed",
-      "segments_sector_3",
-      "tyre_age_at_start",
-      "compound_HARD",
-      "compound_MEDIUM",
-      "compound_SOFT",
-      "session_FP1",
-      "session_FP2",
-      "session_FP3",
-      "wind_direction",
-      "wind_speed",
-      "full_throttle_pct",
-      "brake_pct",
-      "mean_rpm",
-      "max_rpm",
-      "mean_gear",
-      "gear_changes",
-      "drs_open_pct",
-      "laps_since_stint_start",
-      "tyre_age",
-      "stint_avg_pace"
-    ],
-    "params": {
-      "l1_ratio": 0.1,
-      "alpha": 0.7196856730011514
-    },
-    "cv_MAE": 1.4546796654927812,
-    "cv_MAE_std": 0.29435599573616966
-  },
-  "Lasso": {
-    "feature_set": "no_constant",
-    "target_mode": "level",
-    "features": [
-      "duration_sector_1",
-      "duration_sector_2",
-      "duration_sector_3",
-      "i1_speed",
-      "i2_speed",
-      "st_speed",
-      "segments_sector_3",
-      "tyre_age_at_start",
-      "compound_HARD",
-      "compound_MEDIUM",
-      "compound_SOFT",
-      "session_FP1",
-      "session_FP2",
-      "session_FP3",
-      "air_temperature",
-      "humidity",
-      "pressure",
-      "track_temperature",
-      "wind_direction",
-      "wind_speed",
-      "mean_speed",
-      "max_speed",
-      "mean_throttle",
-      "full_throttle_pct",
-      "brake_pct",
-      "mean_rpm",
-      "max_rpm",
-      "mean_gear",
-      "gear_changes",
-      "drs_open_pct",
-      "laps_since_stint_start",
-      "tyre_age",
-      "stint_avg_pace"
-    ],
-    "params": {
-      "alpha": 0.1519911082952933
-    },
-    "cv_MAE": 1.5147903425016371,
-    "cv_MAE_std": 0.38887402132040005
-  },
-  "LinearRegression": {
-    "feature_set": "rollout_core_speeds",
-    "target_mode": "level",
-    "features": [
-      "duration_sector_1",
-      "duration_sector_2",
-      "duration_sector_3",
-      "i1_speed",
-      "i2_speed",
-      "st_speed",
-      "tyre_age_at_start",
-      "compound_HARD",
-      "compound_MEDIUM",
-      "compound_SOFT",
-      "session_FP1",
-      "session_FP2",
-      "session_FP3",
-      "track_temperature",
-      "laps_since_stint_start",
-      "tyre_age",
-      "stint_avg_pace"
+      "tyre_age"
     ],
     "params": {},
-    "cv_MAE": 1.5292729542979138,
-    "cv_MAE_std": 0.4115226778206641
-  },
-  "PerCompoundDegradation": {
-    "feature_set": "rollout_core",
-    "target_mode": "level",
-    "features": [
-      "duration_sector_1",
-      "duration_sector_2",
-      "duration_sector_3",
-      "tyre_age_at_start",
-      "compound_HARD",
-      "compound_MEDIUM",
-      "compound_SOFT",
-      "session_FP1",
-      "session_FP2",
-      "session_FP3",
-      "track_temperature",
-      "laps_since_stint_start",
-      "tyre_age",
-      "stint_avg_pace"
-    ],
-    "params": {
-      "min_rows": 20
-    },
-    "cv_MAE": 1.6870892907868427,
-    "cv_MAE_std": 0.3753972693746406
+    "cv_MAE": 1.1599996887083497,
+    "cv_MAE_std": 0.2330045417266242,
+    "compound_gap": {
+      "SOFT": 0.0,
+      "MEDIUM": 2.031875300228055,
+      "HARD": 2.1207152705151113
+    }
   }
 }

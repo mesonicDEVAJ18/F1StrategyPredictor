@@ -1,5 +1,5 @@
-# Helpers for explore_master.py: custom estimators, model building, nested grouped CV
-# and the simulator-style rollout. No settings here: the experiment block in
+# Helpers for explore_master.py: custom estimators, model building, nested grouped CV,
+# the fall-off target and its scoring. No settings here: the experiment block in
 # explore_master.py and the repo-root .env hold them.
 import os
 import sys
@@ -9,105 +9,94 @@ import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, RegressorMixin, clone
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.isotonic import IsotonicRegression
 from sklearn.model_selection import GridSearchCV, GroupKFold, ParameterGrid, RandomizedSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
 from feature_config import (  # noqa: E402
-    FUEL_EFFECT_K, MODEL_FEATURE_COLUMNS, SESSION_COLUMNS, TARGET_GROUP_COLUMNS, build_next_lap_target,
+    COMPOUNDS, FALL_OFF_ANCHOR_AGE, STINT_GROUP_COLUMNS, compound_of, fall_off_curve, fall_off_target,
+    fit_stint_levels, linear_fall_off, multi_lap_rows, stint_shape_errors,
 )
-
-SECTOR_COLUMNS = ["duration_sector_1", "duration_sector_2", "duration_sector_3"]
-COMPOUNDS = ["SOFT", "MEDIUM", "HARD"]
 
 
 # ============================================================
 # CUSTOM ESTIMATORS
 # ============================================================
-class PerCompoundDegradation(BaseEstimator, RegressorMixin):
-    """Simple per-compound linear degradation model (#27).
+class _PerCompound(BaseEstimator, RegressorMixin):
+    """One small model per compound on tyre_age; a compound with fewer than min_rows rows falls back
+    to one fit on all rows. Needs a DataFrame with the tyre_age and compound_* columns."""
 
-    For each compound, next-lap fcp = a + b * (lap t time) + c * tyre_age, where lap t time is
-    the sum of lap t's sector times. A compound with too few rows falls back to one fit on all rows.
-    Needs a DataFrame with the sector, tyre_age and compound_* columns.
-    """
+    def _new(self):
+        raise NotImplementedError
+
+    def _fit_one(self, age, y):
+        raise NotImplementedError
+
+    def _predict_one(self, model, age):
+        raise NotImplementedError
+
+    def fit(self, X, y):
+        y = np.asarray(y, dtype=float)
+        age, comp = X["tyre_age"].to_numpy(dtype=float), compound_of(X)
+        self.pooled_ = self._fit_one(age, y)
+        self.models_ = {c: self._fit_one(age[comp == c], y[comp == c])
+                        for c in COMPOUNDS if (comp == c).sum() >= self.min_rows}
+        return self
+
+    def predict(self, X):
+        age, comp = X["tyre_age"].to_numpy(dtype=float), compound_of(X)
+        out = self._predict_one(self.pooled_, age)
+        for c, model in self.models_.items():
+            m = comp == c
+            if m.any():
+                out[m] = self._predict_one(model, age[m])
+        return out
+
+
+class PerCompoundFallOff(_PerCompound):
+    """Fall-off per compound as a polynomial in tyre_age (degree 1 = a straight line per compound)."""
+
+    def __init__(self, degree=1, min_rows=10):
+        self.degree = degree
+        self.min_rows = min_rows
+
+    def _fit_one(self, age, y):
+        return np.polyfit(age, y, self.degree)
+
+    def _predict_one(self, model, age):
+        return np.polyval(model, age)
+
+
+class PerCompoundIsotonic(_PerCompound):
+    """Fall-off per compound as a non-decreasing step function of tyre_age (tyres never get faster)."""
 
     def __init__(self, min_rows=10):
         self.min_rows = min_rows
 
-    def _design(self, X):
-        return np.column_stack([X[SECTOR_COLUMNS].sum(axis=1), X["tyre_age"]])
+    def _fit_one(self, age, y):
+        return IsotonicRegression(increasing=True, out_of_bounds="clip").fit(age, y)
 
-    def _compound(self, X):
-        cols = [f"compound_{c}" for c in COMPOUNDS]
-        return np.array(COMPOUNDS)[X[cols].to_numpy().argmax(axis=1)]
-
-    def fit(self, X, y):
-        y = np.asarray(y, dtype=float)
-        D, comp = self._design(X), self._compound(X)
-        self.pooled_ = LinearRegression().fit(D, y)
-        self.models_ = {}
-        for c in COMPOUNDS:
-            m = comp == c
-            if m.sum() >= self.min_rows:
-                self.models_[c] = LinearRegression().fit(D[m], y[m])
-        return self
-
-    def predict(self, X):
-        D, comp = self._design(X), self._compound(X)
-        out = self.pooled_.predict(D)
-        for c, model in self.models_.items():
-            m = comp == c
-            if m.any():
-                out[m] = model.predict(D[m])
-        return out
-
-
-class DeltaTarget(BaseEstimator, RegressorMixin):
-    """Fits `estimator` on target - lap t time (sum of lap t's sector times) and adds it back.
-
-    The sector times belong to lap t, so this is no leakage; it lets trees model the change from
-    lap t instead of the pace level. predict(X) takes the same X, so it drops into the bundle as is.
-    """
-
-    def __init__(self, estimator):
-        self.estimator = estimator
-
-    def _offset(self, X):
-        return X[SECTOR_COLUMNS].sum(axis=1).fillna(self.offset_median_).to_numpy()
-
-    def fit(self, X, y):
-        self.offset_median_ = float(X[SECTOR_COLUMNS].sum(axis=1).median())
-        self.estimator_ = clone(self.estimator).fit(X, np.asarray(y, dtype=float) - self._offset(X))
-        return self
-
-    def predict(self, X):
-        return self.estimator_.predict(X) + self._offset(X)
+    def _predict_one(self, model, age):
+        return model.predict(age)
 
 
 # ============================================================
 # MODEL BUILDING
 # ============================================================
-def build_estimator(model, scale, target_mode):
-    """Median imputer (fitted per fold; the fallback after feature_engineer.py's stint fill, as in
-    train_model.py) -> optional scaler -> model, wrapped for the target mode.
+def build_estimator(model, scale):
+    """Median imputer (fitted per fold, as train_model.py fills from its training rows) -> optional
+    scaler -> model.
 
-    Steps keep pandas output so custom estimators can select columns by name.
+    Steps keep pandas output so custom estimators (and monotone constraints) can select columns by name.
     Returns (estimator, param prefix for the model's grid keys).
     """
     steps = [("impute", SimpleImputer(strategy="median", keep_empty_features=True))]
     if scale:
         steps.append(("scale", StandardScaler()))
     steps.append(("model", model))
-    pipe = Pipeline(steps).set_output(transform="pandas")
-    if target_mode == "delta":
-        return DeltaTarget(pipe), "estimator__model__"
-    if target_mode == "level":
-        return pipe, "model__"
-    raise ValueError(f"Unknown target mode: {target_mode}")
+    return Pipeline(steps).set_output(transform="pandas"), "model__"
 
 
 def make_search(estimator, grid, prefix, inner_folds, n_iter, seed):
@@ -138,105 +127,79 @@ def fit_tuned(estimator, grid, prefix, X, y, groups, inner_folds, n_iter, seed):
 
 
 # ============================================================
-# DATA
+# DATA, TARGET AND SCORING (fall-off within the stint, #31)
 # ============================================================
-def load_target_rows(dataset_path):
-    """Engineered dataset with the shared next-lap target; returns (df, stint group ids)."""
-    df = build_next_lap_target(pd.read_csv(dataset_path))
-    df[MODEL_FEATURE_COLUMNS] = df[MODEL_FEATURE_COLUMNS].replace([np.inf, -np.inf], np.nan)
-    groups = df.groupby(TARGET_GROUP_COLUMNS).ngroup().to_numpy()
+def load_fall_off_rows(dataset_path):
+    """The laps of stints with two or more clean laps (the only ones that carry fall-off);
+    returns (df, stint group ids)."""
+    df = multi_lap_rows(pd.read_csv(dataset_path).replace([np.inf, -np.inf], np.nan))
+    groups = df.groupby(STINT_GROUP_COLUMNS).ngroup().to_numpy()
     return df, groups
 
 
-def baseline_predictions(df, y_train_mean):
-    """Naive forecasts every model has to beat (#27). Nothing in them is fitted except the mean."""
-    persistence = df["fuel_corrected_pace"].to_numpy()
-    # On a stint's first lap stint_avg_pace is lap t's own raw time (feature_engineer.py, #33)
-    stint_avg = df["stint_avg_pace"].to_numpy()
+def fold_target(train):
+    """Stage 1 on the training rows (as train_model.py): fcp - stint level, and the linear slopes.
+
+    The inner search trains and scores on this target too. Its validation stints' levels come
+    from the same fit, which saw their laps, so the inner score is slightly optimistic; it only
+    ranks settings, and the outer score doesn't use any level.
+    """
+    levels, slopes = fit_stint_levels(train)
+    return fall_off_target(train, levels), slopes
+
+
+def baseline_predictions(test, slopes):
+    """Fall-off forecasts every model has to beat: none at all (flat), and the stage-1 slope per compound."""
     return {
-        "baseline_persistence": persistence,
-        "baseline_stint_avg_pace": stint_avg,
-        "baseline_train_mean": np.full(len(df), y_train_mean),
+        "baseline_flat": np.zeros(len(test)),
+        "baseline_linear": linear_fall_off(test, slopes),
     }
 
 
-def metrics(y_true, pred):
+def shape_metrics(fcp, pred, stint_ids):
+    """Error in the shape of the curve within each stint (the stint's mean residual removed, as
+    validate_strategy.py). R2_within: share of the within-stint variation explained."""
+    err = stint_shape_errors(fcp, pred, stint_ids)
+    flat = stint_shape_errors(fcp, np.zeros(len(err)), stint_ids)
     return {
-        "MAE": mean_absolute_error(y_true, pred),
-        "RMSE": float(np.sqrt(mean_squared_error(y_true, pred))),
-        "R2": r2_score(y_true, pred),
+        "MAE": float(np.mean(np.abs(err))),
+        "RMSE": float(np.sqrt(np.mean(err ** 2))),
+        "R2_within": float(1 - np.sum(err ** 2) / np.sum(flat ** 2)),
     }
 
 
 # ============================================================
-# ROLLOUT (mirrors strategy_simulator.rollout_stint / predict_fcp)
+# CURVES (the simulator's fall_off_curve, shared through feature_config)
 # ============================================================
-# strategy_simulator.py can't be imported (it loads the bundle and opens its log at import),
-# so this reproduces its rollout by feature name. Keep it in step with the simulator.
-def predict_fcp(model, features, state, session_weights):
-    """Next lap's fcp, averaged over the session one-hots with the training session weights."""
-    rows, weights = [], []
-    for s in SESSION_COLUMNS:
-        row = dict(state)
-        for ss in SESSION_COLUMNS:
-            row[ss] = 1 if ss == s else 0
-        rows.append([row[f] for f in features])
-        weights.append(session_weights[s])
-    X = pd.DataFrame(rows, columns=features, dtype=float)
-    return float(np.average(model.predict(X), weights=weights))
+def curve_metrics(curves, slope_laps):
+    """Stability and plausibility of one model's fall-off curves ({compound: fall-off from tyre age 1}).
 
-
-def rollout_stint(model, features, medians, session_weights, compound, set_age, stint_length):
-    """fcp per stint lap from lap 1 (the seed lap, training medians) to stint_length."""
-    state = {f: medians.get(f, 0.0) for f in MODEL_FEATURE_COLUMNS}
-    for cc in COMPOUNDS:
-        state[f"compound_{cc}"] = 1 if cc == compound else 0
-    state["tyre_age_at_start"] = set_age
-    state["laps_since_stint_start"] = 1
-    state["tyre_age"] = set_age + 1
-
-    seed = np.array([state[s] for s in SECTOR_COLUMNS], dtype=float)
-    share = seed / seed.sum()
-    raw = float(seed.sum())
-    fcp = raw - FUEL_EFFECT_K * stint_length
-    # No earlier laps on stint lap 1, so stint_avg_pace is the lap's own time (as in training)
-    state["stint_avg_pace"] = raw
-
-    fcps, raw_laps = [], []
-    for age in range(1, stint_length + 1):
-        if age > 1:
-            fcp = predict_fcp(model, features, state, session_weights)
-            raw = fcp + FUEL_EFFECT_K * (stint_length - age + 1)
-            state["stint_avg_pace"] = float(np.mean(raw_laps))
-            for s, sh in zip(SECTOR_COLUMNS, share):
-                state[s] = raw * sh
-            state["laps_since_stint_start"] = age
-            state["tyre_age"] = set_age + age
-        raw_laps.append(raw)
-        fcps.append(fcp)
-    return np.array(fcps)
-
-
-def rollout_metrics(curves, slope_laps):
-    """Stability and plausibility of one model's rollouts ({compound: fcp per stint lap}).
-
-    max_step: largest lap-to-lap change after the seed lap; drift: last lap - lap 2;
-    slope: fcp against stint lap over laps 2..slope_laps (should be > 0: tyres degrade).
+    max_step: largest change from one tyre age to the next; drift: last age - age 1;
+    slope: fall-off against tyre age over ages FALL_OFF_ANCHOR_AGE + 1 .. slope_laps (should be > 0);
+    monotone_share: share of steps that don't get faster.
     """
     out = {}
-    for c, fcp in curves.items():
-        tail = fcp[1:]
-        lo, hi = 1, min(slope_laps, len(fcp))
-        ages = np.arange(lo + 1, hi + 1)
-        out[f"{c}_max_step"] = float(np.abs(np.diff(tail)).max()) if len(tail) > 1 else 0.0
-        out[f"{c}_drift"] = float(fcp[-1] - fcp[1])
-        out[f"{c}_slope"] = float(np.polyfit(ages, fcp[lo:hi], 1)[0]) if len(ages) > 1 else np.nan
-        out[f"{c}_range"] = float(tail.max() - tail.min())
+    for c, fall in curves.items():
+        hi = min(slope_laps, len(fall))
+        ages = np.arange(FALL_OFF_ANCHOR_AGE + 1, hi + 1)
+        steps = np.diff(fall)
+        out[f"{c}_max_step"] = float(np.abs(steps).max()) if len(steps) else 0.0
+        out[f"{c}_drift"] = float(fall[-1] - fall[0])
+        out[f"{c}_slope"] = float(np.polyfit(ages, fall[1:hi], 1)[0]) if len(ages) > 1 else np.nan
+        out[f"{c}_range"] = float(fall.max() - fall.min())
+        out[f"{c}_monotone_share"] = float((steps >= -1e-9).mean()) if len(steps) else 1.0
     out["max_step"] = max(out[f"{c}_max_step"] for c in curves)
     out["all_slopes_positive"] = all(out[f"{c}_slope"] > 0 for c in curves)
-    for lap in (5, slope_laps):
-        if lap <= min(len(v) for v in curves.values()):
-            order = sorted(curves, key=lambda c: curves[c][lap - 1])
-            out[f"order_lap{lap}"] = "<".join(c[0] for c in order)
     out["finite"] = all(np.isfinite(v).all() for v in curves.values())
     return out
+
+
+def compound_order(curves, gap, lap):
+    """Compounds from fastest to slowest at a stint lap on a new set, gap + fall-off (e.g. "S<M<H")."""
+    order = sorted(curves, key=lambda c: gap[c] + curves[c][lap - 1])
+    return "<".join(c[0] for c in order)
+
+
+def fold_curves(model, features, conditions, ages):
+    """{compound: fall-off at `ages`} of one fold's model, at that fold's training medians."""
+    return {c: fall_off_curve(model, features, c, ages, conditions) for c in COMPOUNDS}

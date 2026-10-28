@@ -79,7 +79,7 @@ Laps and stints cover the whole field (20 drivers per session in Bahrain 2025), 
 
 #### **Laps Dataset**
 Key features for lap-level telemetry:
-- `lap_duration`: Total lap time (the basis of fuel-corrected pace; the model's target is the next lap's fuel-corrected pace)
+- `lap_duration`: Total lap time (the basis of fuel-corrected pace, whose fall-off with tyre age the model learns)
 - `duration_sector_1/2/3`: Individual sector times
 - `i1_speed`, `i2_speed`, `st_speed`: Speeds at the two intermediates and the speed trap
 - `lap_number`: Sequential lap index
@@ -138,7 +138,7 @@ Environmental conditions:
 - Practice sessions only; Z-score filtering (|z| > 3) on temperature, humidity, pressure, wind speed and rainfall (wind direction excluded, zero-variance columns skipped)
 
 **3. Encoding**
-- `driver_number`: Kept numerical as an identifier (with `session_key`) to build the per-driver next-lap target; not a model input (generalized model)
+- `driver_number`: Kept numerical as an identifier (with `session_key`) to build stints and driver-session levels; not a model input (generalized model)
 - `compound`: One-hot encoded → `compound_SOFT`, `compound_MEDIUM`, `compound_HARD`
 - `session_name` (FP1/FP2/FP3, from the `laps_p1/p2/p3` file): One-hot encoded → `session_FP1`, `session_FP2`, `session_FP3`, a model input that separates session-level pace offsets; `session_key` stays an identifier
 - `segments_sector_1/2/3`: List of mini-sector codes replaced by its length
@@ -155,72 +155,65 @@ Environmental conditions:
 |---------|---------|---------|
 | `stint_number` | Stints numbered 1, 2, 3… per driver across all sessions | Track tyre degradation per stint |
 | weather join | nearest weather sample to each lap's `date_start` (`merge_asof`, 5 min tolerance) | Give each lap the conditions it was driven in |
-| car-data join | lap `t`'s per-lap telemetry aggregates, merged on `session_key`, `driver_number`, `lap_number` (all 573 laps; 30 outlier values on 23 laps masked) | Describe how lap `t` was driven (speed, throttle, braking, rpm, gears, DRS) |
-| missing-input fill | speed traps, segment counts and car data: median of the same stint's *earlier* laps (`STINT_FILL_COLUMNS`); the rest gets the training median | Keep real, lap-specific values without letting lap `t+1` (the target) into lap `t`'s inputs (#33) |
+| car-data join | the lap's telemetry aggregates, merged on `session_key`, `driver_number`, `lap_number` (all 573 laps; 30 outlier values on 23 laps masked) | Describe how the lap was driven (speed, throttle, braking, rpm, gears, DRS); EDA and `tune_push.py` only, not a model input (#31) |
+| missing-value fill | speed traps, segment counts and car data: median of the same stint's *earlier* laps (`STINT_FILL_COLUMNS`) | Keep real, lap-specific values (#33); not model inputs since #31 |
 | `laps_since_stint_start` | `lap_number - lap_start + 1` | Measure tyre age in current stint |
 | `tyre_age` | `tyre_age_at_start + laps_since_stint_start` | Real age of the set (laps on it including lap `t`), so used sets are told apart from new ones |
-| `session_FP1/2/3` | One-hot of the practice session | Separate session-level pace offsets |
-| `stint_avg_pace` | Mean lap time (s) of the stint's earlier laps (lap `t`'s own time on the first lap) | Capture stint-level performance without seeing lap `t+1` |
+| `session_FP1/2/3` | One-hot of the practice session | Split EDA summaries by session (the stint level absorbs the session in the model) |
+| `run_laps` | `lap_end - lap_start + 1` | Length of the run (quali sim vs long run); a control in the compound-gap fit (#31) |
+| `stint_avg_pace` | Mean lap time (s) of the stint's earlier laps (the lap's own time on the first lap) | Descriptive; built from the lap times being predicted, so not a model input |
 | `fuel_corrected_pace` | `lap_duration − 0.035 × laps_remaining` in seconds (`laps_remaining = lap_end - lap_number + 1`, laps left in the stint counting this one) | Remove the fuel effect; practice fuel loads aren't recorded, so the stint's remaining laps stand in for fuel on board (assumption) |
 
 > **Note**: Track evolution was excluded to avoid deriving dependent variables.
 
 ### Exploratory Data Analysis (`eda.py`)
 
-Runs after `feature_engineer.py` and describes the engineered dataset before it is modelled; outputs go to `scripts/results/eda/`. It covers summary statistics and missing values per session, lap-time and fuel-corrected-pace distributions by session and compound, pace against tyre age (raw, and with each stint's mean removed so driver and session offsets drop out), correlations between the inputs and with the next-lap target (flagging pairs at |r| ≥ `EDA_COLLINEAR_THRESHOLD`), and row coverage before and after the next-lap target shift. On Bahrain 2025, within-stint pace rises by about 0.16 s/lap on SOFT and 0.05–0.06 s/lap on MEDIUM/HARD, but only 273 of 573 laps (12 in FP3) survive the target shift, and the session one-hots and weather inputs form one collinear group.
+Runs after `feature_engineer.py` and describes the engineered dataset before it is modelled; outputs go to `scripts/results/eda/`. It covers summary statistics and missing values per session, lap-time and fuel-corrected-pace distributions by session and compound, pace against tyre age (raw, and the within-stint slope with each stint's mean pace and tyre age removed so driver, session and run offsets drop out), correlations of the candidate inputs (tyre and weather) with within-stint pace (flagging pairs at |r| ≥ `EDA_COLLINEAR_THRESHOLD`), and row coverage of the stints with two or more clean laps. On Bahrain 2025, within-stint pace rises by about 0.37 s/lap on SOFT, 0.23 on MEDIUM and 0.31 on HARD (the same slopes as `train_model.py`'s stage 1), over 436 laps in 96 multi-lap stints.
 
 ---
 
 ## 🤖 Machine Learning Model
 
 ### Objective
-Predict **fuel-corrected pace on the next lap** rather than explicitly computing degradation rates.
+Predict **tyre fall-off with age** (#31): each lap's fuel-corrected pace is a level for its stint plus a fall-off that depends on the tyre.
+
+```
+fuel_corrected_pace(lap) = level[stint] + fall_off(compound, tyre_age, conditions)
+```
 
 **Why this approach?**
-- Fully causal: All inputs from lap `t` predict lap `t+1`
-- No target leakage
-- Degradation emerges naturally from repeated predictions
-- Perfect for autoregressive race simulation
+- The stint's level absorbs everything constant over a run (driver, session, fuel plan, engine mode, quali sim or long run), which in practice data swamps the tyre effect
+- What is left, the change within a run as the tyre ages, is exactly what the strategy needs
+- No target leakage: the inputs are the compound, the tyre age and the weather, never the lap's own timing or telemetry (`LAP_TIMING_COLUMNS`, asserted in `feature_config.py`)
+- Every lap of a stint with two or more clean laps is a row (436), not only laps followed by a clean next lap (273 under the old next-lap target)
 
-### Model Selection: XGBoost
+### Model Selection
 
-`train_model.py` trains one model, XGBoost, and saves it. The model is chosen in [explore/explore_master.py](explore/explore_master.py), which compares many candidates, hyperparameter grids, feature sets and target forms with nested CV grouped by stint, against naive baselines, and rolls each one out like the simulator (`cd explore; python explore_master.py`). The table below is the earlier three-model comparison on one split. K-Means was ruled out without being implemented.
+`train_model.py` trains one fall-off model and saves it; for now that is still XGBoost (depth 7), a leftover from the next-lap model that beats neither baseline on the new target. The model is chosen in [explore/explore_master.py](explore/explore_master.py) (`cd explore; python explore_master.py`): 13 candidates on up to 5 feature sets, nested CV grouped by stint, scored on the within-stint shape of the curve, against no fall-off (flat) and a straight line per compound (linear). Each candidate's best configuration is drawn as a curve over the race length, and it is recommended only if the curve is stable, rises on every compound and never gets faster with age. K-Means was ruled out without being implemented.
 
-| Model | Reasoning | Test MAE | Test RMSE | Test R² |
-|-------|-----------|----------|-----------|---------|
-| Linear Regression | Underfits non-linear tyre behavior | 2.37 s | 2.74 s | −1.002 |
-| Random Forest | Noisy, stepwise predictions | 1.32 s | 1.68 s | 0.250 |
-| **XGBoost** | Chosen for non-linear learning and smooth predictions | 1.12 s | 1.56 s | 0.353 |
+| Model (best feature set) | Shape MAE (s) | Curve |
+|-------|-----------|----------|
+| baseline: flat (no fall-off) | 1.200 ± 0.236 | – |
+| baseline: linear per compound | 1.064 ± 0.230 | S 0.37, M 0.23, H 0.31 s/lap; rises without limit past age 19 |
+| SVR (6 inputs + stint lap) | 1.026 ± 0.250 | best fit, but gets faster again past age 19 |
+| **Ridge (tyre only)** | 1.048 ± 0.246 | recommended: one 0.265 s/lap slope for every compound, most stable across folds |
+| MLP (6 inputs + set age) | 1.048 ± 0.239 | S 0.21, M 0.19, H 0.21 s/lap, keeps rising |
+| ExtraTrees / Random Forest / XGBoost (tuned) | 1.053 / 1.069 / 1.076 | steps of 1–3 s, flat past age 19 |
+| XGBoost as in `train_model.py` | 1.160–1.246 | worst: overfits |
 
-*MAE and RMSE are in seconds, from the earlier comparison, before #29 kept the laps with a missing speed trap (153 target rows). The split is by stint, so the test set was 10 stints (25 rows) the model never saw; with so few, the gap between Random Forest and XGBoost is close to noise. On the current data (273 rows), XGBoost scores 1.37 s / 1.90 s / −0.028 on a different held-out split of 12 stints (64 rows); grouped CV (below) is the better guide. See [diagnostic.md](diagnostic.md) (#27).*
-
-**XGBoost Advantages:**
-- Captures non-linear tyre physics (warm-up, thermal degradation, cliff effects)
-- Smooth predictions for repeated (autoregressive) use
-- Fast inference
-- Interpretable via built-in feature importance
+*Bahrain 2025, 436 laps in 96 stints, mean ± std over 10 outer folds. The top configurations are within 0.04 s, against a standard error of ~0.08 s, so the data doesn't separate them. Every model beats no fall-off, so fall-off is real; none of the recommended ones significantly beats the straight line. The choice (Ridge, MLP or the per-compound line) and copying it into `train_model.py` are still open. See [diagnostic.md](diagnostic.md) (#27, #31).*
 
 ### Training Process
 
-**1. Target Variable**
-```python
-y = fuel_corrected_pace_next_lap
-```
-Built by `build_next_lap_target()` in `scripts/feature_config.py`: the same driver's lap `lap_number + 1` in the same stint. The last lap of each stint and laps followed by a cleaning gap are dropped (573 → 273 rows: practice runs alternate push and cool-down laps, so removing the cool-down laps breaks most pairs).
+**1. Split**: 80/20 by stint (`GroupShuffleSplit` on `driver_number` + `stint_number`, `random_state=42`), so a stint's laps are never on both sides.
 
-**2. Removed Dependent Variables**
-- `lap_duration` (sum of sector times)
-- `laps_remaining` (used in fuel correction formula)
+**2. Stage 1, stint levels** (`fit_stint_levels()` in `scripts/feature_config.py`): least squares of fcp on one level per stint plus one `tyre_age` slope per compound, on the training stints with two or more clean laps. The slopes (SOFT +0.36, MEDIUM +0.21, HARD +0.31 s/lap) are also the linear baseline.
 
-**3. Features and Split**
-- 36 inputs defined in `scripts/feature_config.py` (`MODEL_FEATURE_COLUMNS`), including the `session_FP1/2/3` one-hots and 10 car-data aggregates (`CARDATA_FEATURE_COLUMNS`)
-- 80/20 train/test split by stint (`GroupShuffleSplit` on `driver_number` + `stint_number`, `random_state=42`), so a stint's laps are never on both sides; inputs still missing after the stint fill are then filled with the median of the training rows only
-- The saved bundle holds the model, the feature list, the training-row medians and each session's share of training rows (`{"model", "features", "medians", "session_weights"}`)
+**3. Stage 2, the model**: target `fcp − level[stint]`; 6 inputs (`MODEL_FEATURE_COLUMNS`): the compound one-hots, `tyre_age`, track and air temperature. The curve is measured from a new set's first lap (`fall_off_curve()`).
 
-**4. Validation**
-- 5-fold cross-validation grouped by stint (`GroupKFold`)
-- Residual analysis for systematic bias
-- Random Forest and XGBoost feature importances
+**4. Stage 3, compound gap** (`fit_compound_gap()`): fall-off gives each curve's shape, not how fast a compound is on a new set, so a second least-squares fit over every training lap gives the gap to SOFT and each driver-session's level, with `run_laps` as a control for the run type.
+
+The saved bundle holds `{"model", "features", "medians", "anchor_age", "compound_gap", "levels", "linear_slopes"}`.
 
 ---
 
@@ -236,17 +229,16 @@ Enumerate strategies for the weekend's race length from `race_weekend.py` (Bahra
 
 ### 2. Lap Time Prediction
 
-For each compound and set age a car has left, and every stint length L = 1 to the race length (57 in Bahrain 2025), roll the stint forward from stint lap 1. Tyre age resets to the set's age at every stop.
-1. **Seed:** lap 1 is a median lap: the training medians, the compound one-hot set, `tyre_age_at_start` = the set's age, `tyre_age` = set age + 1, and `stint_avg_pace` = the seed lap's own time (as on a stint's first lap in training).
-2. **Predict:** XGBoost predicts the next lap's fuel-corrected pace from the current lap's inputs.
-   - The race is not a practice session, so each lap is predicted under `session_FP1`, `session_FP2` and `session_FP3` and averaged, weighted by each session's share of training rows.
-3. **Feed back:** each prediction becomes the next lap's inputs.
-   - The training fuel term is added back first: `raw = fcp + 0.035 × (L − age + 1)`.
-   - The sector times are rescaled to sum to `raw`.
-   - `stint_avg_pace` is the mean of the earlier laps.
-   - `laps_since_stint_start` and `tyre_age` go up by one.
-   - Speeds, weather and the car-data aggregates stay at their medians.
-4. **Price:** a stint's time is the summed rollout fcp for its length, plus a race fuel penalty of `0.035 s × laps of fuel remaining` for each race lap it covers.
+For each compound and set age a car has left, evaluate the curve for stint laps 1 to the race length (57 in Bahrain 2025) in one model call. Tyre age resets to the set's age at every stop, and a used set starts further along its curve.
+
+```
+fcp on stint lap n = race pace level + compound gap + fall_off(compound, set age + n)
+```
+
+- **fall_off**: the model's curve from a new set's first lap, with the weather at the training medians
+- **compound gap**: stage 3 (SOFT 0, MEDIUM +2.97 s, HARD +0.85 s on the current data)
+- **race pace level**: the mean of `SIM_DRIVER`'s driver-session levels (93.06 s for car 16); the same for every strategy, so it doesn't change the ranking
+- **Price**: a stint of L laps costs the sum of its first L laps, plus a race fuel penalty of `0.035 s × laps of fuel remaining` for each race lap it covers. Nothing is fed back from one lap to the next.
 
 ### 3. Objective Function
 
@@ -255,13 +247,13 @@ Minimize: Total Race Time (s) = Σ(stint lap times) + 22 s × number of pit stop
 ```
 
 Current output for `SIM_DRIVER=16` (set age at the start of each stint in brackets):
-- SOFT(0)–MEDIUM(0), stop on lap 28, 5818.28 s (tied with MEDIUM(0)–SOFT(0) stopping on lap 29; laps 26–30 within 0.26 s, best MEDIUM(0)–HARD(0) +0.01 s, SOFT(0)–HARD(0) +0.81 s); best 2-stop 12.82 s slower
+- SOFT(0)–SOFT(0)–HARD(0), stops on laps 14 and 28, 5649.51 s (tied with the same three stints in another order; pitting a lap later +0.17 s, best with MEDIUM +1.88 s); best 1-stop (MEDIUM(0)–HARD(0), lap 42) 28.36 s slower
 
-Other cars give similar results from their own sets.
+Other cars differ through their sets and pace level.
 
 Every race lap is summed once: "stop on lap p" means lap p is the in-lap and the next stint starts on lap p + 1, with the 22 s pit loss on top.
 
-None of this is tyre physics yet. 1 stop wins because every rollout is almost flat (100–101.5 s from stint lap 3 on, whatever the compound or set age), so an extra stop can't win back its 22 s. The top strategies are within about 0.5 s and the compounds barely differ, so the pit lap and compound choice are close to arbitrary. The model is trained on only 273 rows, so this is not a valid recommendation yet.
+2 stops win because the curves fall off steeply (5–8 s by tyre age 15), so fresh tyres are worth a stop. This is not a valid recommendation yet: the 29-lap HARD stint runs past the oldest tyre in training (19 laps), where the tree's curve is flat; the compound gap is implausible (MEDIUM slower than HARD); and the pipeline's XGBoost doesn't beat the simple baselines in validation. See [diagnostic.md](diagnostic.md) (#27).
 
 ### 4. Optimization Engine
 
@@ -274,14 +266,11 @@ None of this is tyre physics yet. 1 stop wins because every rollout is almost fl
 ## ✅ Evaluation & Validation
 
 ### Model Validation (`validate_strategy.py`)
-- **Cross-validation**: 5-fold CV grouped by stint on next-lap predictions (current: MAE 1.19 s, RMSE 1.70 s); missing inputs are filled per fold from that fold's training rows
-- **Residual analysis**: Check for systematic bias
-- **Feature importance**: Verify alignment with tyre physics
-  - Expected top features: tyre age, compound, track temperature
-- **Baseline test**: per-stint paired t-test and Wilcoxon test of the model's out-of-fold error against a persistence baseline (lap *t+1* = lap *t*). Current: baseline MAE 1.45 s, model better on 30 of 56 stints, p = 0.0019 (t) / 0.041 (Wilcoxon), median gain 0.05 s, so the model beats persistence at 0.05 (both tests must pass), though only just
-- **Simulation stability** (logged by `strategy_simulator.py`): fcp at stint laps 1, 18 and 57 of a full-length rollout for each compound and set age, plus the largest lap-to-lap step.
-  - No runaway drift (car 16, Bahrain 2025): every rollout stays within 97.25–101.47 s, and the largest lap-to-lap step is 2.38–2.60 s (stint laps 1–2).
-  - Smooth but nearly flat: about 99.6–99.9 s on stint lap 2 and 100.5–100.8 s on lap 3, then 100.4–101.5 s to lap 57. The new sets are within about 0.03 s of each other on average (at most 0.37 s), so the model shows almost no tyre degradation yet.
+- **Cross-validation**: 5-fold CV grouped by stint over the 436 laps of multi-lap stints, with stage 1 and the input medians fitted per fold. A held-out stint's level is unknown, so the score is the **shape** of the curve within each stint (residual minus the stint's mean residual). Current: shape MAE 1.25 s, against 1.19 s for no fall-off (flat) and 1.06 s for the stage-1 slope per compound (linear)
+- **Baseline tests**: per-stint paired t-test and Wilcoxon test against each baseline. Current: the pipeline's XGBoost (depth 7, untuned) beats neither (better than flat on 48 of 96 stints, p = 0.81 / 0.75); the straight line per compound does best
+- **Curve uncertainty**: each fold's fall-off at tyre ages 5, 10 and 15. At age 15: SOFT +5.6 to +7.9 s, MEDIUM +2.5 to +4.7 s, HARD +4.6 to +5.6 s; SOFT falls off most in every fold
+- **Residual analysis**: out-of-fold within-stint residual against tyre age, by compound
+- **Curve check** (logged by `strategy_simulator.py`): fcp and fall-off at stint laps 1, 18 and 57 for each compound and set age, next to the linear fall-off, plus the largest step (2.4–3.6 s: the tree's curve moves in steps, and is flat past tyre age 19)
 
 ### Strategy Validation *(planned, not implemented yet)*
 - Simulate multiple race conditions with variations
@@ -341,11 +330,11 @@ Detailed methodology: [readme.txt](readme.txt). Known bugs: [diagnostic.md](diag
 - Track temperature impact on tyre performance
 - Fuel load reduction over race distance
 
-So far only the fuel term is built in; the model has learnt almost none of the tyre effects from 273 training rows (see Simulation stability).
+Since #31 the model learns fall-off with tyre age directly, and the curves rise on every compound (SOFT most). The compound gap on a new set and the shape past the oldest tyre in training (19 laps) are not reliable yet (see Model Validation).
 
 ### Real-World Alignment
 This pipeline mirrors professional motorsport analytics:
-> "Predict the next lap's corrected pace and let degradation emerge naturally from repeated predictions."
+> "Learn how a tyre falls off with age within a run, and price every stint from that curve."
 
 ---
 

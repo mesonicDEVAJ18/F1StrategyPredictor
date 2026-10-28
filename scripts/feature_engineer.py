@@ -228,9 +228,14 @@ laps["laps_since_stint_start"] = laps["laps_since_stint_start"].clip(lower=1)
 laps["tyre_age"] = laps["tyre_age_at_start"] + laps["laps_since_stint_start"]
 log(f"  → tyre_age range: {laps['tyre_age'].min():.0f}-{laps['tyre_age'].max():.0f} laps")
 
-# Missing inputs (#33): the median of the same stint's earlier laps, NaN skipped. Earlier laps
-# only, so lap t+1 (the target) never feeds lap t's inputs. A stint's laps are all in one CV
-# fold, so the fill needs no fitting; what is still NaN gets the training median in train_model.py
+# Length of the run (laps in the stint, from the stints table): tells a short quali-sim run from a
+# long race-pace run. Only train_model.py's compound-gap fit reads it, as a control between stints (#31)
+laps["run_laps"] = laps["lap_end"] - laps["lap_start"] + 1
+log(f"  → run_laps range: {laps['run_laps'].min():.0f}-{laps['run_laps'].max():.0f} laps")
+
+# Missing values (#33): the median of the same stint's earlier laps, NaN skipped (causal, earlier
+# laps only). Since #31 none of these columns is a model input (they belong to the lap's own timing,
+# LAP_TIMING_COLUMNS); they are kept for eda.py and explore/tune_push.py's label
 stint_sorted = laps.sort_values(["driver_number", "stint_number", "lap_number"])
 stint_groups = stint_sorted.groupby(["driver_number", "stint_number"])
 fill_summary = []
@@ -247,9 +252,8 @@ generated_files.append(fill_name)
 log("  → Missing inputs filled with the median of the stint's earlier laps:")
 log(fill_df[fill_df["missing"] > 0].to_string(index=False))
 
-# Causal stint average pace (seconds): mean of the stint's earlier laps only, so the
-# target lap t+1 can't leak in. On a stint's first lap there are none, so it is lap t's
-# own lap time; the simulator seeds lap 1 the same way.
+# Causal stint average pace (seconds): mean of the stint's earlier laps only. On a stint's
+# first lap there are none, so it is lap t's own lap time. Not a model input since #31 (descriptive)
 laps["stint_avg_pace"] = (
     laps.sort_values(["driver_number", "stint_number", "lap_number"])
     .groupby(["driver_number", "stint_number"])["lap_duration"]
@@ -276,7 +280,7 @@ generated_files.append(feat_snapshot)
 # ============================================================
 log("\nFinal cleanup...")
 
-# session_key and driver_number are kept as identifiers (next-lap target grouping,
+# session_key and driver_number are kept as identifiers (stint and driver-session grouping,
 # car-data merge), not model inputs: the models only read MODEL_FEATURE_COLUMNS
 drops = ["date", "date_start", "lap_duration", "laps_remaining"]
 

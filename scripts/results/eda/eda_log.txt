@@ -1,7 +1,7 @@
-Loaded dataset with 573 rows and 43 columns.
+Loaded dataset with 573 rows and 44 columns.
 Reconstructed lap_duration (fcp + k * laps_remaining) against the sector sum: 573 laps with all three sectors, max |difference| = 0.000 s
 Units: lap and sector times in s, speeds in km/h, car-data aggregates in physical units; weather columns air_temperature, humidity, pressure, rainfall, track_temperature, wind_speed are z-scores (process_weather.py), wind_direction in degrees.
-Rows after the next-lap target shift: 273 (from 573)
+Model inputs (train_model.py): compound_HARD, compound_MEDIUM, compound_SOFT, tyre_age, track_temperature, air_temperature
 
 === 1. Summary statistics and missing values ===
 Columns with missing values (10 of 38):
@@ -15,7 +15,7 @@ Columns with missing values (10 of 38):
   segments_sector_3: 1 (0.2%); FP1 1, FP2 0, FP3 0
   max_rpm: 1 (0.2%); FP1 0, FP2 0, FP3 1
   gear_changes: 1 (0.2%); FP1 0, FP2 1, FP3 0
-Constant inputs (no information for the model): ['segments_sector_1', 'segments_sector_2', 'rainfall']
+Constant columns (no information for a model): ['segments_sector_1', 'segments_sector_2', 'rainfall']
 
 === 2. Pace distributions by session and compound ===
   FP1 HARD  :  62 laps, fcp median 99.012 s, IQR 3.356 s, range 95.930-107.766 s
@@ -28,39 +28,34 @@ Constant inputs (no information for the model): ['segments_sector_1', 'segments_
   FP3 MEDIUM:  13 laps, fcp median 94.782 s, IQR 0.378 s, range 94.467-95.469 s
   FP3 SOFT  :  56 laps, fcp median 94.060 s, IQR 2.316 s, range 91.541-105.983 s
 
-=== 3. Fuel-corrected pace against tyre age ===
+=== 3. Fuel-corrected pace against tyre age (the fall-off the model learns) ===
 Descriptive linear slope of within-stint fcp on tyre age (no inference, see #26):
-  SOFT  : +0.1614 s/lap over 182 laps in 35 multi-lap stints (122 stints in all, tyre age 2-19)
-  MEDIUM: +0.0535 s/lap over 168 laps in 38 multi-lap stints (69 stints in all, tyre age 2-19)
-  HARD  : +0.0554 s/lap over 86 laps in 23 multi-lap stints (42 stints in all, tyre age 2-18)
+  SOFT  : +0.3655 s/lap over 182 laps in 35 multi-lap stints (122 stints in all, tyre age 2-19)
+  MEDIUM: +0.2269 s/lap over 168 laps in 38 multi-lap stints (69 stints in all, tyre age 2-19)
+  HARD  : +0.3059 s/lap over 86 laps in 23 multi-lap stints (42 stints in all, tyre age 2-18)
 
-=== 4. Correlations between model inputs and with the target ===
-Correlations on the 273 target rows; constant inputs left out: ['segments_sector_1', 'segments_sector_2', 'rainfall']
-Input pairs with |Pearson r| >= 0.8: 17, in 2 groups
-  Group 1 (6): session_FP1, session_FP2, air_temperature, humidity, pressure, track_temperature
-  Group 2 (3): duration_sector_2, mean_speed, stint_avg_pace
-Car-data aggregates in a collinear group: 1 of 10
-Strongest correlations with target_next_fcp (Pearson / Spearman):
-  i2_speed                 +0.357 / +0.214
-  session_FP2              -0.285 / -0.262
-  track_temperature        +0.282 / +0.214
-  pressure                 -0.260 / -0.171
-  wind_speed               +0.257 / +0.162
-  air_temperature          +0.250 / +0.084
-  drs_open_pct             +0.242 / -0.003
-  humidity                 -0.237 / -0.301
-  session_FP1              +0.233 / +0.216
-  full_throttle_pct        +0.232 / +0.147
-  (tyre) tyre_age          +0.144 / +0.307
-  (tyre) laps_since_stint_start +0.148 / +0.160
-  (tyre) compound_SOFT     -0.134 / -0.184
-  (tyre) compound_MEDIUM   +0.035 / +0.077
-  (tyre) compound_HARD     +0.141 / +0.152
+=== 4. Correlations between candidate inputs and with within-stint pace ===
+Correlations on the 436 laps of multi-lap stints; constant inputs left out: ['rainfall']
+Input pairs with |Pearson r| >= 0.8: 6, in 1 groups
+  Group 1 (4): air_temperature, humidity, pressure, track_temperature
+Correlations with within-stint pace (Pearson / Spearman):
+  laps_since_stint_start   +0.342 / +0.414
+  tyre_age                 +0.227 / +0.296
+  wind_direction           -0.022 / -0.007
+  pressure                 +0.014 / +0.013
+  wind_speed               +0.011 / -0.008
+  track_temperature        -0.009 / -0.022
+  air_temperature          -0.008 / -0.067
+  humidity                 -0.002 / -0.126
+  compound_MEDIUM          +0.000 / +0.022
+  compound_SOFT            -0.000 / -0.014
+  compound_HARD            -0.000 / -0.009
+  tyre_age_at_start        +0.000 / +0.028
 
-=== 5. Row coverage before and after the next-lap target shift ===
+=== 5. Row coverage: all laps and the laps of multi-lap stints (the fall-off rows) ===
   engineered: 573 rows, 233 stints; by session FP1 188, FP2 298, FP3 87; by compound SOFT 269, MEDIUM 199, HARD 105
-  after_target_shift: 273 rows, 56 stints; by session FP1 70, FP2 191, FP3 12; by compound SOFT 131, MEDIUM 101, HARD 41
-Clean laps per stint: median 1, max 14; 137 of 233 stints have a single clean lap (no target row)
+  multi_lap_stints: 436 rows, 96 stints; by session FP1 153, FP2 259, FP3 24; by compound SOFT 182, MEDIUM 168, HARD 86
+Clean laps per stint: median 1, max 14; 137 of 233 stints have a single clean lap (no fall-off)
 
 FILES GENERATED:
   - eda_summary_stats.csv

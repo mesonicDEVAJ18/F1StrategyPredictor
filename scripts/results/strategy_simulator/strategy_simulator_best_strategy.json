@@ -3,14 +3,17 @@
   "car_number": 16,
   "best_compound_sequence": [
     "SOFT",
-    "MEDIUM"
+    "SOFT",
+    "HARD"
   ],
   "best_set_ages_at_start": [
+    0,
     0,
     0
   ],
   "best_pit_laps": [
+    14,
     28
   ],
-  "best_total_time": 5818.2840644511125
+  "best_total_time": 5649.510125469663
 }

@@ -12,7 +12,7 @@
 #      and session, the k at which the fence starts removing push laps; the lower-side floor is the
 #      smallest K_GRID value at least LABEL_MARGIN x the largest of them.
 #   B. CV sweep: the data stages rerun for each (k_lower, k_upper); XGBoost (train_model.py's MODEL block)
-#      is scored by grouped CV on the target rows present in every configuration of a weekend, with the
+#      is scored by grouped CV on the fall-off rows present in every configuration of a weekend, with the
 #      same stint folds for each configuration, so the scores are paired.
 #
 # While it runs it switches data/raw/ between weekends and rewrites data/processed/; at the end it
@@ -39,7 +39,7 @@ from scipy.stats import ttest_rel, wilcoxon  # noqa: E402
 from xgboost import XGBRegressor  # noqa: E402
 
 from env_config import env_str, env_int, env_float, env_list  # noqa: E402
-from feature_config import MODEL_FEATURE_COLUMNS, TARGET_GROUP_COLUMNS  # noqa: E402
+from feature_config import MODEL_FEATURE_COLUMNS, STINT_GROUP_COLUMNS, stint_shape_errors  # noqa: E402
 import explore_lib as lib  # noqa: E402
 
 warnings.filterwarnings("ignore")
@@ -211,8 +211,8 @@ def stint_folds(stint_keys, seed):
 
 
 def oof_predictions(df, folds):
-    """Out-of-fold XGBoost predictions over the stint folds; train medians fill inputs still missing
-    after feature_engineer.py's stint fill (as train_model.py / validate_strategy.py do)."""
+    """Out-of-fold XGBoost fall-off predictions over the stint folds (#31): each fold fits the stage-1
+    stint levels and the input medians on its training rows, as train_model.py / validate_strategy.py do."""
     fold = df["stint_key"].map(folds).to_numpy()
     pred = np.full(len(df), np.nan)
     for f in range(CV_FOLDS):
@@ -221,7 +221,8 @@ def oof_predictions(df, folds):
             continue
         X_train = df.loc[train, MODEL_FEATURE_COLUMNS]
         medians = X_train.median(numeric_only=True)
-        model = xgb().fit(X_train.fillna(medians), df.loc[train, "target_next_fcp"])
+        y_train, _ = lib.fold_target(df.loc[train])
+        model = xgb().fit(X_train.fillna(medians), y_train)
         pred[test] = model.predict(df.loc[test, MODEL_FEATURE_COLUMNS].fillna(medians))
     return pred
 
@@ -243,8 +244,8 @@ def cv_sweep(year, name, configs, repeats):
         for script in ["process_cardata.py", "feature_engineer.py"]:
             if not run_stage(script, env):
                 return None, None
-        df, _ = lib.load_target_rows(DATASET_PATH)
-        df["stint_key"] = list(zip(*[df[c] for c in TARGET_GROUP_COLUMNS]))
+        df, _ = lib.load_fall_off_rows(DATASET_PATH)
+        df["stint_key"] = list(zip(*[df[c] for c in STINT_GROUP_COLUMNS]))
         df["row_key"] = list(zip(df["session_key"], df["driver_number"], df["lap_number"]))
         datasets[h] = df
     log(f"  {len(configs)} configurations, {len(datasets)} distinct cleaned-lap sets")
@@ -257,18 +258,24 @@ def cv_sweep(year, name, configs, repeats):
     for h, df in datasets.items():
         on_common = df["row_key"].isin(common).to_numpy()
         preds = [oof_predictions(df, folds) for folds in fold_maps]
-        y = df["target_next_fcp"].to_numpy()
-        maes = [np.mean(np.abs(p[on_common] - y[on_common])) for p in preds]
-        rmses = [np.sqrt(np.mean((p[on_common] - y[on_common]) ** 2)) for p in preds]
-        own = [np.nanmean(np.abs(p - y)) for p in preds]
-        persistence = lib.baseline_predictions(df[on_common], 0.0)["baseline_persistence"]
+        y = df["fuel_corrected_pace"].to_numpy()
+        keys = df["stint_key"].astype(str).to_numpy()
+
+        def shape(p, rows):
+            return stint_shape_errors(y[rows], p[rows], keys[rows])
+
+        own_rows = ~np.isnan(preds[0])
+        maes = [np.mean(np.abs(shape(p, on_common))) for p in preds]
+        rmses = [np.sqrt(np.mean(shape(p, on_common) ** 2)) for p in preds]
+        own = [np.mean(np.abs(shape(p, own_rows))) for p in preds]
+        flat = shape(np.zeros(len(df)), on_common)
         scores[h] = {"target_rows": len(df), "common_rows": int(on_common.sum()),
                      "mae_common": np.mean(maes), "mae_common_sd": np.std(maes),
                      "rmse_common": np.mean(rmses), "rmse_common_sd": np.std(rmses),
                      "mae_own_rows": np.mean(own),
-                     "persistence_mae_common": np.mean(np.abs(persistence - y[on_common]))}
+                     "flat_mae_common": np.mean(np.abs(flat))}
         err = pd.DataFrame({"stint_key": df.loc[on_common, "stint_key"].to_numpy(),
-                            "abs_err": np.mean([np.abs(p[on_common] - y[on_common]) for p in preds], axis=0)})
+                            "abs_err": np.mean([np.abs(shape(p, on_common)) for p in preds], axis=0)})
         per_stint[h] = err.groupby("stint_key")["abs_err"].agg(["mean", "size"])
 
     rows, stint_rows = [], []
@@ -279,7 +286,7 @@ def cv_sweep(year, name, configs, repeats):
             stint_rows.append({"weekend": weekend_label, "k_lower": k_lower, "k_upper": k_upper,
                                "stint": f"{weekend_label}:{key[0]}:{key[1]}", "rows": int(r["size"]), "mae": r["mean"]})
     s = scores[config_hash[configs[0]]]
-    log(f"  {s['common_rows']} target rows common to every configuration ({len(stints)} stints); "
+    log(f"  {s['common_rows']} fall-off rows common to every configuration ({len(stints)} stints); "
         f"MAE on them {min(x['mae_common'] for x in scores.values()):.3f}-{max(x['mae_common'] for x in scores.values()):.3f} s")
     return rows, stint_rows
 
