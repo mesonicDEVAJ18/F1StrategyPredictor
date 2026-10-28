@@ -69,8 +69,9 @@ log(f"Loaded dataset with {len(df)} rows.")
 # ============================================================
 df = build_next_lap_target(df)
 
-# Fill missing inputs (e.g. stint_avg_pace on a stint's first lap) with the training medians, as train_model.py does
-X = df[FEATURES].replace([np.inf, -np.inf], np.nan).fillna(bundle["medians"]).values
+# Inputs still missing after feature_engineer.py's stint fill are filled per fold with the
+# median of that fold's training rows (as train_model.py does with its split), not the bundle's
+X = df[FEATURES].replace([np.inf, -np.inf], np.nan).values
 y = df["target_next_fcp"].values
 # One group per stint, so a stint's laps never sit in both the train and test folds
 groups = df.groupby(TARGET_GROUP_COLUMNS).ngroup().values
@@ -99,8 +100,11 @@ log(f"\nRunning {CV_FOLDS}-fold cross-validation grouped by stint...")
 for fold, (train_idx, test_idx) in enumerate(kf.split(X, y, groups), 1):
     test_stints = len(np.unique(groups[test_idx]))
     shared = len(np.intersect1d(groups[train_idx], groups[test_idx]))
-    model.fit(X[train_idx], y[train_idx])
-    pred = model.predict(X[test_idx])
+    fold_medians = np.nanmedian(X[train_idx], axis=0)
+    X_train = np.where(np.isnan(X[train_idx]), fold_medians, X[train_idx])
+    X_test = np.where(np.isnan(X[test_idx]), fold_medians, X[test_idx])
+    model.fit(X_train, y[train_idx])
+    pred = model.predict(X_test)
     oof_pred[test_idx] = pred
     oof_fold[test_idx] = fold
 

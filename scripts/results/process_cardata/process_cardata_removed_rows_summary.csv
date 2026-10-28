@@ -359,4 +359,3 @@ car_data_p3_87.csv,out_of_range,0
 car_data_p3_87.csv,outside_lap,2567
 car_data_p3_87.csv,low_coverage_laps,3
 car_data_p3_87.csv,not_in_clean_laps,7
-all files,zscore_outlier,23

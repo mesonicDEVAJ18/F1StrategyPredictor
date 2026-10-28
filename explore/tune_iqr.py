@@ -211,7 +211,8 @@ def stint_folds(stint_keys, seed):
 
 
 def oof_predictions(df, folds):
-    """Out-of-fold XGBoost predictions over the stint folds; train medians fill missing inputs."""
+    """Out-of-fold XGBoost predictions over the stint folds; train medians fill inputs still missing
+    after feature_engineer.py's stint fill (as train_model.py / validate_strategy.py do)."""
     fold = df["stint_key"].map(folds).to_numpy()
     pred = np.full(len(df), np.nan)
     for f in range(CV_FOLDS):

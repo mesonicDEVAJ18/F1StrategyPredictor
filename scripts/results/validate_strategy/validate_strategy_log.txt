@@ -3,24 +3,24 @@ Loaded dataset with 573 rows.
 Rows after target shift drop: 273 (56 stints)
 
 Running 5-fold cross-validation grouped by stint...
- Fold 1 → 12 stints / 64 rows, 0 shared, MAE=1.3384 s, RMSE=1.8031 s, baseline MAE=1.5179 s
- Fold 2 → 11 stints / 51 rows, 0 shared, MAE=1.1369 s, RMSE=1.4634 s, baseline MAE=1.2020 s
- Fold 3 → 11 stints / 47 rows, 0 shared, MAE=1.2650 s, RMSE=1.7093 s, baseline MAE=1.6594 s
- Fold 4 → 11 stints / 41 rows, 0 shared, MAE=1.1835 s, RMSE=1.8366 s, baseline MAE=1.8291 s
- Fold 5 → 11 stints / 70 rows, 0 shared, MAE=0.9189 s, RMSE=1.3919 s, baseline MAE=1.2039 s
+ Fold 1 → 12 stints / 64 rows, 0 shared, MAE=1.3657 s, RMSE=1.9043 s, baseline MAE=1.5179 s
+ Fold 2 → 11 stints / 51 rows, 0 shared, MAE=1.1950 s, RMSE=1.5228 s, baseline MAE=1.2020 s
+ Fold 3 → 11 stints / 47 rows, 0 shared, MAE=1.3439 s, RMSE=1.7790 s, baseline MAE=1.6594 s
+ Fold 4 → 11 stints / 41 rows, 0 shared, MAE=1.1057 s, RMSE=1.8706 s, baseline MAE=1.8291 s
+ Fold 5 → 11 stints / 70 rows, 0 shared, MAE=0.9307 s, RMSE=1.4086 s, baseline MAE=1.2039 s
 
-CV MAE = 1.1685484791735117 s
-CV RMSE = 1.6408574552285924 s
+CV MAE = 1.1881951388694596 s
+CV RMSE = 1.697048959298953 s
 Out-of-fold predictions: 273 rows, each predicted once
 
 Generating residual plot...
-OOF MAE = 1.1573 s, OOF RMSE = 1.6336 s, mean residual = -0.2517 s
+OOF MAE = 1.1795 s, OOF RMSE = 1.6919 s, mean residual = -0.2531 s
 Residual plot saved.
 
 Testing the model against the persistence baseline (lap t+1 = lap t)...
 Baseline MAE = 1.4495 s, baseline RMSE = 2.7474 s
-Stints: 56, model better on 33; per-stint MAE difference mean -1.3045 s, median -0.0810 s
-Paired t-test (one-sided): t = -3.0681, p = 0.001670
+Stints: 56, model better on 30; per-stint MAE difference mean -1.3145 s, median -0.0493 s
+Paired t-test (one-sided): t = -3.0303, p = 0.001859
 Wilcoxon signed-rank (one-sided): p = 0.041153
 Model beats the persistence baseline on unseen stints at alpha = 0.05
 

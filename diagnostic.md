@@ -75,7 +75,7 @@ Items keep a stable ID (`#N`), which is also the item's GitHub issue number (ope
 
 Ideas that could make more data usable, not confirmed bugs. Each one changes the results, so check the effect before adopting it.
 
-Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 573 (188 / 298 / 87), and only 273 rows survive the next-lap target shift in `train_model.py`. Removed by `process_laps.py`: 275 pit-out laps, 7 invalid-sector or extreme lap times, 1 for "unrealistic speed" (102 before #29), 70 IQR outliers (all slow; 103 before #32) and 331 non-push laps.
+Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 573 (188 / 298 / 87), and only 273 rows survive the next-lap target shift in `train_model.py`. Removed by `process_laps.py`: 275 pit-out laps, 5 invalid-sector or extreme lap times (7 before #33 rebuilt 2 sectors), 1 for "unrealistic speed" (102 before #29), 67 IQR outliers (all slow; 70 before #33, 103 before #32) and 336 non-push laps (331 before #33).
 
 - [ ] **#31 Next-lap target loses most rows**
   - **Where:** `build_next_lap_target()` in `scripts/feature_config.py`; `train_model.py` logs "Rows after target shift drop: 273".
@@ -397,6 +397,42 @@ Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 573 (
     - **Effect:** none on Bahrain 2025. The cleaned laps, target rows, model and strategy are unchanged, so nothing downstream was rerun.
     - **Open:** to judge filters fairly, the CV needs a common evaluation set that doesn't depend on the strictest configuration, e.g. rows scored at their features under every configuration. `tune_push.py`'s winner rule has a caution comment about this. #32's result isn't affected, since its bias went against its winner.
     - **Docs:** readme.txt (Data Preparation step 2, a new "Tuning the push-lap filter" subsection), README.md, AGENTS.md, `.env` comment.
+
+- [x] **#33 Some dropped or median-filled data could be imputed instead** (was under "Things to explore")
+  - **Where:** `apply_domain_filters()` in `scripts/process_laps.py`; `zscore_outlier_filter()` in `scripts/process_cardata.py`; the median fill in `scripts/train_model.py` (`X.fillna(medians)`) and `scripts/validate_strategy.py` (`fillna(bundle["medians"])`).
+  - **Problem (Bahrain 2025):**
+    - **1. The car-data z-score filter dropped the whole lap:** 23 laps (8 target rows) lost all 10 aggregates, though 19 had only one aggregate past |z| > 3 (1 had two, 3 had three). Their real values were replaced by the field-wide training median.
+    - **2. Invalid-sector laps:** 6 laps (0 / 1 / 5) each miss one sector. 2 have `lap_duration` and the other two sectors, so the missing one is `lap_duration` minus the other two; 4 also miss `lap_duration` and can't be rebuilt.
+    - **3. The median fill:** 122 of 273 target rows (45%) had at least one median-filled input: `stint_avg_pace` 49 (a stint's first lap), `i1_speed` 47, `st_speed` 32, car data 8, segment counts 1–2. The median was pooled over every driver and session, and computed on all 273 rows before the split; `validate_strategy.py` filled every CV fold with it, so held-out rows fed their own fill.
+  - **Fixed:**
+    - **1. Cells, not laps:** `zscore_outlier_mask()` (was `zscore_outlier_filter()`) keeps the per-session z, but sets only the flagged aggregates to NaN and keeps the lap. It logs the masked cells per column and per lap and saves `process_cardata_zscore_masked_cells.csv`; the `zscore_outlier` stage is gone from `process_cardata_removed_rows_summary.csv`. `CARDATA_ZSCORE_THRESHOLD` keeps its meaning (`tune_push.py`'s 1e9 still switches it off).
+    - **2. Sector rebuild:** `rebuild_missing_sector()` runs first in `apply_domain_filters()`. A lap missing exactly one sector, with `lap_duration` and the other two (> 0) recorded, gets `lap_duration` − the other two; a result ≤ 0 stays NaN and the lap is dropped as before. Rebuilt laps are saved to `process_laps_rebuilt_sectors_laps_p*.csv`. No `.env` key: the rule is deterministic.
+    - **3a. Causal stint fill:** `feature_engineer.py` fills each column in `STINT_FILL_COLUMNS` (`feature_config.py`: the speed traps, segment counts and car-data aggregates) with the median of the same stint's *earlier* laps (`shift(1).expanding().median()` per `(driver_number, stint_number)`, NaN skipped), and saves `feature_engineer_stint_fill_summary.csv`. It is causal on purpose. A median over the whole stint would include lap *t+1*, the target lap (in a 2-lap stint, it *is* lap *t+1*'s value), which breaks the leakage rule. A stint's laps are all in one CV fold, so the fill needs no fitting.
+    - **3b. First-lap `stint_avg_pace`:** on a stint's first lap there are no earlier laps, so it is lap *t*'s own `lap_duration` (lap *t*'s data, no leakage), not the median. No new column. The simulator's `rollout_stint()` seeds stint lap 1 the same way (`stint_avg_pace` = the seed lap's raw time), and so does `explore_lib.rollout_stint()`; `explore_lib.baseline_predictions()` no longer needs its `fillna`.
+    - **3c. Fallback fitted on training rows:** what is still NaN gets a median fitted on training rows only. `train_model.py` computes it from `X_train` after the split and saves it as the bundle `medians` (format unchanged), which the simulator starts from. `validate_strategy.py` fits it per fold from the fold's training rows and no longer uses the bundle medians. `explore/` already did this (`SimpleImputer` per fold, train medians per fold in `tune_iqr.py` / `tune_push.py`) and inherits 3a through the engineered dataset.
+    - **Rejected:** group-wise (session × driver) medians and a regression from `i2_speed`. The causal stint median is the closest group and covers almost every gap.
+  - **Rows:** 573 cleaned laps, unchanged. The 2 rebuilt laps (FP2 car 22 lap 25, 152.3 s; FP3 car 16 lap 8, 174.1 s) are slow and are dropped later. They do move FP2's and FP3's IQR bounds (FP2 IQR 5.34 → 5.46 s), so 3 FP2 laps move from the IQR filter to the non-push filter: IQR 1 / 65 / 1 (was 1 / 68 / 1), non-push 146 / 69 / 121 (was 146 / 65 / 120). `laps_combined_clean.csv` is byte-identical. Target rows: 273, unchanged.
+  - **Car data:** 550 → 573 laps (all laps have car data); 30 cells are masked on the 23 recovered laps (`brake_pct` 7, `mean_rpm` 6, `mean_speed` / `full_throttle_pct` / `gear_changes` 4, `mean_throttle` 3, `max_rpm` 2; 19 laps with one, 1 with two, 3 with three).
+  - **Fill coverage** (573 laps): `i1_speed` 61 missing → 51 filled from the stint, `st_speed` 42 → 39, car data 30 → 23, segment counts 15 → 0 (no earlier lap of the stint has a value). In the target rows, 9 rows (`i1_speed` 7, segment counts 1–2) still need the fallback median, against 122 before; `stint_avg_pace` is never NaN (233 first laps).
+  - **Checks:**
+    - every masked cell is NaN in `cardata_per_lap_clean.csv`, and every other cell of the 550 old laps is unchanged
+    - the rebuilt sectors sum to `lap_duration` exactly
+    - every filled cell equals the median of its stint's earlier non-missing laps (recomputed independently, 0 mismatches)
+    - the first-lap `stint_avg_pace` equals its own `lap_duration`
+    - the bundle medians equal the `X_train` medians
+    - every age-1 rollout row has `stint_avg_pace` = its raw seed lap (99.25 s)
+    - `explore_master.py --skip-pipeline --quick` runs (its results were restored afterwards)
+  - **EDA:** 10 columns with missing values (was 16), at most 1.7% (`i1_speed` and `segments_sector_1`, 10 laps each). Collinear groups 3 → 2: `stint_avg_pace` joins `duration_sector_2` / `mean_speed`, since its first-lap value is now lap *t*'s own time, and the `st_speed` / `max_speed` pair is gone. `explore/` reads these groups, so its reduced feature set changes. `stint_avg_pace` drops out of the ten strongest target correlations (Pearson +0.28 before). The degradation slopes are unchanged (+0.16 / +0.05 / +0.06 s/lap).
+  - **Effect on metrics** (step 1 alone in brackets):
+    - Grouped 5-fold CV MAE 1.19 s, RMSE 1.70 s (1.16 / 1.65; was 1.17 / 1.64 s), per fold MAE 0.93–1.37 s. OOF MAE 1.18 s, RMSE 1.69 s, mean residual −0.25 s (was 1.16 / 1.63 / −0.25 s).
+    - Held-out split (12 stints / 64 rows): MAE 1.37 s, RMSE 1.90 s, R² −0.03 (1.32 / 1.80 / 0.086; was 1.34 / 1.80 / 0.078).
+    - The changes are well inside the fold spread (about 0.09 s standard error), so the imputation neither helps nor hurts measurably on 273 rows.
+    - **Persistence test:** model better on 30 of 56 stints (was 33), paired t p = 0.0019, Wilcoxon p = 0.041 (0.019 after step 1), median per-stint gain 0.05 s (was 0.08 s). Both tests pass, so the model still **beats persistence at 0.05**, only just.
+  - **Feature importance:** XGB's top five are `session_FP3` 0.095, `air_temperature` 0.094, `stint_avg_pace` 0.072 (it was not in the top five), `drs_open_pct` 0.056 and `i2_speed` 0.049. `tyre_age` is 15th (0.028; was 10th).
+  - **Rollout behaviour** (car 16, 57-lap stint, fcp in s): seed 99.25 s raw (97.25 s fcp). Every compound predicts 99.8 s on stint lap 2 and 100.8 s on lap 3, then 100.4–101.4 s to lap 57; the new sets are within 0.03 s of each other on average (at most 0.37 s), and SOFT(6) is +0.06 s (−0.35 to +0.41 s lap by lap). Largest step 2.38–2.60 s (lap 1 to 2). Still nearly flat.
+  - **Effect on strategy (car 16):** SOFT(0)–MEDIUM(0), pit on lap 28, 5818.28 s, tied with MEDIUM(0)–SOFT(0) on lap 29. Pit laps 26–30 are within 0.26 s. MEDIUM(0)–HARD(0) is +0.01 s, SOFT(0)–HARD(0) +0.81 s, the best with SOFT(6) (SOFT(6)–MEDIUM(0), pit on lap 10) +10.32 s, and the best 2-stop (MEDIUM(0)–HARD(0)–MEDIUM(0), pits on 19 and 38) +12.82 s (was MEDIUM(0)–HARD(0), pit on lap 29, 5819.18 s; after step 1 alone, lap 27, 5835.22 s). The compounds are within 1 s, so the pick is close to arbitrary. Still **not** a valid recommendation (flat rollouts, #27).
+  - **Not rerun:** `explore/explore_master.py` (#27) in full, and `tune_iqr.py` / `tune_push.py`; their CV inputs change with 1 and 3a.
+  - **Docs:** readme.txt (Data Preparation step 2, Feature Engineering, ML Modelling training, Race Simulation step 2, Evaluation, and the counts and results downstream), README.md, AGENTS.md, `.env` comment.
 
 ### P3: completeness and cleanup
 

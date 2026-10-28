@@ -2,15 +2,15 @@
   "time_units": "seconds",
   "car_number": 16,
   "best_compound_sequence": [
-    "MEDIUM",
-    "HARD"
+    "SOFT",
+    "MEDIUM"
   ],
   "best_set_ages_at_start": [
     0,
     0
   ],
   "best_pit_laps": [
-    29
+    28
   ],
-  "best_total_time": 5819.181425967487
+  "best_total_time": 5818.2840644511125
 }

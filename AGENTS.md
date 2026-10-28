@@ -146,7 +146,9 @@ Scripts communicate through CSVs in `data/processed/`, not by importing each oth
   `data/cache/<weekend>/` and, for the active weekend, from `data/raw/` too. The `WEEKENDS` table is hardcoded data
   (meeting key, FP1-3 session keys, scheduled race laps); sprint weekends are rejected. Each run's source and file
   counts are in `results/race_weekend/race_weekend_summary.csv`.
-- `process_laps.py`   → `data/processed/laps_combined_clean.csv`. Its residual filter has a separate multiplier for each side
+- `process_laps.py`   → `data/processed/laps_combined_clean.csv`. A lap missing exactly one sector, with `lap_duration` and the
+  other two recorded, first gets that sector as `lap_duration` minus the other two (kept only if > 0; saved to
+  `results/process_laps/process_laps_rebuilt_sectors_*.csv`); laps still missing a sector are dropped. Its residual filter has a separate multiplier for each side
   (`IQR_LOWER_MULTIPLIER` for fast laps, `IQR_UPPER_MULTIPLIER` for slow ones, tuned by `explore/tune_iqr.py`), and it saves
   every lap reaching that filter with its residual and `best_ratio` to `results/process_laps/process_laps_iqr_residuals_*.csv`
   (diagnostic only; `tune_iqr.py` reads it). Its push-lap filter drops a lap slower than `PUSH_LAP_MAX_BEST_RATIO` × the
@@ -162,14 +164,17 @@ Scripts communicate through CSVs in `data/processed/`, not by importing each oth
 - `process_weather.py`→ `data/processed/cleaned_weather.csv`
 - `process_cardata.py`→ `data/processed/cardata_per_lap_clean.csv` (reads `data/raw/car_data/` (`CARDATA_DIR`); keyed by
   `session_key`, `driver_number`, `lap_number`; lap windows come from the raw `data/raw/laps/laps_p*.csv`, and only laps in
-  `data/processed/laps_combined_clean.csv` are kept, so it must run after `process_laps.py`; the aggregates are left
-  unscaled, in physical units)
+  `data/processed/laps_combined_clean.csv` are kept, so it must run after `process_laps.py`; its per-session z-score test
+  (`CARDATA_ZSCORE_THRESHOLD`) masks only the flagged aggregate to NaN and keeps the lap (`process_cardata_zscore_masked_cells.csv`);
+  the aggregates are left unscaled, in physical units)
 - `feature_engineer.py` reads the laps, stints, weather and car data above → `data/processed/final_engineered_dataset.csv`
   (and a copy under `results/feature_engineer/`). It keeps `session_key` and `driver_number` as
   identifiers only; they are not in `MODEL_FEATURE_COLUMNS`. The session reaches the model only as the
   `session_FP1/FP2/FP3` one-hot, built from `process_laps.py`'s `session_name`. The car-data aggregates
-  (`CARDATA_FEATURE_COLUMNS`) are left-merged on lap *t*'s keys. Laps without telemetry stay NaN and get the
-  training medians, and the simulator holds them at those medians.
+  (`CARDATA_FEATURE_COLUMNS`) are left-merged on lap *t*'s keys. Missing inputs in `STINT_FILL_COLUMNS` (speed traps,
+  segment counts, car data) are filled with the median of the same stint's *earlier* laps (causal: a whole-stint median
+  would include lap *t+1*, the target), and `stint_avg_pace` on a stint's first lap is lap *t*'s own lap time. Whatever is
+  still NaN gets the training-row medians in `train_model.py`; the simulator holds speeds and car data at those medians.
 - `eda.py` reads the engineered dataset and writes only to `results/eda/` (no hand-off file, nothing in the pipeline
   reads it; `explore/` reads its collinear groups): summary statistics and missing values, pace distributions by session and compound, pace against
   tyre age (raw and with each stint's mean removed), input/target correlations with collinear groups
@@ -178,13 +183,14 @@ Scripts communicate through CSVs in `data/processed/`, not by importing each oth
 - `train_model.py` reads the engineered dataset, fits the one model in its MODEL block (no comparison: that is
   `explore/`'s job) and scores it on a held-out 20% of stints → `results/train_model/train_model_xgb_model.pkl`
   (a joblib bundle: `{"model": ..., "features": [...], "medians": {...}, "session_weights": {...}}`;
-  `medians` are the training medians used for `fillna`, and `session_weights` is each session's share of
-  training rows)
+  `medians` are the medians of the training split's rows, fitted after the split and used for `fillna`, and
+  `session_weights` is each session's share of the target rows). `validate_strategy.py` fits its own fill per CV fold
+  from that fold's training rows, not the bundle's `medians`
 - `strategy_simulator.py` and `validate_strategy.py` load that `.pkl` bundle. The simulator starts from
   `medians` (inputs are in physical units, so 0 is not "average") and averages each lap's prediction over
   the session one-hots with `session_weights`, because the race is not a practice session. Each stint is
   rolled out autoregressively from stint lap 1, once per (compound, set age at start, stint length), with
-  `tyre_age` = set age + stint lap: every predicted fcp is turned back into a raw lap time with
+  `tyre_age` = set age + stint lap and the seed lap's `stint_avg_pace` = its own lap time: every predicted fcp is turned back into a raw lap time with
   `FUEL_EFFECT_K` (feature_config.py) and fed into the next lap's sector times and running `stint_avg_pace`.
   Strategies are optimised for the one car in `SIM_DRIVER` from its tyre-set inventory (an unknown car number
   raises): each set is fitted at most once, and the fastest choice of sets is kept for each compound sequence

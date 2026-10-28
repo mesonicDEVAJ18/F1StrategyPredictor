@@ -120,7 +120,8 @@ def rollout_stint(base_features, compound, set_age, stint_length):
     Rolls one stint forward from stint lap 1 to stint_length, on a set that
     already has set_age laps on it (0 = new set).
 
-    Lap 1 is the seed lap (training medians). Each later lap's fcp is predicted
+    Lap 1 is the seed lap (training medians), with stint_avg_pace = its own lap
+    time, as on a stint's first lap in training. Each later lap's fcp is predicted
     from the previous lap's state, then converted back to a raw lap time by
     adding back training's fuel term (fcp = lap_duration - k * laps left in the
     stint, counting the current lap)
@@ -139,6 +140,8 @@ def rollout_stint(base_features, compound, set_age, stint_length):
     raw = float(seed_sectors.sum())
     fcp = raw - FUEL_EFFECT_K * stint_length
     state["fuel_corrected_pace"] = fcp
+    # No earlier laps on stint lap 1, so stint_avg_pace is the lap's own time (feature_engineer.py)
+    state["stint_avg_pace"] = raw
 
     records = []
     raw_laps = []
@@ -395,7 +398,8 @@ def optimize_strategy(total_laps, base_features):
 if __name__ == "__main__":
     # Baseline = training medians (features are in physical units, so 0 is not "average").
     # Speed traps and car-data aggregates stay at these medians for the whole rollout;
-    # rollout_stint() sets each stint's compound, tyre age, sector times and stint_avg_pace.
+    # rollout_stint() sets each stint's compound, tyre age, sector times and stint_avg_pace
+    # (the seed lap's own time on stint lap 1, so the stint_avg_pace median is unused).
     start_features = {f: 0.0 for f in SIM_FEATURE_COLUMNS}
     start_features.update({f: v for f, v in MEDIANS.items() if f in start_features})
 

@@ -10,18 +10,18 @@ Rolling out 4 (compound, set age) pairs: [('SOFT', 0), ('SOFT', 6), ('MEDIUM', 0
 Saved stint rollouts and stint totals.
 
 Rollout check (stint of 57 laps, fcp in s, by stint lap):
-  SOFT set age 0: lap 1: 97.23, lap 18: 101.46, lap 57: 101.29, max |lap-to-lap step|: 2.68
-  SOFT set age 6: lap 1: 97.23, lap 18: 101.54, lap 57: 101.38, max |lap-to-lap step|: 2.43
-  MEDIUM set age 0: lap 1: 97.23, lap 18: 101.13, lap 57: 101.19, max |lap-to-lap step|: 2.76
-  HARD set age 0: lap 1: 97.23, lap 18: 101.45, lap 57: 101.22, max |lap-to-lap step|: 2.68
+  SOFT set age 0: lap 1: 97.25, lap 18: 101.08, lap 57: 101.06, max |lap-to-lap step|: 2.57
+  SOFT set age 6: lap 1: 97.25, lap 18: 101.13, lap 57: 101.12, max |lap-to-lap step|: 2.38
+  MEDIUM set age 0: lap 1: 97.25, lap 18: 101.35, lap 57: 101.03, max |lap-to-lap step|: 2.60
+  HARD set age 0: lap 1: 97.25, lap 18: 101.08, lap 57: 101.04, max |lap-to-lap step|: 2.56
 Dropped 2109 strategies using fewer than 2 compounds.
 Total strategies to evaluate: 16206
 
 Car 16: 3996 strategies skipped (not enough sets of a compound), 12210 evaluated
-Car 16 best strategy: {'car_number': 16, 'best_compound_sequence': ('MEDIUM', 'HARD'), 'best_set_ages_at_start': (0, 0), 'best_pit_laps': [29], 'best_total_time': 5819.181425967487}
+Car 16 best strategy: {'car_number': 16, 'best_compound_sequence': ('SOFT', 'MEDIUM'), 'best_set_ages_at_start': (0, 0), 'best_pit_laps': [28], 'best_total_time': 5818.2840644511125}
 
 OPTIMIZATION COMPLETE
-Car 16: ('MEDIUM', 'HARD'), set ages (0, 0), pits [29], time 5819.18 s
+Car 16: ('SOFT', 'MEDIUM'), set ages (0, 0), pits [28], time 5818.28 s
 
 FILES GENERATED:
   - strategy_simulator_stint_rollouts.csv

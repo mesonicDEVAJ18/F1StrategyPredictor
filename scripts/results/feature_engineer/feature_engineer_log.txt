@@ -2,7 +2,7 @@ Loading preprocessed data...
   → Laps:   573 rows
   → Stints: 275 rows
   → Weather:239 rows
-  → Car data:550 laps
+  → Car data:573 laps
 
 Assigning stint numbers to laps...
   → Missing stint numbers: 0
@@ -18,13 +18,28 @@ Merging weather on timestamps (lap date_start ~ weather date)...
 
 Merging per-lap car data (session_key, driver_number, lap_number)...
   → Rows before/after merge: 573 / 573
-  → Laps without car data: 23 of 573
+  → Laps without car data: 0 of 573
+  → Laps with some car data masked: 23
   → Car data merged successfully
 
 Engineering features...
   → Session one-hot rows: {'session_FP1': 188, 'session_FP2': 298, 'session_FP3': 87}
   → tyre_age range: 2-19 laps
-  → stint_avg_pace NaN (first lap of a stint): 233
+  → Missing inputs filled with the median of the stint's earlier laps:
+           column  missing  filled_from_stint  still_missing
+         i1_speed       61                 51             10
+         st_speed       42                 39              3
+segments_sector_1       10                  0             10
+segments_sector_2        4                  0              4
+segments_sector_3        1                  0              1
+       mean_speed        4                  3              1
+    mean_throttle        3                  3              0
+full_throttle_pct        4                  4              0
+        brake_pct        7                  5              2
+         mean_rpm        6                  4              2
+          max_rpm        2                  1              1
+     gear_changes        4                  3              1
+  → stint_avg_pace on a stint's first lap set to its own lap time: 233 laps
 
 Final cleanup...
 
@@ -37,6 +52,7 @@ FILES GENERATED:
   - feature_engineer_laps_after_stint_merge.csv
   - feature_engineer_laps_after_weather_merge.csv
   - feature_engineer_laps_after_cardata_merge.csv
+  - feature_engineer_stint_fill_summary.csv
   - feature_engineer_feature_engineered_snapshot.csv
   - feature_engineer_final_engineered_dataset.csv
   - feature_engineer_manifest.txt

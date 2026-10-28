@@ -71,22 +71,13 @@ log(f"  → Dropped for a gap to the next lap: {rows_before - len(df) - n_stints
 X = df[FEATURES].copy()
 y = df["target_next_fcp"]
 
-# Clean
+# Clean (the median fill comes after the split, so held-out rows don't feed it)
 X.replace([np.inf, -np.inf], np.nan, inplace=True)
-medians = X.median(numeric_only=True)
-X = X.fillna(medians)
 
 # Share of training rows per practice session; the simulator averages its
 # predictions over the session one-hots with these weights (the race is no session)
 session_weights = df[SESSION_COLUMNS].mean()
 log(f"Session weights: {session_weights.round(3).to_dict()}")
-
-# Save snapshot
-snapshot_name = f"{SCRIPT_NAME}_feature_matrix_snapshot.csv"
-X.assign(target=y).head(200).to_csv(f"{RESULTS_DIR}/{snapshot_name}", index=False)
-generated_files.append(snapshot_name)
-
-log("Saved feature snapshot.")
 
 
 # ======================================================
@@ -106,6 +97,21 @@ log(
     f"Completed train/test split by stint: {len(train_groups)} stints / {len(train_idx)} rows train, "
     f"{len(test_groups)} stints / {len(test_idx)} rows test, {len(train_groups & test_groups)} shared."
 )
+
+# Inputs still missing after feature_engineer.py's stint fill get the median of the training
+# rows only; the simulator starts from these medians too (#33)
+medians = X_train.median(numeric_only=True)
+log(f"Inputs median-filled: {int(X_train.isna().any(axis=1).sum())} train rows, "
+    f"{int(X_test.isna().any(axis=1).sum())} test rows; per column: {X.isna().sum()[X.isna().sum() > 0].to_dict()}")
+X_train = X_train.fillna(medians)
+X_test = X_test.fillna(medians)
+
+# Save snapshot
+snapshot_name = f"{SCRIPT_NAME}_feature_matrix_snapshot.csv"
+X_train.assign(target=y_train).head(200).to_csv(f"{RESULTS_DIR}/{snapshot_name}", index=False)
+generated_files.append(snapshot_name)
+
+log("Saved feature snapshot.")
 
 
 # ======================================================

@@ -59,7 +59,7 @@ DRS_OPEN_CODES = env_list("CARDATA_DRS_OPEN_CODES", cast=int)
 MIN_COVERAGE = env_float("CARDATA_MIN_COVERAGE")
 # throttle (%) at or above this counts as full throttle
 FULL_THROTTLE_MIN = env_float("CARDATA_FULL_THROTTLE_MIN")
-# per-session |z| above this on any aggregate drops the lap
+# per-session |z| above this masks that aggregate on that lap (set to NaN; the lap is kept)
 ZSCORE_THRESHOLD = env_float("CARDATA_ZSCORE_THRESHOLD")
 # readings above these are physically impossible
 MAX_SPEED_KMH = env_float("CARDATA_MAX_SPEED_KMH")
@@ -209,21 +209,36 @@ def keep_clean_laps(per_lap, fname):
     return per_lap
 
 
-def zscore_outlier_filter(per_lap, cols, fname):
-    """Drop laps with |z| > ZSCORE_THRESHOLD in any aggregate, z computed per session."""
-    keep = pd.Series(True, index=per_lap.index)
+def zscore_outlier_mask(per_lap, cols, fname):
+    """Set an aggregate to NaN where |z| > ZSCORE_THRESHOLD, z computed per session (#33).
+
+    Only the flagged cells are masked; the lap and its other aggregates are kept, and
+    feature_engineer.py fills the masked cells from the stint's earlier laps.
+    """
+    per_lap = per_lap.copy()
+    flags = pd.DataFrame(False, index=per_lap.index, columns=cols)
     for col in cols:
         grouped = per_lap.groupby("session_key")[col]
         std = grouped.transform("std")
         z = (per_lap[col] - grouped.transform("mean")) / std
         # Zero-variance columns are skipped
-        keep &= ~((std > 0) & (z.abs() > ZSCORE_THRESHOLD))
+        flags[col] = (std > 0) & (z.abs() > ZSCORE_THRESHOLD)
+    per_lap[cols] = per_lap[cols].mask(flags)
 
-    before = len(per_lap)
-    per_lap = per_lap[keep]
-    removed = before - len(per_lap)
-    log(f"[{fname}] Removed {removed} laps with |z| > {ZSCORE_THRESHOLD:g} (per session)")
-    removed_rows_summary.append([fname, "zscore_outlier", removed])
+    masked_laps = int(flags.any(axis=1).sum())
+    log(f"[{fname}] Masked {int(flags.values.sum())} aggregates with |z| > {ZSCORE_THRESHOLD:g} (per session) "
+        f"on {masked_laps} laps; the laps are kept")
+    log(f"[{fname}] Masked per column: {flags.sum()[flags.sum() > 0].to_dict()}")
+    log(f"[{fname}] Masked aggregates per lap: {flags.sum(axis=1)[flags.any(axis=1)].value_counts().sort_index().to_dict()}")
+
+    masked = (
+        flags.assign(session_key=per_lap["session_key"])
+        .groupby("session_key")[cols].sum()
+        .stack().rename("cells").reset_index().rename(columns={"level_1": "column"})
+    )
+    masked_name = f"{SCRIPT_NAME}_zscore_masked_cells.csv"
+    masked[masked["cells"] > 0].to_csv(os.path.join(RESULTS_DIR, masked_name), index=False)
+    generated_files.append(masked_name)
 
     return per_lap
 
@@ -269,8 +284,8 @@ for file_path in cardata_files:
 combined = pd.concat(per_lap_dfs, ignore_index=True)
 combined = combined.sort_values(LAP_KEYS).reset_index(drop=True)
 
-# Outliers are judged per session across both cars, so this runs on the combined table
-combined = zscore_outlier_filter(combined, ZSCORE_COLS, "all files")
+# Outliers are judged per session across the field, so this runs on the combined table
+combined = zscore_outlier_mask(combined, ZSCORE_COLS, "all files")
 
 # lap_duration was only needed for coverage; it is the dependent variable, so keep it out
 combined = combined.drop(columns=["lap_duration"])

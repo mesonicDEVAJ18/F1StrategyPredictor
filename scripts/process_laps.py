@@ -57,10 +57,38 @@ list_fix_summary = []
 # HELPER FUNCTIONS
 # ============================================================
 
+def rebuild_missing_sector(df, fname, sector_cols):
+    """A lap missing exactly one sector, with lap_duration and the other two (> 0) recorded, gets the
+    missing one as lap_duration minus the other two (#33; deterministic). A result <= 0 stays NaN."""
+    df = df.copy()
+    missing = df[sector_cols].isna()
+    others_ok = df[sector_cols].fillna(1).gt(0).all(axis=1)
+    candidates = missing.sum(axis=1).eq(1) & df["lap_duration"].notna() & others_ok
+
+    rebuilt = []
+    for col in sector_cols:
+        rows = candidates & missing[col]
+        value = df.loc[rows, "lap_duration"] - df.loc[rows, [c for c in sector_cols if c != col]].sum(axis=1)
+        value = value[value > 0]
+        df.loc[value.index, col] = value
+        rebuilt.append(df.loc[value.index, [c for c in ["session_key", "driver_number", "lap_number", "lap_duration"]
+                                             if c in df.columns]].assign(sector=col, value=value))
+
+    rebuilt = pd.concat(rebuilt, ignore_index=True)
+    log(f"[{fname}] Rebuilt {len(rebuilt)} missing sectors as lap_duration minus the other two "
+        f"({int(candidates.sum()) - len(rebuilt)} gave <= 0 and stay invalid)")
+    rebuilt_name = f"{SCRIPT_NAME}_rebuilt_sectors_{fname.replace('.csv', '')}.csv"
+    rebuilt.to_csv(os.path.join(RESULTS_DIR, rebuilt_name), index=False)
+    generated_files.append(rebuilt_name)
+    return df
+
+
 def apply_domain_filters(df, fname):
     sector_cols = ["duration_sector_1", "duration_sector_2", "duration_sector_3"]
 
-    # Invalid sector rows
+    df = rebuild_missing_sector(df, fname, sector_cols)
+
+    # Invalid sector rows (missing sectors that could not be rebuilt, or sectors <= 0)
     before = len(df)
     df = df.dropna(subset=sector_cols)
     df = df[(df[sector_cols] > 0).all(axis=1)]
@@ -77,7 +105,8 @@ def apply_domain_filters(df, fname):
     removed_rows_summary.append([fname, "unrealistic_laptime", removed])
 
     # Unrealistic speeds: only a recorded speed can be too slow. NaN <= MIN_SPEED_KMH is False, so a lap
-    # with a missing speed trap is kept; the missing value gets the training median in train_model.py
+    # with a missing speed trap is kept; feature_engineer.py fills the missing value from the stint's earlier laps
+    # (else the training median in train_model.py)
     speed_cols = ["i1_speed", "i2_speed", "st_speed"]
     if all(col in df.columns for col in speed_cols):
         before = len(df)
@@ -86,7 +115,7 @@ def apply_domain_filters(df, fname):
         log(f"[{fname}] Removed {removed} unrealistic-speed laps")
         removed_rows_summary.append([fname, "unrealistic_speed", removed])
         missing = df[speed_cols].isna().any(axis=1).sum()
-        log(f"[{fname}] Kept {missing} laps with a missing speed trap (filled with the training medians in train_model.py)")
+        log(f"[{fname}] Kept {missing} laps with a missing speed trap (filled in feature_engineer.py / train_model.py)")
 
     return df
 

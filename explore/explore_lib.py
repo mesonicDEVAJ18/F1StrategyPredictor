@@ -92,7 +92,8 @@ class DeltaTarget(BaseEstimator, RegressorMixin):
 # MODEL BUILDING
 # ============================================================
 def build_estimator(model, scale, target_mode):
-    """Median imputer (fitted per fold) -> optional scaler -> model, wrapped for the target mode.
+    """Median imputer (fitted per fold; the fallback after feature_engineer.py's stint fill, as in
+    train_model.py) -> optional scaler -> model, wrapped for the target mode.
 
     Steps keep pandas output so custom estimators can select columns by name.
     Returns (estimator, param prefix for the model's grid keys).
@@ -150,8 +151,8 @@ def load_target_rows(dataset_path):
 def baseline_predictions(df, y_train_mean):
     """Naive forecasts every model has to beat (#27). Nothing in them is fitted except the mean."""
     persistence = df["fuel_corrected_pace"].to_numpy()
-    # stint_avg_pace is NaN on a stint's first lap: fall back to lap t
-    stint_avg = df["stint_avg_pace"].fillna(df["fuel_corrected_pace"]).to_numpy()
+    # On a stint's first lap stint_avg_pace is lap t's own raw time (feature_engineer.py, #33)
+    stint_avg = df["stint_avg_pace"].to_numpy()
     return {
         "baseline_persistence": persistence,
         "baseline_stint_avg_pace": stint_avg,
@@ -198,6 +199,8 @@ def rollout_stint(model, features, medians, session_weights, compound, set_age, 
     share = seed / seed.sum()
     raw = float(seed.sum())
     fcp = raw - FUEL_EFFECT_K * stint_length
+    # No earlier laps on stint lap 1, so stint_avg_pace is the lap's own time (as in training)
+    state["stint_avg_pace"] = raw
 
     fcps, raw_laps = [], []
     for age in range(1, stint_length + 1):

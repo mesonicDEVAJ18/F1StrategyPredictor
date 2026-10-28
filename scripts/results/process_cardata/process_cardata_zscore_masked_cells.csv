@@ -1,0 +1,17 @@
+session_key,column,cells
+10007,mean_speed,2
+10007,mean_throttle,1
+10007,full_throttle_pct,2
+10007,brake_pct,1
+10007,mean_rpm,3
+10007,gear_changes,1
+10008,brake_pct,5
+10008,mean_rpm,1
+10008,max_rpm,1
+10008,gear_changes,3
+10009,mean_speed,2
+10009,mean_throttle,2
+10009,full_throttle_pct,2
+10009,brake_pct,1
+10009,mean_rpm,2
+10009,max_rpm,1

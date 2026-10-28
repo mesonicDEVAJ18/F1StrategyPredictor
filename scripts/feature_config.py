@@ -18,6 +18,15 @@ CARDATA_FEATURE_COLUMNS = [
     "drs_open_pct",
 ]
 
+# Inputs that can be missing on a lap (speed traps, segment counts, masked or missing car data):
+# feature_engineer.py fills them with the median of the same stint's earlier laps (causal, so lap t+1
+# never feeds lap t's inputs); what is left gets the training median in train_model.py (#33)
+STINT_FILL_COLUMNS = [
+    "i1_speed", "i2_speed", "st_speed",
+    "segments_sector_1", "segments_sector_2", "segments_sector_3",
+    *CARDATA_FEATURE_COLUMNS,
+]
+
 # Model input order (WHAT THE MODEL EXPECTS)
 MODEL_FEATURE_COLUMNS = [
     "duration_sector_1",

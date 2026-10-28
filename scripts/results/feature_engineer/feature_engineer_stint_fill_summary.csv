@@ -1,0 +1,17 @@
+column,missing,filled_from_stint,still_missing
+i1_speed,61,51,10
+i2_speed,0,0,0
+st_speed,42,39,3
+segments_sector_1,10,0,10
+segments_sector_2,4,0,4
+segments_sector_3,1,0,1
+mean_speed,4,3,1
+max_speed,0,0,0
+mean_throttle,3,3,0
+full_throttle_pct,4,4,0
+brake_pct,7,5,2
+mean_rpm,6,4,2
+max_rpm,2,1,1
+mean_gear,0,0,0
+gear_changes,4,3,1
+drs_open_pct,0,0,0

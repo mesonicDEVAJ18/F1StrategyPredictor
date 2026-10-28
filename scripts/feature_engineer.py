@@ -5,7 +5,7 @@ from pathlib import Path
 import os
 from datetime import datetime
 
-from feature_config import SESSION_COLUMNS, CARDATA_FEATURE_COLUMNS, FUEL_EFFECT_K
+from feature_config import SESSION_COLUMNS, CARDATA_FEATURE_COLUMNS, STINT_FILL_COLUMNS, FUEL_EFFECT_K
 from env_config import env_str
 
 # ============================================================
@@ -183,8 +183,8 @@ log("  → Weather merged successfully")
 log("\nMerging per-lap car data (session_key, driver_number, lap_number)...")
 
 # Each row gets its own lap t's telemetry; the target is lap t+1, so nothing leaks.
-# Laps whose telemetry was dropped (low coverage, outliers) stay NaN and are filled
-# with the training medians in train_model.py
+# Laps without telemetry (low coverage) and aggregates masked as outliers stay NaN here
+# and are filled from the stint's earlier laps below
 lap_keys = ["session_key", "driver_number", "lap_number"]
 rows_before = len(laps)
 laps = laps.merge(
@@ -194,9 +194,10 @@ laps = laps.merge(
     validate="one_to_one"
 )
 
-no_cardata = laps[CARDATA_FEATURE_COLUMNS[0]].isna().sum()
+no_cardata = laps[CARDATA_FEATURE_COLUMNS].isna().all(axis=1).sum()
 log(f"  → Rows before/after merge: {rows_before} / {len(laps)}")
 log(f"  → Laps without car data: {no_cardata} of {len(laps)}")
+log(f"  → Laps with some car data masked: {(laps[CARDATA_FEATURE_COLUMNS].isna().any(axis=1).sum() - no_cardata)}")
 
 merge_cardata_snapshot = f"{SCRIPT_NAME}_laps_after_cardata_merge.csv"
 laps.to_csv(f"{RESULTS_DIR}/{merge_cardata_snapshot}", index=False)
@@ -227,15 +228,36 @@ laps["laps_since_stint_start"] = laps["laps_since_stint_start"].clip(lower=1)
 laps["tyre_age"] = laps["tyre_age_at_start"] + laps["laps_since_stint_start"]
 log(f"  → tyre_age range: {laps['tyre_age'].min():.0f}-{laps['tyre_age'].max():.0f} laps")
 
+# Missing inputs (#33): the median of the same stint's earlier laps, NaN skipped. Earlier laps
+# only, so lap t+1 (the target) never feeds lap t's inputs. A stint's laps are all in one CV
+# fold, so the fill needs no fitting; what is still NaN gets the training median in train_model.py
+stint_sorted = laps.sort_values(["driver_number", "stint_number", "lap_number"])
+stint_groups = stint_sorted.groupby(["driver_number", "stint_number"])
+fill_summary = []
+for col in STINT_FILL_COLUMNS:
+    before = int(laps[col].isna().sum())
+    earlier_median = stint_groups[col].transform(lambda s: s.shift(1).expanding().median())
+    laps[col] = laps[col].fillna(earlier_median)
+    after = int(laps[col].isna().sum())
+    fill_summary.append([col, before, before - after, after])
+fill_df = pd.DataFrame(fill_summary, columns=["column", "missing", "filled_from_stint", "still_missing"])
+fill_name = f"{SCRIPT_NAME}_stint_fill_summary.csv"
+fill_df.to_csv(f"{RESULTS_DIR}/{fill_name}", index=False)
+generated_files.append(fill_name)
+log("  → Missing inputs filled with the median of the stint's earlier laps:")
+log(fill_df[fill_df["missing"] > 0].to_string(index=False))
+
 # Causal stint average pace (seconds): mean of the stint's earlier laps only, so the
-# target lap t+1 can't leak in. NaN on a stint's first lap; training
-# fills it with the median, which is also the simulator's seed value.
+# target lap t+1 can't leak in. On a stint's first lap there are none, so it is lap t's
+# own lap time; the simulator seeds lap 1 the same way.
 laps["stint_avg_pace"] = (
     laps.sort_values(["driver_number", "stint_number", "lap_number"])
     .groupby(["driver_number", "stint_number"])["lap_duration"]
     .transform(lambda s: s.shift(1).expanding().mean())
 )
-log(f"  → stint_avg_pace NaN (first lap of a stint): {laps['stint_avg_pace'].isna().sum()}")
+first_laps = laps["stint_avg_pace"].isna()
+laps["stint_avg_pace"] = laps["stint_avg_pace"].fillna(laps["lap_duration"])
+log(f"  → stint_avg_pace on a stint's first lap set to its own lap time: {first_laps.sum()} laps")
 
 # fuel_corrected_pace (seconds; lap_duration is unscaled, k is s/lap): the fuel effect is
 # removed. Practice fuel loads aren't recorded, so the laps left in the stint, counting lap t,
