@@ -4,11 +4,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import warnings
+from scipy.stats import ttest_1samp, wilcoxon, friedmanchisquare, t as t_dist
 
 from feature_config import MODEL_FEATURE_COLUMNS, STINT_FILL_COLUMNS, SECTOR_COLUMNS
-from feature_config import SESSION_COLUMNS, STINT_GROUP_COLUMNS
-from feature_config import FUEL_EFFECT_K, multi_lap_rows
-from env_config import env_str, env_float
+from feature_config import SESSION_COLUMNS, STINT_GROUP_COLUMNS, FALL_OFF_ANCHOR_AGE
+from feature_config import FUEL_EFFECT_K, multi_lap_rows, fit_stint_levels, linear_fall_off, fit_compound_gap
+from env_config import env_str, env_int, env_float
 
 warnings.filterwarnings("ignore")
 
@@ -52,6 +53,9 @@ def save_plot(name):
 # ============================================================
 DATASET_PATH = os.path.join(env_str("DATA_DIR"), env_str("PROCESSED_DIR"), env_str("ENGINEERED_FILE"))
 EDA_COLLINEAR_THRESHOLD = env_float("EDA_COLLINEAR_THRESHOLD")
+EDA_BOOTSTRAP_RESAMPLES = env_int("EDA_BOOTSTRAP_RESAMPLES")
+SIGNIFICANCE_LEVEL = env_float("SIGNIFICANCE_LEVEL")
+RANDOM_STATE = env_int("RANDOM_STATE")
 
 COMPOUNDS = ["SOFT", "MEDIUM", "HARD"]
 COMPOUND_COLUMNS = [f"compound_{c}" for c in COMPOUNDS]
@@ -239,7 +243,7 @@ save_plot("pace_vs_tyre_age")
 slope_df = pd.DataFrame(slope_rows)
 save_csv(slope_df, "degradation_slopes")
 
-log("Descriptive linear slope of within-stint fcp on tyre age (no inference, see #26):")
+log("Descriptive linear slope of within-stint fcp on tyre age (tested in section 6, #26):")
 for _, r in slope_df.iterrows():
     log(
         f"  {r['compound']:<6}: {r['demeaned_slope_s_per_lap']:+.4f} s/lap over {r['laps_in_multi_lap_stints']} laps "
@@ -369,6 +373,264 @@ ax.set_xlabel("Clean laps in stint")
 ax.set_ylabel("Stints")
 ax.legend()
 save_plot("stint_lengths")
+
+
+# ============================================================
+# 6. STATISTICAL INFERENCE (#26)
+# ============================================================
+log("\n=== 6. Statistical inference: degradation, compound pace, session pace ===")
+
+# Laps within a stint aren't independent (#18), so every test below runs on stints or on
+# driver-session means, or resamples whole stints; never on single laps
+CI_LEVEL = 1 - SIGNIFICANCE_LEVEL
+rng = np.random.default_rng(RANDOM_STATE)
+log(f"alpha = {SIGNIFICANCE_LEVEL}, {CI_LEVEL:.0%} intervals, {EDA_BOOTSTRAP_RESAMPLES} bootstrap resamples (seed {RANDOM_STATE})")
+
+
+def fmt_p(p, floor=0.0001):
+    if p < floor:
+        return f"< {floor:.4f}"
+    return f"{p:.4f}"
+
+
+def holm(pvals):
+    """Holm-adjusted p-values (family-wise error over the tests that ran; NaN stays NaN)."""
+    pvals = np.asarray(pvals, dtype=float)
+    adj = np.full_like(pvals, np.nan)
+    ran = np.flatnonzero(~np.isnan(pvals))
+    running = 0.0
+    for rank, i in enumerate(ran[np.argsort(pvals[ran])]):
+        running = max(running, (len(ran) - rank) * pvals[i])
+        adj[i] = min(running, 1.0)
+    return adj
+
+
+def paired_tests(diff):
+    """Mean difference with a t interval, a one-sample t-test and a Wilcoxon signed-rank test against 0."""
+    diff = np.asarray(diff, dtype=float)
+    out = {"pairs": len(diff), "mean_diff_s": np.nan, "median_diff_s": np.nan, "ci_low_s": np.nan,
+           "ci_high_s": np.nan, "t_p": np.nan, "wilcoxon_p": np.nan}
+    if len(diff) < 2:
+        return out
+    mean, se = diff.mean(), diff.std(ddof=1) / np.sqrt(len(diff))
+    half = t_dist.ppf(1 - SIGNIFICANCE_LEVEL / 2, len(diff) - 1) * se
+    out.update(mean_diff_s=mean, median_diff_s=np.median(diff), ci_low_s=mean - half, ci_high_s=mean + half,
+               t_p=ttest_1samp(diff, 0).pvalue, wilcoxon_p=wilcoxon(diff).pvalue)
+    return out
+
+
+def verdict(p):
+    return "significant" if p < SIGNIFICANCE_LEVEL else "not significant"
+
+
+# --- 6a. Degradation: is each compound's within-stint slope different from 0? ---
+log("\n6a. Degradation: stage-1 slope per compound (train_model.py's fit_stint_levels), stint cluster bootstrap")
+
+multi = multi_lap_rows(df)
+_, point_slopes = fit_stint_levels(multi)
+
+# With one level per stint, stage 1's slope for a compound is the pooled within-stint slope:
+# sum of the stints' Sxy over sum of their Sxx (age and pace centred on the stint's means). Each
+# compound's slope depends only on its own stints, so the bootstrap resamples stints within each
+# compound (keeping its stint count) and a stint drawn twice counts twice, with its own level
+grp = multi.groupby(STINT_GROUP_COLUMNS)
+age_c = multi["tyre_age"] - grp["tyre_age"].transform("mean")
+fcp_c = multi["fuel_corrected_pace"] - grp["fuel_corrected_pace"].transform("mean")
+stint_moments = pd.DataFrame({"sxy": age_c * fcp_c, "sxx": age_c ** 2}).groupby(
+    [multi[c] for c in STINT_GROUP_COLUMNS]).sum()
+stint_moments["compound"] = grp["compound"].first()
+stints_by_compound = {c: stint_moments.loc[stint_moments["compound"] == c, ["sxy", "sxx"]].to_numpy() for c in COMPOUNDS}
+for c in COMPOUNDS:
+    pooled = stints_by_compound[c][:, 0].sum() / stints_by_compound[c][:, 1].sum()
+    assert np.isclose(pooled, point_slopes[c]), f"{c}: pooled within-stint slope {pooled} != stage 1 {point_slopes[c]}"
+
+boot = np.empty((EDA_BOOTSTRAP_RESAMPLES, len(COMPOUNDS)))
+for j, c in enumerate(COMPOUNDS):
+    m = stints_by_compound[c]
+    drawn = rng.integers(0, len(m), size=(EDA_BOOTSTRAP_RESAMPLES, len(m)))
+    boot[:, j] = m[drawn, 0].sum(axis=1) / m[drawn, 1].sum(axis=1)
+boot = pd.DataFrame(boot, columns=COMPOUNDS)
+p_floor = 1 / EDA_BOOTSTRAP_RESAMPLES
+
+
+def boot_p(samples):
+    """Two-sided percentile-bootstrap p-value for 0."""
+    return min(1.0, 2 * min((samples <= 0).mean(), (samples >= 0).mean()))
+
+
+# One OLS slope per stint, as a check that doesn't depend on the pooled fit
+stint_slope_df = multi.groupby(STINT_GROUP_COLUMNS).apply(
+    lambda g: pd.Series({
+        "session": g["session"].iloc[0],
+        "compound": g["compound"].iloc[0],
+        "laps": len(g),
+        "tyre_age_min": g["tyre_age"].min(),
+        "tyre_age_max": g["tyre_age"].max(),
+        "slope_s_per_lap": np.polyfit(g["tyre_age"], g["fuel_corrected_pace"], 1)[0]
+    })
+).reset_index()
+save_csv(stint_slope_df, "inference_stint_slopes")
+
+lo_q, hi_q = SIGNIFICANCE_LEVEL / 2, 1 - SIGNIFICANCE_LEVEL / 2
+deg_rows = []
+for c in COMPOUNDS:
+    per_stint = stint_slope_df.loc[stint_slope_df["compound"] == c, "slope_s_per_lap"].to_numpy(dtype=float)
+    deg_rows.append({
+        "compound": c,
+        "multi_lap_stints": len(stints_by_compound[c]),
+        "laps": int((multi["compound"] == c).sum()),
+        "slope_s_per_lap": point_slopes[c],
+        "ci_low": boot[c].quantile(lo_q),
+        "ci_high": boot[c].quantile(hi_q),
+        "bootstrap_p": boot_p(boot[c]),
+        "stint_slope_mean": per_stint.mean(),
+        "stint_slope_median": np.median(per_stint),
+        "stint_slopes_positive": int((per_stint > 0).sum()),
+        "stint_t_p": ttest_1samp(per_stint, 0).pvalue,
+        "stint_wilcoxon_p": wilcoxon(per_stint).pvalue
+    })
+deg_df = pd.DataFrame(deg_rows)
+save_csv(deg_df, "inference_degradation")
+
+for _, r in deg_df.iterrows():
+    log(
+        f"  {r['compound']:<6}: {r['slope_s_per_lap']:+.3f} s/lap, {CI_LEVEL:.0%} CI [{r['ci_low']:+.3f}, {r['ci_high']:+.3f}], "
+        f"bootstrap p {fmt_p(r['bootstrap_p'], p_floor)} ({verdict(r['bootstrap_p'])}); "
+        f"per-stint slopes: {r['stint_slopes_positive']}/{r['multi_lap_stints']} positive, median {r['stint_slope_median']:+.3f}, "
+        f"t p {fmt_p(r['stint_t_p'])}, Wilcoxon p {fmt_p(r['stint_wilcoxon_p'])}"
+    )
+
+diff_rows = []
+for a, b in [("SOFT", "MEDIUM"), ("SOFT", "HARD"), ("HARD", "MEDIUM")]:
+    d = boot[a] - boot[b]
+    diff_rows.append({
+        "pair": f"{a} - {b}",
+        "slope_diff_s_per_lap": point_slopes[a] - point_slopes[b],
+        "ci_low": d.quantile(lo_q),
+        "ci_high": d.quantile(hi_q),
+        "bootstrap_p": boot_p(d)
+    })
+slope_diff_df = pd.DataFrame(diff_rows)
+slope_diff_df["holm_p"] = holm(slope_diff_df["bootstrap_p"])
+save_csv(slope_diff_df, "inference_slope_differences")
+
+log("  Slope differences between compounds (Holm over the 3 pairs):")
+for _, r in slope_diff_df.iterrows():
+    log(
+        f"    {r['pair']:<13}: {r['slope_diff_s_per_lap']:+.3f} s/lap, CI [{r['ci_low']:+.3f}, {r['ci_high']:+.3f}], "
+        f"p {fmt_p(r['bootstrap_p'], p_floor)}, Holm p {fmt_p(r['holm_p'], p_floor)} ({verdict(r['holm_p'])})"
+    )
+
+
+# --- New-set pace of every stint (6b and 6c) ---
+# Stage 1 on all rows: a single-lap stint's level is its own lap with the fall-off removed, so every
+# clean lap counts. New-set pace = level + the compound's slope at FALL_OFF_ANCHOR_AGE
+all_levels, all_slopes = fit_stint_levels(df)
+stint_df = df.groupby(STINT_GROUP_COLUMNS).agg(
+    session_key=("session_key", "first"),
+    session=("session", "first"),
+    compound=("compound", "first"),
+    run_laps=("run_laps", "first"),
+    laps=("lap_number", "size")
+).reset_index()
+stint_df["new_set_pace"] = (
+    all_levels.reindex(pd.MultiIndex.from_frame(stint_df[STINT_GROUP_COLUMNS])).to_numpy()
+    + stint_df["compound"].map(all_slopes) * FALL_OFF_ANCHOR_AGE
+)
+
+
+def paired_table(wide, pairs, label):
+    rows = []
+    for a, b in pairs:
+        diff = (wide[a] - wide[b]).dropna()
+        rows.append({"pair": f"{a} - {b}", **paired_tests(diff)})
+    out = pd.DataFrame(rows)
+    out["t_holm_p"] = holm(out["t_p"])
+    out["wilcoxon_holm_p"] = holm(out["wilcoxon_p"])
+    for _, r in out.iterrows():
+        if r["pairs"] < 2:
+            log(f"  {r['pair']:<13}: {r['pairs']:>2} {label}, too few pairs to test (left out of the Holm family)")
+            continue
+        log(
+            f"  {r['pair']:<13}: {r['pairs']:>2} {label}, mean {r['mean_diff_s']:+.3f} s, CI [{r['ci_low_s']:+.3f}, "
+            f"{r['ci_high_s']:+.3f}], median {r['median_diff_s']:+.3f} s; t p {fmt_p(r['t_p'])} (Holm {fmt_p(r['t_holm_p'])}), "
+            f"Wilcoxon p {fmt_p(r['wilcoxon_p'])} (Holm {fmt_p(r['wilcoxon_holm_p'])}, {verdict(r['wilcoxon_holm_p'])})"
+        )
+    return out
+
+
+# --- 6b. Compound pace: within the same driver and session ---
+log("\n6b. Compound pace on a new set, paired within driver-session (the session and driver can't confound it)")
+
+compound_wide = stint_df.groupby(["driver_number", "session_key", "compound"])["new_set_pace"].mean().unstack("compound")
+n_two = int((compound_wide.notna().sum(axis=1) >= 2).sum())
+log(f"  {len(compound_wide)} driver-sessions, {n_two} ran two or more compounds")
+compound_pace_df = paired_table(compound_wide, [("MEDIUM", "SOFT"), ("HARD", "SOFT"), ("HARD", "MEDIUM")],
+                                "driver-sessions")
+save_csv(compound_pace_df, "inference_compound_pace")
+
+run_mix = ", ".join(f"{c} {stint_df.loc[stint_df['compound'] == c, 'run_laps'].median():.0f}" for c in COMPOUNDS)
+log(f"  Median run length (run_laps) per compound: {run_mix}. Run type still differs between compounds "
+    "(short quali sims vs long runs), so this is the same caveat as stage 3's compound gap (#27)")
+stage3_gap, _, _ = fit_compound_gap(df, linear_fall_off(df, all_slopes))
+log(f"  For comparison, stage 3 (fit_compound_gap with the linear fall-off): "
+    f"MEDIUM {stage3_gap['MEDIUM']:+.3f} s, HARD {stage3_gap['HARD']:+.3f} s to SOFT")
+
+
+# --- 6c. Session pace (track evolution): same driver, same compound ---
+log("\n6c. Session pace on a new set, paired within driver and compound (a change in compound mix can't pose as evolution)")
+
+session_wide = stint_df.groupby(["driver_number", "compound", "session"])["new_set_pace"].mean().unstack("session")
+session_pace_df = paired_table(session_wide, [("FP2", "FP1"), ("FP3", "FP2"), ("FP3", "FP1")], "driver-compounds")
+
+complete = session_wide[SESSIONS].dropna()
+if len(complete) >= 3:
+    friedman_p = friedmanchisquare(*[complete[s] for s in SESSIONS]).pvalue
+    log(f"  Friedman over the {len(complete)} driver-compounds with all three sessions: p {fmt_p(friedman_p)} ({verdict(friedman_p)})")
+else:
+    friedman_p = np.nan
+    log(f"  Friedman skipped: only {len(complete)} driver-compounds ran all three sessions (needs 3)")
+session_pace_df["friedman_blocks"] = len(complete)
+session_pace_df["friedman_p"] = friedman_p
+save_csv(session_pace_df, "inference_session_pace")
+
+
+# --- Plot ---
+fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+
+ax = axes[0]
+for i, r in deg_df.iterrows():
+    color = COMPOUND_COLORS[r["compound"]]
+    ax.errorbar(i, r["slope_s_per_lap"], yerr=[[r["slope_s_per_lap"] - r["ci_low"]], [r["ci_high"] - r["slope_s_per_lap"]]],
+                fmt="o", markersize=8, color=color, capsize=4, linewidth=2)
+ax.axhline(0, color="black", linewidth=0.8)
+ax.set_xticks(range(len(deg_df)))
+ax.set_xticklabels([f"{r['compound']}\n({r['multi_lap_stints']} stints)" for _, r in deg_df.iterrows()])
+ax.set_ylabel("Within-stint slope (s per lap of tyre age)")
+ax.set_title(f"Degradation: stage-1 slope, {CI_LEVEL:.0%} stint bootstrap CI")
+
+for ax, wide, pairs, table, title in [
+    (axes[1], compound_wide, [("MEDIUM", "SOFT"), ("HARD", "SOFT"), ("HARD", "MEDIUM")], compound_pace_df,
+     "Compound pace on a new set (same driver-session)"),
+    (axes[2], session_wide, [("FP2", "FP1"), ("FP3", "FP2"), ("FP3", "FP1")], session_pace_df,
+     "Session pace on a new set (same driver and compound)")
+]:
+    for i, ((a, b), (_, r)) in enumerate(zip(pairs, table.iterrows())):
+        diff = (wide[a] - wide[b]).dropna()
+        jitter = rng.uniform(-0.12, 0.12, len(diff))
+        ax.scatter(i + jitter, diff, s=14, alpha=0.5, color="tab:blue")
+        if r["pairs"] >= 2:
+            ax.errorbar(i + 0.3, r["mean_diff_s"], yerr=[[r["mean_diff_s"] - r["ci_low_s"]], [r["ci_high_s"] - r["mean_diff_s"]]],
+                        fmt="o", markersize=8, color="black", capsize=4, linewidth=2)
+    ax.axhline(0, color="black", linewidth=0.8)
+    ax.set_xticks(range(len(pairs)))
+    ax.set_xticklabels([f"{a} - {b}\n(n={int(r['pairs'])})" for (a, b), (_, r) in zip(pairs, table.iterrows())])
+    ax.set_ylabel("Paired difference in new-set pace (s)")
+    ax.set_title(title)
+axes[2].scatter([], [], s=14, color="tab:blue", label="one pair")
+axes[2].errorbar([], [], yerr=[], fmt="o", color="black", label=f"mean, {CI_LEVEL:.0%} t CI")
+axes[2].legend(loc="best")
+save_plot("inference")
 
 
 # ============================================================

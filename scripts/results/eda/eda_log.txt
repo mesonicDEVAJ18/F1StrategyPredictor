@@ -29,7 +29,7 @@ Constant columns (no information for a model): ['segments_sector_1', 'segments_s
   FP3 SOFT  :  56 laps, fcp median 94.060 s, IQR 2.316 s, range 91.541-105.983 s
 
 === 3. Fuel-corrected pace against tyre age (the fall-off the model learns) ===
-Descriptive linear slope of within-stint fcp on tyre age (no inference, see #26):
+Descriptive linear slope of within-stint fcp on tyre age (tested in section 6, #26):
   SOFT  : +0.3655 s/lap over 182 laps in 35 multi-lap stints (122 stints in all, tyre age 2-19)
   MEDIUM: +0.2269 s/lap over 168 laps in 38 multi-lap stints (69 stints in all, tyre age 2-19)
   HARD  : +0.3059 s/lap over 86 laps in 23 multi-lap stints (42 stints in all, tyre age 2-18)
@@ -57,6 +57,32 @@ Correlations with within-stint pace (Pearson / Spearman):
   multi_lap_stints: 436 rows, 96 stints; by session FP1 153, FP2 259, FP3 24; by compound SOFT 182, MEDIUM 168, HARD 86
 Clean laps per stint: median 1, max 14; 137 of 233 stints have a single clean lap (no fall-off)
 
+=== 6. Statistical inference: degradation, compound pace, session pace ===
+alpha = 0.05, 95% intervals, 2000 bootstrap resamples (seed 42)
+
+6a. Degradation: stage-1 slope per compound (train_model.py's fit_stint_levels), stint cluster bootstrap
+  SOFT  : +0.365 s/lap, 95% CI [+0.299, +0.505], bootstrap p < 0.0005 (significant); per-stint slopes: 35/35 positive, median +0.490, t p 0.0010, Wilcoxon p < 0.0001
+  MEDIUM: +0.227 s/lap, 95% CI [+0.133, +0.336], bootstrap p < 0.0005 (significant); per-stint slopes: 27/38 positive, median +0.176, t p 0.0202, Wilcoxon p 0.0003
+  HARD  : +0.306 s/lap, 95% CI [+0.039, +0.539], bootstrap p 0.0340 (significant); per-stint slopes: 15/23 positive, median +0.140, t p 0.1897, Wilcoxon p 0.1793
+  Slope differences between compounds (Holm over the 3 pairs):
+    SOFT - MEDIUM: +0.139 s/lap, CI [+0.010, +0.298], p 0.0280, Holm p 0.0840 (not significant)
+    SOFT - HARD  : +0.060 s/lap, CI [-0.180, +0.373], p 0.6050, Holm p 1.0000 (not significant)
+    HARD - MEDIUM: +0.079 s/lap, CI [-0.210, +0.330], p 0.6200, Holm p 1.0000 (not significant)
+
+6b. Compound pace on a new set, paired within driver-session (the session and driver can't confound it)
+  60 driver-sessions, 44 ran two or more compounds
+  MEDIUM - SOFT: 27 driver-sessions, mean +1.473 s, CI [+0.318, +2.628], median +1.086 s; t p 0.0144 (Holm 0.0144), Wilcoxon p 0.0030 (Holm 0.0034, significant)
+  HARD - SOFT  : 16 driver-sessions, mean +1.718 s, CI [+0.855, +2.581], median +1.894 s; t p 0.0007 (Holm 0.0014), Wilcoxon p 0.0017 (Holm 0.0034, significant)
+  HARD - MEDIUM:  1 driver-sessions, too few pairs to test (left out of the Holm family)
+  Median run length (run_laps) per compound: SOFT 4, MEDIUM 6, HARD 6. Run type still differs between compounds (short quali sims vs long runs), so this is the same caveat as stage 3's compound gap (#27)
+  For comparison, stage 3 (fit_compound_gap with the linear fall-off): MEDIUM +0.877 s, HARD +0.527 s to SOFT
+
+6c. Session pace on a new set, paired within driver and compound (a change in compound mix can't pose as evolution)
+  FP2 - FP1    : 15 driver-compounds, mean -2.357 s, CI [-3.423, -1.291], median -2.327 s; t p 0.0003 (Holm 0.0006), Wilcoxon p 0.0006 (Holm 0.0018, significant)
+  FP3 - FP2    : 21 driver-compounds, mean +0.015 s, CI [-0.698, +0.728], median +0.351 s; t p 0.9654 (Holm 0.9654), Wilcoxon p 0.7079 (Holm 0.7079, not significant)
+  FP3 - FP1    : 13 driver-compounds, mean -1.707 s, CI [-2.401, -1.014], median -2.278 s; t p 0.0002 (Holm 0.0005), Wilcoxon p 0.0012 (Holm 0.0024, significant)
+  Friedman over the 11 driver-compounds with all three sessions: p 0.0039 (significant)
+
 FILES GENERATED:
   - eda_summary_stats.csv
   - eda_missing_values.csv
@@ -71,6 +97,12 @@ FILES GENERATED:
   - eda_target_correlations.csv
   - eda_row_coverage.csv
   - eda_stint_lengths.png
+  - eda_inference_stint_slopes.csv
+  - eda_inference_degradation.csv
+  - eda_inference_slope_differences.csv
+  - eda_inference_compound_pace.csv
+  - eda_inference_session_pace.csv
+  - eda_inference.png
 
 --- EDA COMPLETE ---
 

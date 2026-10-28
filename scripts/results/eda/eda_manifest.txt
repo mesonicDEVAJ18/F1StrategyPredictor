@@ -11,3 +11,9 @@ eda_collinear_pairs.csv
 eda_target_correlations.csv
 eda_row_coverage.csv
 eda_stint_lengths.png
+eda_inference_stint_slopes.csv
+eda_inference_degradation.csv
+eda_inference_slope_differences.csv
+eda_inference_compound_pace.csv
+eda_inference_session_pace.csv
+eda_inference.png

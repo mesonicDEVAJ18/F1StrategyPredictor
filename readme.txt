@@ -458,8 +458,25 @@ within a stint (their effect lives in the stint's level).
 lap and carry no fall-off. The other 96 stints hold the 436 laps the model learns from (FP1 153, FP2 259, FP3 24; SOFT 182, MEDIUM 168,
 HARD 86), with tyre age 2-19 on every compound. (The next-lap target before #31 kept 273 rows in 56 stints.)
 
-[TODO #26, P3, see diagnostic.md] Not implemented yet: no test on the practice laps of compound pace differences, degradation slopes or
-session pace.
+6. Statistical inference (#26; eda_inference_*.csv, eda_inference.png). Laps within a stint aren't independent, so every test runs on
+stints or on driver-session means (or resamples whole stints), never on single laps. alpha = SIGNIFICANCE_LEVEL (0.05, .env), 95% intervals,
+and a Holm correction within each family of three comparisons.
+- Degradation: stage 1's slope per compound (fit_stint_levels), with a stint cluster bootstrap (EDA_BOOTSTRAP_RESAMPLES = 2000 resamples of
+whole stints within each compound, seeded with RANDOM_STATE). SOFT +0.365 s/lap [+0.299, +0.505], MEDIUM +0.227 [+0.133, +0.336], HARD +0.306
+[+0.039, +0.539]: all three differ from 0 (bootstrap p < 0.0005, < 0.0005, 0.034). As a check, one OLS slope per stint: 35 of 35 SOFT stints
+rise (Wilcoxon p < 0.0001), 27 of 38 MEDIUM (p 0.0003), but only 15 of 23 HARD (p 0.18), so HARD's fall-off is the least certain. No two
+compounds' slopes differ after Holm (SOFT - MEDIUM +0.14 s/lap, p 0.028, Holm p 0.084), so HARD above MEDIUM is within the noise.
+- Compound pace: each stint's pace on a new set (its stage-1 level + its compound's slope at tyre age 1, fitted on all 573 laps, so
+single-lap stints count) is averaged per driver, session and compound, and compounds are compared within the same driver-session (paired
+t-test and Wilcoxon signed-rank), so neither the driver nor the session confounds it. MEDIUM is 1.47 s slower than SOFT [+0.32, +2.63] over 27
+driver-sessions (Wilcoxon Holm p 0.003), HARD 1.72 s slower [+0.86, +2.58] over 16 (Holm p 0.003). Only one driver-session ran both HARD and
+MEDIUM, so their order can't be tested. SOFT runs are shorter (median 4 laps, against 6 on MEDIUM and HARD), so short quali sims still
+widen the gap: the same confound as stage 3's compound gap (#27), which gives MEDIUM +0.88 s and HARD +0.53 s with the linear fall-off.
+- Session pace: the same new-set pace, compared between sessions for the same driver on the same compound, so a change in compound mix
+can't pose as track evolution. FP2 is 2.36 s faster than FP1 [-3.42, -1.29] (15 pairs, Wilcoxon Holm p 0.002) and FP3 1.71 s faster than
+FP1 [-2.40, -1.01] (13 pairs, Holm p 0.002); FP3 and FP2 don't differ (+0.02 s, 21 pairs, p 0.71). Friedman over the 11 driver-compounds
+that ran all three sessions: p 0.004. Track evolution can't be separated from the conditions (FP2 runs in the evening, FP1 and FP3 in the
+afternoon), fuel loads or engine modes; in the model the stint level absorbs all of them.
 
 ML MODELLING TO COMPUTE DEGRADATION RATE (train_model.py)
 1. Remove dependant variables to avoid leakage
@@ -673,7 +690,7 @@ Known bugs and their effect on the results are documented in diagnostic.md.
 Open TODOs by priority (IDs as in diagnostic.md; each is tagged [TODO #N, ...] where it applies above):
 P1, results are invalid until fixed:  none open
 P2, method or validation misleading:  #27 model choice, compound gap, experiments and reasoning
-P3, completeness and cleanup:         #26 no statistical inference, #15 results documentation
+P3, completeness and cleanup:         #15 results documentation
 [TODO #15, P3, see diagnostic.md] Results are not written up yet. Do this once #27 is settled, since the numbers will change.
 
 THANK YOU

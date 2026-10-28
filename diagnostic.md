@@ -91,19 +91,6 @@ Items keep a stable ID (`#N`), which is also the item's GitHub issue number (ope
     - [ ] **Limitations:** a short note on which results depend on items still open above.
     - [ ] Decide where this lives (a results section in `readme.txt` / `README.md`, or a separate `RESULTS.md`) and link it from both readmes.
 
-- [ ] **#26 No statistical inference on the practice data**
-  - **Where:** no script. The only statistical test is in `validate_strategy.py` (#5), and it tests the model's errors against a persistence baseline, not effects in the data.
-  - **Problem:** nothing tests whether the effects the strategy depends on are real in the data: differences in pace between compounds, tyre degradation, and pace changes between sessions.
-  - **Fix:** add tests on the real laps, in the #25 stage or next to it:
-    - [ ] **Compound pace:** do SOFT, MEDIUM and HARD differ in `fuel_corrected_pace`? Use pairwise Welch t-tests or one-way ANOVA / Kruskal–Wallis, within session so the session's pace level doesn't confound it.
-    - [ ] **Degradation:** is the slope of `fuel_corrected_pace` against `tyre_age` per compound different from 0? Report the slope with a confidence interval.
-    - [ ] **Session pace:** do FP1, FP2 and FP3 differ (track evolution)?
-  - **Watch out:** laps within one stint aren't independent (the same issue as #18), so per-lap tests overstate significance. Test on stint-level values (e.g. per-stint slopes or means) or account for the grouping.
-  - `scipy` is already pinned. `statsmodels` isn't installed, so confirm before adding a dependency.
-  - **Since #31:** train_model.py's stage 1 (stint levels + one `tyre_age` slope per compound) is the within-stint degradation estimate this item asks to test: +0.362 / +0.210 / +0.312 s/lap on the training stints, +0.365 / +0.227 / +0.306 on all rows (= eda.py's slopes, now within-stint). A CI on those slopes, with stint-level resampling, would close the degradation part. The compound gap (stage 3) is the compound-pace part, and comparing stints confounds it (see #31).
-  - **Depends on:** #25 (same data, likely the same stage).
-  - **readme.txt:** Exploratory Data Analysis and Statistical Inference.
-
 ---
 
 ## Things to explore
@@ -714,9 +701,34 @@ None at the moment.
     - **`.env`:** `EDA_COLLINEAR_THRESHOLD=0.8`, the |Pearson r| at which two inputs are flagged as collinear.
     - **Findings, Bahrain 2025:**
       - **Missing / constant:** `stint_avg_pace` is NaN on 223 rows (47.8%, every stint's first lap), the car-data aggregates on 19 (4.1%). `segments_sector_1`, `segments_sector_2` and `rainfall` are constant, so 3 of the 36 inputs carry nothing.
-      - **Degradation:** with each stint's mean removed, a linear fit of `fuel_corrected_pace` on `tyre_age` gives +0.168 s/lap on SOFT, +0.041 on MEDIUM and +0.053 on HARD (35 / 31 / 21 multi-lap stints). Descriptive only; whether these differ from 0 is #26.
+      - **Degradation:** with each stint's mean removed, a linear fit of `fuel_corrected_pace` on `tyre_age` gives +0.168 s/lap on SOFT, +0.041 on MEDIUM and +0.053 on HARD (35 / 31 / 21 multi-lap stints). Descriptive only; #26 now tests the (post-#31) slopes.
       - **Correlations (153 target rows):** 18 input pairs at |r| ≥ 0.8 in 4 groups: `session_FP1`/`session_FP2` with air and track temperature, humidity and pressure; `duration_sector_2` with `mean_speed`; `st_speed` with `max_speed`; `mean_throttle` with `full_throttle_pct`. The sector times and speed traps are not collinear among themselves at 0.8. The top target correlations are `full_throttle_pct` (+0.44), `i2_speed` (+0.44) and `mean_throttle` (+0.36); `tyre_age` is +0.02 and the compound one-hots within ±0.13, as between-stint pace levels swamp the within-stint trend.
       - **Coverage:** 467 laps in 223 stints, 136 of them with a single clean lap; 153 target rows in 50 stints (FP1 45 / FP2 101 / FP3 7; SOFT 64 / MEDIUM 63 / HARD 26).
+
+- [x] **#26 No statistical inference on the practice data**
+  - **Where:** no script. The only statistical test is in `validate_strategy.py` (#5), and it tests the model's errors against a persistence baseline, not effects in the data.
+  - **Problem:** nothing tests whether the effects the strategy depends on are real in the data: differences in pace between compounds, tyre degradation, and pace changes between sessions.
+  - **Fix:** add tests on the real laps, in the #25 stage or next to it:
+    - [x] **Compound pace:** do SOFT, MEDIUM and HARD differ in `fuel_corrected_pace`? Use pairwise Welch t-tests or one-way ANOVA / Kruskal–Wallis, within session so the session's pace level doesn't confound it.
+    - [x] **Degradation:** is the slope of `fuel_corrected_pace` against `tyre_age` per compound different from 0? Report the slope with a confidence interval.
+    - [x] **Session pace:** do FP1, FP2 and FP3 differ (track evolution)?
+  - **Watch out:** laps within one stint aren't independent (the same issue as #18), so per-lap tests overstate significance. Test on stint-level values (e.g. per-stint slopes or means) or account for the grouping.
+  - `scipy` is already pinned. `statsmodels` isn't installed, so confirm before adding a dependency.
+  - **Since #31:** train_model.py's stage 1 (stint levels + one `tyre_age` slope per compound) is the within-stint degradation estimate this item asks to test: +0.362 / +0.210 / +0.312 s/lap on the training stints, +0.365 / +0.227 / +0.306 on all rows (= eda.py's slopes, now within-stint). A CI on those slopes, with stint-level resampling, would close the degradation part. The compound gap (stage 3) is the compound-pace part, and comparing stints confounds it (see #31).
+  - **Depends on:** #25 (same data, likely the same stage).
+  - **readme.txt:** Exploratory Data Analysis and Statistical Inference.
+  - **Fixed:** a new section 6 in `scripts/eda.py`, "Statistical inference". `statsmodels` wasn't needed: scipy only. Every test is on stints, or on driver-session means (or resamples whole stints), never single laps. alpha is `SIGNIFICANCE_LEVEL` (0.05) with 95% intervals, and each family of three comparisons is Holm-corrected. Outputs: `eda_inference_degradation.csv`, `_slope_differences.csv`, `_stint_slopes.csv`, `_compound_pace.csv`, `_session_pace.csv` and `eda_inference.png`.
+    - **`.env`:** `EDA_BOOTSTRAP_RESAMPLES=2000`. eda.py also reads `RANDOM_STATE` and `SIGNIFICANCE_LEVEL` (comments updated).
+    - **Degradation:** stage 1's slopes (`fit_stint_levels` on the multi-lap stints), with a stint cluster bootstrap, resampling within each compound. Each resample's slope is the pooled within-stint ΣSxy / ΣSxx, which equals stage 1 with one level per stint (asserted on the point estimate); this runs in milliseconds instead of refitting 2000 times. The per-stint OLS slopes get a one-sample t-test and a Wilcoxon test as a check.
+      - SOFT +0.365 s/lap [+0.299, +0.505], MEDIUM +0.227 [+0.133, +0.336], HARD +0.306 [+0.039, +0.539]; bootstrap p < 0.0005 / < 0.0005 / 0.034.
+      - Per stint: 35/35 SOFT stints rise (Wilcoxon p < 0.0001), 27/38 MEDIUM (p 0.0003), 15/23 HARD (p 0.18). HARD's fall-off is the least certain.
+      - Slope differences: none significant after Holm (SOFT − MEDIUM +0.14 s/lap, p 0.028, Holm 0.084; the others p ≈ 0.6). HARD above MEDIUM is within the noise.
+    - **Compound pace:** each stint's new-set pace (stage-1 level + slope at `FALL_OFF_ANCHOR_AGE`, fitted on all 573 laps) is averaged per driver, session and compound, and compounds are paired within the driver-session (44 of 60 ran two compounds).
+      - MEDIUM − SOFT +1.47 s [+0.32, +2.63] (27 pairs, Wilcoxon Holm p 0.003); HARD − SOFT +1.72 s [+0.86, +2.58] (16 pairs, Holm p 0.003).
+      - HARD − MEDIUM: only 1 driver-session ran both, so it can't be tested, and the data can't order MEDIUM and HARD.
+      - The run-type confound remains (median `run_laps` SOFT 4, MEDIUM / HARD 6), as in #27's compound-gap item. Stage 3 with the linear fall-off gives MEDIUM +0.88 / HARD +0.53 s.
+    - **Session pace:** new-set pace paired within driver and compound. FP2 − FP1 −2.36 s [−3.42, −1.29] (15 pairs, Holm p 0.002); FP3 − FP1 −1.71 s [−2.40, −1.01] (13, Holm p 0.002); FP3 − FP2 +0.02 s (21, p 0.71). Friedman on the 11 driver-compounds with all three sessions: p 0.004. Track evolution can't be separated from the conditions (FP2 runs in the evening), fuel or engine modes.
+    - **Checks:** eda.py exits 0 with output redirected (cp1252) in ~4 s. The point slopes equal `eda_degradation_slopes.csv` and stage 1. Two runs give byte-identical CSVs (seeded). Sections 1–5 and every other stage are unchanged.
 
 - [x] **#28 Redirected output crashes on non-ASCII log text**
   - **Where:** the `log()` helper in all 11 stage scripts.

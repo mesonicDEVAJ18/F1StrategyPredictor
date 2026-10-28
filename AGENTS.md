@@ -187,7 +187,9 @@ Scripts communicate through CSVs in `data/processed/`, not by importing each oth
   tyre age (raw, and the within-stint slope with each stint's mean pace and age removed, = train_model.py's stage 1),
   correlations of the candidate inputs with within-stint pace, with collinear groups (`EDA_COLLINEAR_THRESHOLD`), and
   row coverage of all laps and of the multi-lap stints (the fall-off rows). `lap_duration` is
-  rebuilt from `fuel_corrected_pace` with `FUEL_EFFECT_K`. Descriptive only; tests on the data are #26.
+  rebuilt from `fuel_corrected_pace` with `FUEL_EFFECT_K`. Section 6 (#26) tests the data on stints or driver-session
+  means, never single laps: a stint cluster bootstrap of stage 1's slopes (`EDA_BOOTSTRAP_RESAMPLES`), and compound and
+  session pace on a new set, paired within driver-session / driver-compound (t, Wilcoxon, Holm; `SIGNIFICANCE_LEVEL`).
 - `train_model.py` reads the engineered dataset, splits it 80/20 by stint, and on the training side fits stage 1
   (`fit_stint_levels()`: stint levels + a linear slope per compound, on the multi-lap stints), the one model in its
   MODEL block on `fcp − level` (no comparison: that is `explore/`'s job), and stage 3 (`fit_compound_gap()`: compound
