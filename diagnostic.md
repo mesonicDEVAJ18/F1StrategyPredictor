@@ -18,7 +18,13 @@ Items keep a stable ID (`#N`), which is also the item's GitHub issue number (ope
 ### P2: method or validation is misleading
 
 - [ ] **#27 The model choice rests on three untuned models and untested reasoning**
-  - **Where:** `scripts/train_model.py` (now fits only XGBoost, with one fixed set of hyperparameters from `.env`; the three-model comparison below was its old behaviour); `explore/explore_master.py` + `explore/explore_lib.py`, where the comparison now lives; the "Reasoning" paragraph in `readme.txt` ML Modelling step 3.
+  - **Where:**
+    - `scripts/train_model.py`: now fits only XGBoost, with one fixed set of hyperparameters from `.env`. The three-model comparison below was its old behaviour.
+    - `scripts/feature_config.py`: `fit_compound_gap()` nets out the model's fall-off; `MODEL_FEATURE_COLUMNS`.
+    - `scripts/validate_strategy.py` and `scripts/strategy_simulator.py`: they read the bundle. The simulator enumerates 1- and 2-stop strategies by brute force.
+    - `explore/tune_iqr.py` / `explore/tune_push.py`: their CV sweeps are scored with XGBoost.
+    - `explore/explore_master.py` + `explore/explore_lib.py`: where the comparison now lives.
+    - The "Reasoning" paragraph in `readme.txt` ML Modelling step 3.
   - **Problem:**
     - Only three models are compared, each with one configuration, on one held-out split (10 stints, 25 rows since #18; 31 rows before). XGBoost at max depth 7 with 36 inputs on 153 rows is likely to overfit, but no other setting has been tried.
     - XGBoost is saved regardless of the comparison. It is the best of the three on the held-out stints (MAE 2.37 / 1.32 / 1.12 s, R² −1.002 / 0.250 / 0.353 for LR/RF/XGB), but only XGBoost gets grouped CV, and with 10 test stints its lead over Random Forest is close to noise. Its rank has changed with the fixes: it was last before #4 (the history is under #13).
@@ -28,13 +34,135 @@ Items keep a stable ID (`#N`), which is also the item's GitHub issue number (ope
     - [x] **Grouped CV for the current three:** run the grouped CV by stint (#18) for Linear Regression, Random Forest and XGBoost, not just XGBoost. Then either keep XGBoost with metrics that support it, or save the best model. This is the comparison from #13; the items below widen it. Done in `explore/` (nested, 5 folds x 2 repeats, all candidates).
     - [x] **Baselines:** the next lap equals lap *t*'s fcp, and the next lap equals `stint_avg_pace`. Every model has to beat these to count. Since #5, `validate_strategy.py` scores the first (persistence) per fold and tests XGBoost against it per stint; the `stint_avg_pace` baseline and the other candidates are still to do. Done in `explore/`: persistence, `stint_avg_pace` and the training mean (the mean beats the other two).
     - [x] **More candidates:** regularised linear models (Ridge / Lasso), a simple per-compound linear degradation model, ExtraTrees and `HistGradientBoostingRegressor` from scikit-learn. LightGBM or others would be a new dependency, so confirm first. Done in `explore/`, plus SVR, k-nearest neighbours and an MLP (scikit-learn only).
-    - [ ] **Tuning:** a small hyperparameter search for each model (for XGBoost: shallower trees, `min_child_weight`, regularisation), scored with grouped CV by stint (#18). The tuned values go in `.env`. The search runs in `explore/` (nested grouped CV); the tuned values aren't in `.env` yet, since no model is chosen.
     - [x] **Fewer inputs:** try reduced feature sets (e.g. without the car-data aggregates, the 3 constant inputs or the collinear groups found by `eda.py`, see #25), since 36 inputs on 153 rows is a lot. Done in `explore/` (6 feature sets).
     - [x] **Rollout comparison:** roll each serious candidate out through the simulator's `rollout_stint()`. Compare stability (largest lap-to-lap step, drift), whether pace rises with tyre age, and whether compounds come out in a plausible order. One-step error alone doesn't show how a model behaves when rolled forward. Done in `explore/` (a by-name copy of `rollout_stint()`).
     - [x] **Report:** per-fold MAE / RMSE / R² with the spread for every candidate, not a single split. Done: `explore/results/explore_master/explore_master_cv_folds.csv` / `_summary.csv`.
-    - [ ] **Choose the fall-off model** (since #31): Ridge, the MLP or the per-compound line (see the run below), then copy it into train_model.py's MODEL block and `.env`. The current XGBoost (depth 7) beats neither baseline.
-    - [ ] **Compound gap** (from #31): stage 3's gap between compounds on a new set is implausible (MEDIUM slower than HARD on most candidates) and unstable (MEDIUM +0.15 to +2.05 s, HARD +0.34 to +2.12 s across the candidates; +0.78 to +2.04 / +0.46 to +1.98 s across validate_strategy.py's folds). It can only come from comparisons between stints, which the run type (short quali sims vs long runs) confounds even with `run_laps` in the fit. Options to test: restrict the fit to runs of similar length, weight by run length, or compare compounds only within a driver-session that ran both.
-    - [ ] **Update the reasoning** in `readme.txt` ML Modelling step 3 to match the results. Keep each claim only if the experiments back it, replace the asserted ones with the measured comparison, drop or source the "real-world pipelines" line, and update the results table and the "XGBoost is kept" sentence. If another model wins, save it instead (the bundle format and the simulator would need to accept it).
+    - **Remaining work, in steps (planned 2026-11-01): make the pipeline independent of the model, then plug the model in last.**
+      - **Goal:**
+        - Nothing up to the fall-off model depends on which model is chosen: lap cleaning and its tuned factors, the stage-1 stint levels, the compound gap and the race pace level.
+        - The model is plugged in last. It only predicts each compound's fall-off with tyre age.
+        - The simulator takes that fall-off and searches every legal strategy for the fastest.
+        - Data scope is unchanged: the selected weekend's FP1–FP3 only.
+      - **Where XGBoost leaks upstream today:**
+        - The compound gap is fitted on `fcp − fall_off(model)` (`fall_off_rows` in train_model.py, validate_strategy.py and explore).
+        - `IQR_UPPER_MULTIPLIER` was kept partly on tune_iqr.py's CV sweep, which is scored with XGBoost, as is tune_push.py's.
+        - The model is hard-coded in train_model.py's MODEL block, in the bundle name (`train_model_xgb_model.pkl`) and in the simulator's log line.
+        - validate_strategy.py refits the loaded model object in place.
+        - `MODEL_FEATURE_COLUMNS` is separate from explore's feature sets.
+      - **Workflow:** the steps run in order. After each one, `master.py` and `explore_master.py --skip-pipeline` must run end to end. Each step is one commit with its before → after numbers.
+      - **Acceptance check from Step 1 on (swap test):** run train_model.py with two different models (e.g. XGBoost and Ridge).
+        - These must come out identical: the cleaned data, the stage-1 levels and slopes, `compound_gap` and the driver-session `levels`.
+        - Only these may differ: the fall-off curves, the stage-2 metrics and the strategy.
+    - [ ] **Step 0: check the workflow as it stands** (no code changes).
+      - Run `master.py` and `explore_master.py --skip-pipeline --quick`. The tracked outputs should come back unchanged.
+      - The eda log should still show 436 rows / 96 multi-lap stints, so the 2026-10-28 explore run below still applies.
+    - [ ] **Step 1: a model-independent pipeline** (XGBoost stays the model; only the gap moves).
+      - **Where:**
+        - `scripts/feature_config.py`, `scripts/train_model.py`, `scripts/validate_strategy.py`, `scripts/strategy_simulator.py`, `scripts/eda.py`
+        - `explore/explore_master.py`, `explore/tune_iqr.py`, `explore/tune_push.py`
+        - `.env`
+      - [ ] **Compound gap without the model:**
+        - `fit_compound_gap()` fits on each stint's new-set level, not on `fcp − fall_off(model)`.
+        - A new helper, `stint_new_set_levels(df)` in feature_config.py, gives one row per stint, weighted by its laps:
+          - stage 1 on all laps
+          - level + slope × anchor age
+        - eda.py 6b does this inline today and will reuse the helper.
+        - The regression structure stays as it is: driver-session levels, HARD/MEDIUM, `run_laps`.
+        - train_model.py stage 3, validate_strategy.py's per-fold gap and explore's `record()` no longer use `fall_off_rows` for the gap.
+      - [ ] **Model plug-in point:**
+        - explore's `FEATURE_SETS` move into feature_config.py, with the leakage assert on each set, so explore and the pipeline share them.
+        - train_model.py's MODEL block becomes the only place the model is defined: an sklearn `Pipeline` (optional scaler + estimator) and `MODEL_NAME`.
+        - Its feature set is picked by a new `.env` key, `FALL_OFF_FEATURE_SET` (default `core`, today's 6 inputs).
+        - `MODEL_FEATURE_COLUMNS` becomes `FEATURE_SETS["core"]`.
+        - The bundle gains `model_name` and is renamed `train_model_fall_off_model.pkl` (`MODEL_BUNDLE_PATH`).
+      - [ ] **Consumers that work with any model:**
+        - Each consumer reads only `bundle["features"]` and calls `predict`.
+        - validate_strategy.py refits `sklearn.base.clone(model)` in each fold.
+        - The simulator logs `model_name`.
+        - Feature importances are saved only if the model has them.
+      - [ ] **Tuned factors without the model:**
+        - tune_iqr.py / tune_push.py's CV scorer switches from XGBoost to the model-free stage-1 linear fall-off, with the same shape MAE, stint folds and common rows.
+        - Their label sweeps use no model already. They are the basis of `IQR_LOWER_MULTIPLIER=60` and the push ratios, and they back `IQR_UPPER_MULTIPLIER=3` (≥ 3 removes 1 push lap).
+        - Rerunning the 12-weekend CV sweeps is optional.
+        - `XGB_*` is then read only by train_model.py's MODEL block and explore's `XGBoost_current`.
+      - **Verify:**
+        - The swap test passes.
+        - `master.py` exits 0 with XGBoost restored.
+        - The gap equals eda.py 6b's model-free stage-3 line (MEDIUM +0.877, HARD +0.527 s).
+    - [ ] **Step 2: a better compound-gap estimator** (model-free; from #31).
+      - **Problem:** stage 3's gap on a new set is implausible and unstable.
+        - MEDIUM comes out slower than HARD on most candidates.
+        - It ranges over MEDIUM +0.15 to +2.05 s and HARD +0.34 to +2.12 s across the candidates, and over +0.78 to +2.04 / +0.46 to +1.98 s across validate_strategy.py's folds.
+        - Why:
+          - With one fixed level per driver-session, it is identified only within the 44 driver-sessions that ran two or more compounds.
+          - HARD and MEDIUM are compared directly in just 1 of them.
+          - `run_laps` is nearly collinear with compound within a driver-session (median run SOFT 4, MEDIUM / HARD 6 laps).
+        - eda.py 6b's paired new-set comparison gives MEDIUM +1.47 s and HARD +1.72 s.
+      - **Where:**
+        - `explore/explore_lib.py`
+        - `explore/explore_master.py`: a new `--gap-only` section
+        - then `fit_compound_gap()` in `scripts/feature_config.py`, plus `.env`
+      - [ ] **Candidates**, on Step 1's stint new-set levels, using numpy / scipy / scikit-learn only:
+        - **G0:** today's structure.
+        - **G1:** no `run_laps` control.
+        - **G2:** run-type controls (`run_laps`, used-set start, a short/long-run indicator).
+        - **G3:** crossed partial pooling.
+          - A driver effect, a session effect and a driver × session deviation shrunk with a ridge penalty (≙ random effects).
+          - The penalty is tuned by grouped CV.
+          - Driver-sessions on a single compound then count through the shared driver effect.
+        - **G4:** G3 with S ≤ M ≤ H enforced (`scipy.optimize.lsq_linear` on non-negative increments).
+        - **G5:** G3 on run-type-matched stints only.
+      - [ ] **Scoring:**
+        - Grouped CV by stint, predicting each held-out stint's new-set pace. Lap-weighted MAE, with the same scored stints for every candidate.
+        - A stint cluster bootstrap for 95% CIs of the MEDIUM and HARD gaps and P(S < M < H).
+        - The spread of the gap across folds.
+        - The order of the compounds, against eda.py 6b.
+        - Pick rule: the best prediction among the candidates with a plausible order, with the narrowest CI breaking ties.
+      - [ ] **Apply the winner** in `fit_compound_gap()`. Its tunable values become commented `.env` keys.
+      - **Verify:**
+        - validate_strategy.py's per-fold gap is narrower than now and plausibly ordered in every fold.
+        - The swap test still gives an identical gap.
+        - `master.py` exits 0.
+    - [ ] **Step 3: dynamic programming over strategies in the simulator** (new issue, to open; readme.txt "Future work").
+      - **Where:** `scripts/strategy_simulator.py`, `.env`.
+      - **Input:** the per-(compound, set age) stint cost table the simulator already builds (cumulative fall-off + gap + race pace level + fuel). This is the only place the model's output enters.
+      - **State:** race lap, the set on the car, a bitmask of the car's sets already used, the compounds used and the stops made.
+      - **Transitions:**
+        - Either continue on the current set, or pit at the end of the lap onto an unused set.
+        - Pits only within the pit window, each adding `PIT_LOSS_S`.
+        - `MIN_COMPOUNDS_USED` is enforced at the finish.
+        - `MAX_STOPS` (`.env`) replaces `STOP_COUNTS`.
+      - **Output:** the best strategy, plus the best per stop count and per compound sequence (for the alternatives table), with back-pointers for the pit laps and sets.
+      - **Verify:**
+        - With `MAX_STOPS=2`, run it once side by side with today's brute force: the best strategy and total must be the same.
+        - With 3 stops allowed, it finishes in seconds.
+        - Each total equals its stint totals + fuel + pit loss.
+    - [ ] **Step 4: plug in the fall-off model.** This replaces the old "Choose the fall-off model" and "Tuning" items.
+      - **Where:**
+        - train_model.py's MODEL block
+        - `.env`: `FALL_OFF_FEATURE_SET` and the model's hyperparameter keys, e.g. `RIDGE_ALPHA`, with the reasoning in a comment
+      - Rerun `explore_master.py --skip-pipeline`, so that its curve and order checks use the model-free gap.
+      - Choose between:
+        - Ridge (`tyre_only`): the rule's pick. eda.py 6a finds no significant slope difference between compounds.
+        - The MLP (`plus_age_at_start`).
+        - The per-compound line.
+      - The current XGBoost (depth 7) beats neither baseline.
+      - **Verify:**
+        - The swap test passes: nothing upstream of stage 2 moves.
+        - validate_strategy.py's shape MAE matches explore's for that configuration.
+        - The curves are smooth and rise on every compound.
+        - The DP strategy is logged.
+    - [ ] **Step 5: documentation, and close #27.** This replaces the old "Update the reasoning" item.
+      - **`readme.txt`:**
+        - ML Modelling steps 2–3: the model-free stage 3 and the plug-in model.
+        - The measured reasoning: keep each claim only if the experiments back it, and drop or source the "real-world pipelines" line.
+        - The results table and the "XGBoost is kept" sentence.
+        - Race Simulation: DP and the current output.
+        - Evaluation.
+        - The `[TODO #27]` tags.
+      - **`README.md`:** results and strategy.
+      - **`AGENTS.md`:** the model plug-in point, the bundle name, `FEATURE_SETS`, the tune scorer and DP.
+      - **Here:** move #27 to Fixed (P2), update #15's "Depends on", and close the issues.
   - **First explore run (2026-10-26, Bahrain 2025, 153 rows / 50 stints):**
     - Outer-CV MAE: MLP (all inputs, delta target) 1.19 ± 0.21 s, SVR (all inputs) 1.20 ± 0.27, ExtraTrees 1.22, Random Forest 1.23, current XGBoost 1.25 ± 0.31, tuned XGBoost 1.30; linear models 1.44-1.62; training mean 1.59, persistence 1.82. The top ~20 configurations sit within the fold spread (about 0.09 s standard error), so the data doesn't separate them.
     - Feature sets: the constant inputs and the car-data aggregates can go without loss for the trees; the rollout-only set costs about 0.05-0.1 s. The delta target helps only the MLP and ExtraTrees.
@@ -71,7 +199,7 @@ Items keep a stable ID (`#N`), which is also the item's GitHub issue number (ope
       - **The fix:** the first run picked SVR, because its slope check covered tyre ages 2–20 only. `MIN_MONOTONE_SHARE` (0.95, the share of steps over the whole race that don't get faster) was added to the experiment block, and the run was repeated with it. All the numbers are seeded and unchanged; only the recommendation moves.
       - **Rule:** beats both baselines, stable steps (≤ 1 s), positive slope on every compound, monotone.
       - **Result:** **Ridge (`tyre_only`) 1.048 s**, with MLP (`plus_age_at_start`) within one fold std. Neither is significantly better than the linear baseline (Wilcoxon p = 0.83 / 0.11).
-    - **Not done yet: the choice.** train_model.py still fits XGBoost (depth 7), which beats neither baseline (validate_strategy.py: 1.25 s vs flat 1.19 and linear 1.06). Choose between Ridge (most stable, but no compound difference), the MLP, and the per-compound line (interpretable, compound-specific, rises without limit past age 19). Copying the choice into train_model.py's MODEL block and `.env` is still to do. Any of them works with the bundle and the simulator, which only call `predict` on `MODEL_FEATURE_COLUMNS`, but the inputs would have to match the chosen feature set. The tuning item above stays open until then.
+    - **Not done yet: the choice.** train_model.py still fits XGBoost (depth 7), which beats neither baseline (validate_strategy.py: 1.25 s vs flat 1.19 and linear 1.06). Choose between Ridge (most stable, but no compound difference), the MLP, and the per-compound line (interpretable, compound-specific, rises without limit past age 19). Copying the choice into train_model.py's MODEL block and `.env` is still to do (Step 4 above, after the pipeline is made independent of the model in Steps 1–3). Any of them works with the bundle and the simulator, which only call `predict` on `MODEL_FEATURE_COLUMNS`, but the inputs would have to match the chosen feature set.
   - **Depends on:** nothing left (#18, grouped CV, is fixed). #13 is merged into this item.
   - **readme.txt:** ML Modelling step 3, model choice, reasoning and results table.
 
