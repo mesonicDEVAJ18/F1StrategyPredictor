@@ -13,59 +13,146 @@ Candidates: ['Ridge', 'PerCompoundFallOff', 'PerCompoundIsotonic', 'RandomForest
 Outer CV: 5 folds x 2 repeats by stint; inner 4 folds, randomized search above 20 settings
 
 Running 57 candidate x feature set combinations...
- [1/57] Ridge / core: shape MAE 0.8917 ± 0.1102 s (12.6s)
- [2/57] Ridge / tyre_only: shape MAE 0.8900 ± 0.1115 s (7.4s)
- [3/57] Ridge / all_weather: shape MAE 0.8976 ± 0.1112 s (7.2s)
- [4/57] Ridge / plus_age_at_start: shape MAE 0.8914 ± 0.1077 s (8.3s)
- [5/57] Ridge / plus_stint_lap: shape MAE 0.8989 ± 0.1030 s (6.9s)
- [6/57] PerCompoundFallOff / tyre_only: shape MAE 0.9046 ± 0.1054 s (3.0s)
- [7/57] PerCompoundIsotonic / tyre_only: shape MAE 0.9461 ± 0.1037 s (1.6s)
- [8/57] RandomForest / core: shape MAE 0.9415 ± 0.1112 s (41.2s)
- [9/57] RandomForest / tyre_only: shape MAE 0.9280 ± 0.1055 s (18.3s)
- [10/57] RandomForest / all_weather: shape MAE 0.9473 ± 0.1079 s (21.6s)
- [11/57] RandomForest / plus_age_at_start: shape MAE 0.9380 ± 0.1142 s (20.0s)
- [12/57] RandomForest / plus_stint_lap: shape MAE 0.9405 ± 0.1264 s (20.0s)
- [13/57] ExtraTrees / core: shape MAE 0.9190 ± 0.1164 s (13.5s)
- [14/57] ExtraTrees / tyre_only: shape MAE 0.9148 ± 0.1164 s (13.1s)
- [15/57] ExtraTrees / all_weather: shape MAE 0.9190 ± 0.1150 s (56.0s)
- [16/57] ExtraTrees / plus_age_at_start: shape MAE 0.9086 ± 0.1114 s (67.7s)
- [17/57] ExtraTrees / plus_stint_lap: shape MAE 0.9218 ± 0.1226 s (74.4s)
- [18/57] HistGradientBoosting / core: shape MAE 0.9300 ± 0.1104 s (69.0s)
- [19/57] HistGradientBoosting / tyre_only: shape MAE 0.9324 ± 0.1165 s (30.9s)
- [20/57] HistGradientBoosting / all_weather: shape MAE 0.9485 ± 0.1164 s (67.3s)
- [21/57] HistGradientBoosting / plus_age_at_start: shape MAE 0.9345 ± 0.1104 s (64.2s)
- [22/57] HistGradientBoosting / plus_stint_lap: shape MAE 0.9469 ± 0.1205 s (62.3s)
- [23/57] HistGB_monotone / core: shape MAE 0.9377 ± 0.1103 s (69.3s)
- [24/57] HistGB_monotone / tyre_only: shape MAE 0.9353 ± 0.1090 s (60.0s)
- [25/57] HistGB_monotone / all_weather: shape MAE 0.9465 ± 0.1157 s (69.4s)
- [26/57] HistGB_monotone / plus_age_at_start: shape MAE 0.9355 ± 0.1156 s (68.8s)
- [27/57] HistGB_monotone / plus_stint_lap: shape MAE 0.9401 ± 0.1201 s (66.2s)
- [28/57] XGBoost_current / core: shape MAE 1.0595 ± 0.1006 s (4.5s)
- [29/57] XGBoost_current / tyre_only: shape MAE 1.0085 ± 0.1094 s (1.7s)
- [30/57] XGBoost_current / all_weather: shape MAE 1.0433 ± 0.0831 s (2.9s)
- [31/57] XGBoost_current / plus_age_at_start: shape MAE 1.0432 ± 0.1005 s (2.5s)
- [32/57] XGBoost_current / plus_stint_lap: shape MAE 1.0401 ± 0.1122 s (2.7s)
- [33/57] XGBoost / core: shape MAE 0.9319 ± 0.1045 s (33.0s)
- [34/57] XGBoost / tyre_only: shape MAE 0.9262 ± 0.1191 s (27.5s)
- [35/57] XGBoost / all_weather: shape MAE 0.9499 ± 0.1112 s (36.2s)
- [36/57] XGBoost / plus_age_at_start: shape MAE 0.9301 ± 0.1149 s (34.4s)
- [37/57] XGBoost / plus_stint_lap: shape MAE 0.9316 ± 0.1178 s (33.8s)
- [38/57] XGBoost_monotone / core: shape MAE 0.9347 ± 0.1064 s (32.9s)
- [39/57] XGBoost_monotone / tyre_only: shape MAE 0.9228 ± 0.1194 s (26.3s)
- [40/57] XGBoost_monotone / all_weather: shape MAE 0.9491 ± 0.1042 s (38.4s)
- [41/57] XGBoost_monotone / plus_age_at_start: shape MAE 0.9326 ± 0.1132 s (33.1s)
- [42/57] XGBoost_monotone / plus_stint_lap: shape MAE 0.9354 ± 0.1210 s (28.8s)
- [43/57] SVR / core: shape MAE 0.8837 ± 0.1122 s (2.4s)
- [44/57] SVR / tyre_only: shape MAE 0.8882 ± 0.1117 s (10.5s)
- [45/57] SVR / all_weather: shape MAE 0.8924 ± 0.1110 s (12.4s)
- [46/57] SVR / plus_age_at_start: shape MAE 0.8772 ± 0.1133 s (10.6s)
- [47/57] SVR / plus_stint_lap: shape MAE 0.8794 ± 0.1113 s (10.6s)
- [48/57] KNeighbors / core: shape MAE 0.9571 ± 0.1044 s (5.1s)
- [49/57] KNeighbors / tyre_only: shape MAE 0.9319 ± 0.0976 s (5.3s)
- [50/57] KNeighbors / all_weather: shape MAE 0.9409 ± 0.1021 s (5.5s)
- [51/57] KNeighbors / plus_age_at_start: shape MAE 0.9524 ± 0.1278 s (5.9s)
- [52/57] KNeighbors / plus_stint_lap: shape MAE 0.9476 ± 0.1202 s (5.8s)
- [53/57] MLP / core: shape MAE 0.8922 ± 0.1003 s (181.1s)
- [54/57] MLP / tyre_only: shape MAE 0.8911 ± 0.1049 s (38.0s)
- [55/57] MLP / all_weather: shape MAE 0.8984 ± 0.1044 s (356.6s)
- [56/57] MLP / plus_age_at_start: shape MAE 0.8877 ± 0.1074 s (188.2s)
+ [1/57] Ridge / core: shape MAE 0.8917 ± 0.1102 s (5.2s)
+ [2/57] Ridge / tyre_only: shape MAE 0.8900 ± 0.1115 s (1.4s)
+ [3/57] Ridge / all_weather: shape MAE 0.8976 ± 0.1112 s (1.3s)
+ [4/57] Ridge / plus_age_at_start: shape MAE 0.8914 ± 0.1077 s (1.3s)
+ [5/57] Ridge / plus_stint_lap: shape MAE 0.8989 ± 0.1030 s (1.3s)
+ [6/57] PerCompoundFallOff / tyre_only: shape MAE 0.9046 ± 0.1054 s (0.6s)
+ [7/57] PerCompoundIsotonic / tyre_only: shape MAE 0.9461 ± 0.1037 s (0.5s)
+ [8/57] RandomForest / core: shape MAE 0.9415 ± 0.1112 s (18.7s)
+ [9/57] RandomForest / tyre_only: shape MAE 0.9280 ± 0.1055 s (17.9s)
+ [10/57] RandomForest / all_weather: shape MAE 0.9473 ± 0.1079 s (20.8s)
+ [11/57] RandomForest / plus_age_at_start: shape MAE 0.9380 ± 0.1142 s (20.6s)
+ [12/57] RandomForest / plus_stint_lap: shape MAE 0.9405 ± 0.1264 s (119.4s)
+ [13/57] ExtraTrees / core: shape MAE 0.9190 ± 0.1164 s (84.6s)
+ [14/57] ExtraTrees / tyre_only: shape MAE 0.9148 ± 0.1164 s (76.5s)
+ [15/57] ExtraTrees / all_weather: shape MAE 0.9190 ± 0.1150 s (85.5s)
+ [16/57] ExtraTrees / plus_age_at_start: shape MAE 0.9086 ± 0.1114 s (81.0s)
+ [17/57] ExtraTrees / plus_stint_lap: shape MAE 0.9218 ± 0.1226 s (81.8s)
+ [18/57] HistGradientBoosting / core: shape MAE 0.9300 ± 0.1104 s (65.9s)
+ [19/57] HistGradientBoosting / tyre_only: shape MAE 0.9324 ± 0.1165 s (61.9s)
+ [20/57] HistGradientBoosting / all_weather: shape MAE 0.9485 ± 0.1164 s (68.2s)
+ [21/57] HistGradientBoosting / plus_age_at_start: shape MAE 0.9345 ± 0.1104 s (65.2s)
+ [22/57] HistGradientBoosting / plus_stint_lap: shape MAE 0.9469 ± 0.1205 s (65.8s)
+ [23/57] HistGB_monotone / core: shape MAE 0.9377 ± 0.1103 s (71.0s)
+ [24/57] HistGB_monotone / tyre_only: shape MAE 0.9353 ± 0.1090 s (64.3s)
+ [25/57] HistGB_monotone / all_weather: shape MAE 0.9465 ± 0.1157 s (26.4s)
+ [26/57] HistGB_monotone / plus_age_at_start: shape MAE 0.9355 ± 0.1156 s (10.8s)
+ [27/57] HistGB_monotone / plus_stint_lap: shape MAE 0.9401 ± 0.1201 s (11.1s)
+ [28/57] XGBoost_current / core: shape MAE 1.0595 ± 0.1006 s (3.0s)
+ [29/57] XGBoost_current / tyre_only: shape MAE 1.0085 ± 0.1094 s (0.6s)
+ [30/57] XGBoost_current / all_weather: shape MAE 1.0433 ± 0.0831 s (0.9s)
+ [31/57] XGBoost_current / plus_age_at_start: shape MAE 1.0432 ± 0.1005 s (0.8s)
+ [32/57] XGBoost_current / plus_stint_lap: shape MAE 1.0401 ± 0.1122 s (0.8s)
+ [33/57] XGBoost / core: shape MAE 0.9319 ± 0.1045 s (6.4s)
+ [34/57] XGBoost / tyre_only: shape MAE 0.9262 ± 0.1191 s (4.9s)
+ [35/57] XGBoost / all_weather: shape MAE 0.9499 ± 0.1112 s (7.1s)
+ [36/57] XGBoost / plus_age_at_start: shape MAE 0.9301 ± 0.1149 s (6.2s)
+ [37/57] XGBoost / plus_stint_lap: shape MAE 0.9316 ± 0.1178 s (6.2s)
+ [38/57] XGBoost_monotone / core: shape MAE 0.9347 ± 0.1064 s (5.8s)
+ [39/57] XGBoost_monotone / tyre_only: shape MAE 0.9228 ± 0.1194 s (4.7s)
+ [40/57] XGBoost_monotone / all_weather: shape MAE 0.9491 ± 0.1042 s (7.1s)
+ [41/57] XGBoost_monotone / plus_age_at_start: shape MAE 0.9326 ± 0.1132 s (6.4s)
+ [42/57] XGBoost_monotone / plus_stint_lap: shape MAE 0.9354 ± 0.1210 s (6.7s)
+ [43/57] SVR / core: shape MAE 0.8837 ± 0.1122 s (2.2s)
+ [44/57] SVR / tyre_only: shape MAE 0.8882 ± 0.1117 s (2.2s)
+ [45/57] SVR / all_weather: shape MAE 0.8924 ± 0.1110 s (2.1s)
+ [46/57] SVR / plus_age_at_start: shape MAE 0.8772 ± 0.1133 s (2.0s)
+ [47/57] SVR / plus_stint_lap: shape MAE 0.8794 ± 0.1113 s (2.1s)
+ [48/57] KNeighbors / core: shape MAE 0.9571 ± 0.1044 s (1.2s)
+ [49/57] KNeighbors / tyre_only: shape MAE 0.9319 ± 0.0976 s (1.2s)
+ [50/57] KNeighbors / all_weather: shape MAE 0.9409 ± 0.1021 s (1.3s)
+ [51/57] KNeighbors / plus_age_at_start: shape MAE 0.9524 ± 0.1278 s (1.2s)
+ [52/57] KNeighbors / plus_stint_lap: shape MAE 0.9476 ± 0.1202 s (1.2s)
+ [53/57] MLP / core: shape MAE 0.8922 ± 0.1003 s (64.9s)
+ [54/57] MLP / tyre_only: shape MAE 0.8911 ± 0.1049 s (39.2s)
+ [55/57] MLP / all_weather: shape MAE 0.8984 ± 0.1044 s (81.0s)
+ [56/57] MLP / plus_age_at_start: shape MAE 0.8877 ± 0.1074 s (73.5s)
+ [57/57] MLP / plus_stint_lap: shape MAE 0.9030 ± 0.1083 s (69.7s)
+
+Leaderboard (outer-CV means over all folds and repeats; within-stint shape MAE/RMSE in s):
+ rank            candidate       feature_set  n_inputs  MAE_mean  MAE_std  RMSE_mean  R2_within_mean  MAE_gain_vs_flat  MAE_gain_vs_linear  folds_beating_linear  stints_beating_linear  wilcoxon_p_vs_linear  curve_std_age15
+    1                  SVR plus_age_at_start         7    0.8772   0.1194     1.3785          0.1949            0.1580              0.0273                     8                     48                0.0900           1.1824
+    2                  SVR    plus_stint_lap         7    0.8794   0.1173     1.3705          0.2029            0.1558              0.0252                     8                     51                0.0322           1.1779
+    3                  SVR              core         6    0.8837   0.1182     1.3795          0.1919            0.1516              0.0209                     8                     54                0.0636           0.8294
+    4                  MLP plus_age_at_start         7    0.8877   0.1132     1.3818          0.1893            0.1476              0.0169                     9                     53                0.0377           0.7674
+    5                  SVR         tyre_only         4    0.8882   0.1177     1.3866          0.1838            0.1470              0.0163                     7                     51                0.0660           1.0439
+    6                Ridge         tyre_only         4    0.8900   0.1176     1.3764          0.1958            0.1453              0.0146                     7                     51                0.6067           0.2051
+    7                  MLP         tyre_only         4    0.8911   0.1105     1.3882          0.1816            0.1442              0.0135                     8                     54                0.0472           0.7533
+    8                Ridge plus_age_at_start         7    0.8914   0.1136     1.3743          0.1976            0.1439              0.0132                     7                     45                0.7019           0.1677
+    9                Ridge              core         6    0.8917   0.1161     1.3767          0.1952            0.1435              0.0129                     6                     48                0.6420           0.2349
+   10                  MLP              core         6    0.8922   0.1057     1.3841          0.1852            0.1431              0.0124                     9                     53                0.0568           0.8005
+   11                  SVR       all_weather        10    0.8924   0.1170     1.3929          0.1767            0.1428              0.0121                     7                     46                0.1862           0.5960
+   12                Ridge       all_weather        10    0.8976   0.1172     1.3815          0.1892            0.1376              0.0069                     6                     41                0.9087           0.2313
+   13                  MLP       all_weather        10    0.8984   0.1101     1.3892          0.1795            0.1369              0.0062                     7                     47                0.4872           0.8419
+   14                Ridge    plus_stint_lap         7    0.8989   0.1086     1.3745          0.1962            0.1364              0.0057                     6                     41                0.8706           0.2260
+   15                  MLP    plus_stint_lap         7    0.9030   0.1142     1.3783          0.1920            0.1323              0.0016                     4                     46                0.7939           0.6299
+   16   PerCompoundFallOff         tyre_only         4    0.9046   0.1111     1.3831          0.1853            0.1307              0.0000                     7                     47                0.3172           0.9705
+   17      baseline_linear                 -         0    0.9046   0.1111     1.3831          0.1853            0.1307              0.0000                     0                      0                   NaN           0.9705
+   18           ExtraTrees plus_age_at_start         7    0.9086   0.1174     1.3897          0.1809            0.1266             -0.0041                     3                     43                0.5293           0.6176
+   19           ExtraTrees         tyre_only         4    0.9148   0.1227     1.3853          0.1856            0.1204             -0.0103                     4                     48                0.7655           0.8843
+   20           ExtraTrees              core         6    0.9190   0.1226     1.3911          0.1795            0.1163             -0.0144                     4                     41                0.8237           0.7527
+   21           ExtraTrees       all_weather        10    0.9190   0.1213     1.3950          0.1740            0.1162             -0.0145                     2                     40                0.8198           0.7684
+   22           ExtraTrees    plus_stint_lap         7    0.9218   0.1292     1.3829          0.1873            0.1135             -0.0172                     3                     46                0.8592           0.7933
+   23     XGBoost_monotone         tyre_only         4    0.9228   0.1259     1.3932          0.1744            0.1125             -0.0182                     1                     40                0.9674           0.7300
+   24              XGBoost         tyre_only         4    0.9262   0.1256     1.4007          0.1644            0.1091             -0.0216                     2                     46                0.9416           0.7222
+   25         RandomForest         tyre_only         4    0.9280   0.1112     1.4186          0.1453            0.1072             -0.0235                     2                     42                0.8528           0.8065
+   26 HistGradientBoosting              core         6    0.9300   0.1164     1.4042          0.1602            0.1052             -0.0255                     2                     39                0.9764           0.7427
+   27              XGBoost plus_age_at_start         7    0.9301   0.1211     1.4053          0.1610            0.1051             -0.0256                     3                     44                0.8443           0.5220
+   28              XGBoost    plus_stint_lap         7    0.9316   0.1242     1.3729          0.1970            0.1036             -0.0271                     2                     43                0.7435           0.6781
+   29              XGBoost              core         6    0.9319   0.1102     1.4010          0.1655            0.1034             -0.0273                     3                     43                0.8642           0.6068
+   30           KNeighbors         tyre_only         4    0.9319   0.1029     1.4115          0.1531            0.1033             -0.0274                     2                     35                0.9867           0.6326
+
+Baselines:
+ rank       candidate feature_set  n_inputs  MAE_mean  MAE_std  RMSE_mean  R2_within_mean  MAE_gain_vs_flat  MAE_gain_vs_linear  folds_beating_linear  stints_beating_linear  wilcoxon_p_vs_linear  curve_std_age15
+   17 baseline_linear           -         0    0.9046   0.1111     1.3831          0.1853            0.1307              0.0000                     0                      0                   NaN           0.9705
+   55   baseline_flat           -         0    1.0352   0.1158     1.5392          0.0000            0.0000             -0.1307                     0                     33                0.9846              NaN
+
+Best shape MAE per candidate and feature set:
+feature_set            core  tyre_only  all_weather  plus_age_at_start  plus_stint_lap
+candidate                                                                             
+SVR                   0.884      0.888        0.892              0.877           0.879
+MLP                   0.892      0.891        0.898              0.888           0.903
+Ridge                 0.892      0.890        0.898              0.891           0.899
+PerCompoundFallOff      NaN      0.905          NaN                NaN             NaN
+ExtraTrees            0.919      0.915        0.919              0.909           0.922
+XGBoost_monotone      0.935      0.923        0.949              0.933           0.935
+XGBoost               0.932      0.926        0.950              0.930           0.932
+RandomForest          0.942      0.928        0.947              0.938           0.940
+HistGradientBoosting  0.930      0.932        0.949              0.935           0.947
+KNeighbors            0.957      0.932        0.941              0.952           0.948
+HistGB_monotone       0.938      0.935        0.947              0.936           0.940
+PerCompoundIsotonic     NaN      0.946          NaN                NaN             NaN
+XGBoost_current       1.060      1.008        1.043              1.043           1.040
+
+Curves of the best configuration of each candidate (new set, tyre ages 1-57; model-free compound gap from stage 3 on all 566 laps: MEDIUM +0.978, HARD +1.228 s):
+  baseline_linear (-): max step 0.34 s, monotone share 1.00, slope s/lap [S +0.341, M +0.227, H +0.211], fall-off at age 15 [S +4.77, M +3.18, H +2.96], gap M +0.98 H +1.23, order lap 5 S<M<H, lap 20 H<M<S, params {}
+  SVR (plus_age_at_start): max step 0.25 s, monotone share 0.50, slope s/lap [S +0.234, M +0.186, H +0.171], fall-off at age 15 [S +3.26, M +2.43, H +2.22], gap M +0.98 H +1.23, order lap 5 S<M<H, lap 20 S<H<M, params {'gamma': 0.03, 'epsilon': 0.3, 'C': 1}
+  MLP (plus_age_at_start): max step 0.18 s, monotone share 1.00, slope s/lap [S +0.177, M +0.169, H +0.166], fall-off at age 15 [S +2.54, M +2.17, H +2.09], gap M +0.98 H +1.23, order lap 5 S<M<H, lap 20 S<M<H, params {'regressor__solver': 'adam', 'regressor__learning_rate_init': 0.001, 'regressor__hidden_layer_sizes': (32,), 'regressor__alpha': 10.0}
+  Ridge (tyre_only): max step 0.25 s, monotone share 1.00, slope s/lap [S +0.255, M +0.255, H +0.255], fall-off at age 15 [S +3.57, M +3.57, H +3.57], gap M +0.98 H +1.23, order lap 5 S<M<H, lap 20 S<M<H, params {'alpha': np.float64(15.199110829529332)}
+  PerCompoundFallOff (tyre_only): max step 0.34 s, monotone share 1.00, slope s/lap [S +0.341, M +0.227, H +0.211], fall-off at age 15 [S +4.77, M +3.18, H +2.96], gap M +0.98 H +1.23, order lap 5 S<M<H, lap 20 H<M<S, params {'degree': 1, 'min_rows': 10}
+  ExtraTrees (plus_age_at_start): max step 0.81 s, monotone share 0.95, slope s/lap [S +0.196, M +0.117, H +0.137], fall-off at age 15 [S +3.06, M +1.58, H +2.13], gap M +0.98 H +1.23, order lap 5 S<M<H, lap 20 M<S<H, params {'min_samples_leaf': 3, 'max_features': 0.6, 'max_depth': 5}
+  XGBoost_monotone (tyre_only): max step 1.77 s, monotone share 1.00, slope s/lap [S +0.279, M +0.226, H +0.231], fall-off at age 15 [S +4.55, M +2.85, H +2.78], gap M +0.98 H +1.23, order lap 5 M<H<S, lap 20 M<H<S, params {'subsample': 1.0, 'reg_lambda': 1, 'reg_alpha': 2, 'n_estimators': 300, 'min_child_weight': 10, 'max_depth': 5, 'learning_rate': 0.02, 'colsample_bytree': 0.5}
+  XGBoost (tyre_only): max step 1.16 s, monotone share 0.96, slope s/lap [S +0.283, M +0.234, H +0.241], fall-off at age 15 [S +4.11, M +3.03, H +3.12], gap M +0.98 H +1.23, order lap 5 S<M<H, lap 20 M<S<H, params {'subsample': 0.7, 'reg_lambda': 20, 'reg_alpha': 0.5, 'n_estimators': 300, 'min_child_weight': 5, 'max_depth': 2, 'learning_rate': 0.05, 'colsample_bytree': 0.5}
+  RandomForest (tyre_only): max step 1.08 s, monotone share 0.96, slope s/lap [S +0.288, M +0.222, H +0.191], fall-off at age 15 [S +5.12, M +2.83, H +2.69], gap M +0.98 H +1.23, order lap 5 H<M<S, lap 20 H<M<S, params {'min_samples_leaf': 10, 'max_features': 0.3, 'max_depth': 5}
+  HistGradientBoosting (core): max step 1.00 s, monotone share 0.98, slope s/lap [S +0.242, M +0.199, H +0.201], fall-off at age 15 [S +4.08, M +2.87, H +2.87], gap M +0.98 H +1.23, order lap 5 S<M<H, lap 20 S<M<H, params {'min_samples_leaf': 20, 'max_iter': 100, 'max_depth': 3, 'learning_rate': 0.03, 'l2_regularization': 10.0}
+  KNeighbors (tyre_only): max step 1.47 s, monotone share 0.79, slope s/lap [S +0.294, M +0.217, H +0.182], fall-off at age 15 [S +4.44, M +2.84, H +2.56], gap M +0.98 H +1.23, order lap 5 H<S<M, lap 20 H<M<S, params {'n_neighbors': 20, 'weights': 'uniform'}
+  HistGB_monotone (tyre_only): max step 0.78 s, monotone share 1.00, slope s/lap [S +0.273, M +0.205, H +0.211], fall-off at age 15 [S +3.52, M +2.87, H +2.87], gap M +0.98 H +1.23, order lap 5 S<M<H, lap 20 M<S<H, params {'min_samples_leaf': 5, 'max_iter': 100, 'max_depth': 2, 'learning_rate': 0.03, 'l2_regularization': 0.0}
+  PerCompoundIsotonic (tyre_only): max step 2.33 s, monotone share 1.00, slope s/lap [S +0.338, M +0.234, H +0.301], fall-off at age 15 [S +5.26, M +2.85, H +2.42], gap M +0.98 H +1.23, order lap 5 H<M<S, lap 20 M<H<S, params {'min_rows': 10}
+  XGBoost_current (tyre_only): max step 3.11 s, monotone share 0.84, slope s/lap [S +0.327, M +0.222, H +0.268], fall-off at age 15 [S +5.27, M +2.55, H +2.02], gap M +0.98 H +1.23, order lap 5 H<M<S, lap 20 M<H<S, params {}
+
+Flat baseline (no fall-off): shape MAE 1.0352 ± 0.1158 s; linear baseline (stage-1 slope per compound): 0.9046 ± 0.1111 s
+Recommendation: MLP (plus_age_at_start), shape MAE 0.8877 ± 0.1132 s: the lowest among candidates with a stable curve rising on every compound (monotone share >= 0.95) that beat both baselines
+  Within one fold std of it: ['Ridge', 'PerCompoundFallOff']
+Lowest shape MAE regardless of the curve: SVR (plus_age_at_start), 0.8772 ± 0.1194 s
+
+Finished in 1557s. FILES GENERATED:
+  - explore_master_cv_folds.csv
+  - explore_master_fold_curves.csv
+  - explore_master_summary.csv
+  - explore_master_best_params.json
+  - explore_master_curves.csv
+  - explore_master_curve_metrics.csv
+  - explore_master_mae_by_feature_set.png
+  - explore_master_curves.png

@@ -1,6 +1,6 @@
 {
   "SVR": {
-    "feature_set": "plus_stint_lap",
+    "feature_set": "plus_age_at_start",
     "features": [
       "compound_HARD",
       "compound_MEDIUM",
@@ -8,38 +8,19 @@
       "tyre_age",
       "track_temperature",
       "air_temperature",
-      "laps_since_stint_start"
+      "tyre_age_at_start"
     ],
     "params": {
-      "gamma": 0.1,
-      "epsilon": 0.1,
-      "C": 10
+      "gamma": 0.03,
+      "epsilon": 0.3,
+      "C": 1
     },
-    "cv_MAE": 1.0257273488064382,
-    "cv_MAE_std": 0.25030483144788535,
+    "cv_MAE": 0.8772159817271806,
+    "cv_MAE_std": 0.11943442477529714,
     "compound_gap": {
       "SOFT": 0.0,
-      "MEDIUM": 2.054450740368189,
-      "HARD": 0.7847420390461775
-    }
-  },
-  "Ridge": {
-    "feature_set": "tyre_only",
-    "features": [
-      "compound_HARD",
-      "compound_MEDIUM",
-      "compound_SOFT",
-      "tyre_age"
-    ],
-    "params": {
-      "alpha": 43.28761281083057
-    },
-    "cv_MAE": 1.0477639183272371,
-    "cv_MAE_std": 0.24634798361033539,
-    "compound_gap": {
-      "SOFT": 0.0,
-      "MEDIUM": 0.14604347445739307,
-      "HARD": 0.3523786322408391
+      "MEDIUM": 0.9781164523851658,
+      "HARD": 1.2278212313464465
     }
   },
   "MLP": {
@@ -61,12 +42,51 @@
       ],
       "regressor__alpha": 10.0
     },
-    "cv_MAE": 1.0483037255364756,
-    "cv_MAE_std": 0.23941155615935633,
+    "cv_MAE": 0.8876515807694693,
+    "cv_MAE_std": 0.11324961094160381,
     "compound_gap": {
       "SOFT": 0.0,
-      "MEDIUM": 0.6637596120287377,
-      "HARD": 0.5072173684511387
+      "MEDIUM": 0.9781164523851658,
+      "HARD": 1.2278212313464465
+    }
+  },
+  "Ridge": {
+    "feature_set": "tyre_only",
+    "features": [
+      "compound_HARD",
+      "compound_MEDIUM",
+      "compound_SOFT",
+      "tyre_age"
+    ],
+    "params": {
+      "alpha": 15.199110829529332
+    },
+    "cv_MAE": 0.8899653281755052,
+    "cv_MAE_std": 0.11757903805085428,
+    "compound_gap": {
+      "SOFT": 0.0,
+      "MEDIUM": 0.9781164523851658,
+      "HARD": 1.2278212313464465
+    }
+  },
+  "PerCompoundFallOff": {
+    "feature_set": "tyre_only",
+    "features": [
+      "compound_HARD",
+      "compound_MEDIUM",
+      "compound_SOFT",
+      "tyre_age"
+    ],
+    "params": {
+      "degree": 1,
+      "min_rows": 10
+    },
+    "cv_MAE": 0.9045548334439097,
+    "cv_MAE_std": 0.11105447759869694,
+    "compound_gap": {
+      "SOFT": 0.0,
+      "MEDIUM": 0.9781164523851658,
+      "HARD": 1.2278212313464465
     }
   },
   "ExtraTrees": {
@@ -85,15 +105,15 @@
       "max_features": 0.6,
       "max_depth": 5
     },
-    "cv_MAE": 1.0526093962701266,
-    "cv_MAE_std": 0.22977683696976503,
+    "cv_MAE": 0.9086358025570996,
+    "cv_MAE_std": 0.11738653492039933,
     "compound_gap": {
       "SOFT": 0.0,
-      "MEDIUM": 1.319903877158275,
-      "HARD": 0.606342642048503
+      "MEDIUM": 0.9781164523851658,
+      "HARD": 1.2278212313464465
     }
   },
-  "PerCompoundFallOff": {
+  "XGBoost_monotone": {
     "feature_set": "tyre_only",
     "features": [
       "compound_HARD",
@@ -102,80 +122,30 @@
       "tyre_age"
     ],
     "params": {
-      "degree": 1,
-      "min_rows": 10
-    },
-    "cv_MAE": 1.0638174276456103,
-    "cv_MAE_std": 0.22998645116804667,
-    "compound_gap": {
-      "SOFT": 0.0,
-      "MEDIUM": 0.8770739403754462,
-      "HARD": 0.5267467332991149
-    }
-  },
-  "RandomForest": {
-    "feature_set": "plus_stint_lap",
-    "features": [
-      "compound_HARD",
-      "compound_MEDIUM",
-      "compound_SOFT",
-      "tyre_age",
-      "track_temperature",
-      "air_temperature",
-      "laps_since_stint_start"
-    ],
-    "params": {
-      "min_samples_leaf": 3,
-      "max_features": 0.3,
-      "max_depth": null
-    },
-    "cv_MAE": 1.068573903270347,
-    "cv_MAE_std": 0.21735343453802763,
-    "compound_gap": {
-      "SOFT": 0.0,
-      "MEDIUM": 1.197534890337323,
-      "HARD": 0.7745696029728801
-    }
-  },
-  "XGBoost_monotone": {
-    "feature_set": "plus_stint_lap",
-    "features": [
-      "compound_HARD",
-      "compound_MEDIUM",
-      "compound_SOFT",
-      "tyre_age",
-      "track_temperature",
-      "air_temperature",
-      "laps_since_stint_start"
-    ],
-    "params": {
-      "subsample": 0.7,
-      "reg_lambda": 5,
-      "reg_alpha": 0,
-      "n_estimators": 100,
-      "min_child_weight": 3,
-      "max_depth": 7,
+      "subsample": 1.0,
+      "reg_lambda": 1,
+      "reg_alpha": 2,
+      "n_estimators": 300,
+      "min_child_weight": 10,
+      "max_depth": 5,
       "learning_rate": 0.02,
-      "colsample_bytree": 0.8
+      "colsample_bytree": 0.5
     },
-    "cv_MAE": 1.0705968705948883,
-    "cv_MAE_std": 0.2261738289764609,
+    "cv_MAE": 0.9227890350632288,
+    "cv_MAE_std": 0.12585998952023852,
     "compound_gap": {
       "SOFT": 0.0,
-      "MEDIUM": 0.6122801214211755,
-      "HARD": 0.342322392505098
+      "MEDIUM": 0.9781164523851658,
+      "HARD": 1.2278212313464465
     }
   },
   "XGBoost": {
-    "feature_set": "plus_age_at_start",
+    "feature_set": "tyre_only",
     "features": [
       "compound_HARD",
       "compound_MEDIUM",
       "compound_SOFT",
-      "tyre_age",
-      "track_temperature",
-      "air_temperature",
-      "tyre_age_at_start"
+      "tyre_age"
     ],
     "params": {
       "subsample": 0.7,
@@ -187,80 +157,58 @@
       "learning_rate": 0.05,
       "colsample_bytree": 0.5
     },
-    "cv_MAE": 1.0760298075059795,
-    "cv_MAE_std": 0.23113628509839523,
+    "cv_MAE": 0.9261638543449411,
+    "cv_MAE_std": 0.12556659371190565,
     "compound_gap": {
       "SOFT": 0.0,
-      "MEDIUM": 0.656375317724148,
-      "HARD": 0.8536770354087793
+      "MEDIUM": 0.9781164523851658,
+      "HARD": 1.2278212313464465
     }
   },
-  "HistGB_monotone": {
-    "feature_set": "plus_stint_lap",
+  "RandomForest": {
+    "feature_set": "tyre_only",
+    "features": [
+      "compound_HARD",
+      "compound_MEDIUM",
+      "compound_SOFT",
+      "tyre_age"
+    ],
+    "params": {
+      "min_samples_leaf": 10,
+      "max_features": 0.3,
+      "max_depth": 5
+    },
+    "cv_MAE": 0.9280130537179636,
+    "cv_MAE_std": 0.11122155746193205,
+    "compound_gap": {
+      "SOFT": 0.0,
+      "MEDIUM": 0.9781164523851658,
+      "HARD": 1.2278212313464465
+    }
+  },
+  "HistGradientBoosting": {
+    "feature_set": "core",
     "features": [
       "compound_HARD",
       "compound_MEDIUM",
       "compound_SOFT",
       "tyre_age",
       "track_temperature",
-      "air_temperature",
-      "laps_since_stint_start"
+      "air_temperature"
     ],
     "params": {
-      "min_samples_leaf": 10,
+      "min_samples_leaf": 20,
       "max_iter": 100,
       "max_depth": 3,
       "learning_rate": 0.03,
       "l2_regularization": 10.0
     },
-    "cv_MAE": 1.0761288572447372,
-    "cv_MAE_std": 0.22920229268456419,
+    "cv_MAE": 0.9300184812842914,
+    "cv_MAE_std": 0.11636649210308579,
     "compound_gap": {
       "SOFT": 0.0,
-      "MEDIUM": 0.8779780844021374,
-      "HARD": 0.7235947940471306
-    }
-  },
-  "HistGradientBoosting": {
-    "feature_set": "tyre_only",
-    "features": [
-      "compound_HARD",
-      "compound_MEDIUM",
-      "compound_SOFT",
-      "tyre_age"
-    ],
-    "params": {
-      "min_samples_leaf": 10,
-      "max_iter": 300,
-      "max_depth": 2,
-      "learning_rate": 0.03,
-      "l2_regularization": 0.0
-    },
-    "cv_MAE": 1.082706639582938,
-    "cv_MAE_std": 0.22794462656231917,
-    "compound_gap": {
-      "SOFT": 0.0,
-      "MEDIUM": 1.759844190146147,
-      "HARD": 1.8227638461135474
-    }
-  },
-  "PerCompoundIsotonic": {
-    "feature_set": "tyre_only",
-    "features": [
-      "compound_HARD",
-      "compound_MEDIUM",
-      "compound_SOFT",
-      "tyre_age"
-    ],
-    "params": {
-      "min_rows": 10
-    },
-    "cv_MAE": 1.0849795814623704,
-    "cv_MAE_std": 0.23496133896066165,
-    "compound_gap": {
-      "SOFT": 0.0,
-      "MEDIUM": 1.9594831924494542,
-      "HARD": 1.9889262441906084
+      "MEDIUM": 0.9781164523851658,
+      "HARD": 1.2278212313464465
     }
   },
   "KNeighbors": {
@@ -275,12 +223,54 @@
       "n_neighbors": 20,
       "weights": "uniform"
     },
-    "cv_MAE": 1.0918085243848912,
-    "cv_MAE_std": 0.22329809866845277,
+    "cv_MAE": 0.9319264391445528,
+    "cv_MAE_std": 0.10288217747170673,
     "compound_gap": {
       "SOFT": 0.0,
-      "MEDIUM": 1.5098760368802715,
-      "HARD": 1.5193234644138585
+      "MEDIUM": 0.9781164523851658,
+      "HARD": 1.2278212313464465
+    }
+  },
+  "HistGB_monotone": {
+    "feature_set": "tyre_only",
+    "features": [
+      "compound_HARD",
+      "compound_MEDIUM",
+      "compound_SOFT",
+      "tyre_age"
+    ],
+    "params": {
+      "min_samples_leaf": 5,
+      "max_iter": 100,
+      "max_depth": 2,
+      "learning_rate": 0.03,
+      "l2_regularization": 0.0
+    },
+    "cv_MAE": 0.9352982549113309,
+    "cv_MAE_std": 0.11487834325194435,
+    "compound_gap": {
+      "SOFT": 0.0,
+      "MEDIUM": 0.9781164523851658,
+      "HARD": 1.2278212313464465
+    }
+  },
+  "PerCompoundIsotonic": {
+    "feature_set": "tyre_only",
+    "features": [
+      "compound_HARD",
+      "compound_MEDIUM",
+      "compound_SOFT",
+      "tyre_age"
+    ],
+    "params": {
+      "min_rows": 10
+    },
+    "cv_MAE": 0.9460934814898208,
+    "cv_MAE_std": 0.10926603386880065,
+    "compound_gap": {
+      "SOFT": 0.0,
+      "MEDIUM": 0.9781164523851658,
+      "HARD": 1.2278212313464465
     }
   },
   "XGBoost_current": {
@@ -292,12 +282,12 @@
       "tyre_age"
     ],
     "params": {},
-    "cv_MAE": 1.1599996887083497,
-    "cv_MAE_std": 0.2330045417266242,
+    "cv_MAE": 1.0084935361063063,
+    "cv_MAE_std": 0.11534753449920404,
     "compound_gap": {
       "SOFT": 0.0,
-      "MEDIUM": 2.031875300228055,
-      "HARD": 2.1207152705151113
+      "MEDIUM": 0.9781164523851658,
+      "HARD": 1.2278212313464465
     }
   }
 }

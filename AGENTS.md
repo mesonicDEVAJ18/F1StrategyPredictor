@@ -172,12 +172,15 @@ agreed for it:
 
   Start a step only when the user asks. Each step is one commit with its before → after numbers. After each one,
   `master.py` and `explore_master.py --skip-pipeline` must run end to end.
+- **Status:** Steps 0 and 1 are done (Step 1 is commit a72dd8c; its full explore rerun finished 2026-11-05). Step 2 is
+  next and starts only when the user asks.
 - **Swap test** (the acceptance check from Step 1 on): run train_model.py with two different models.
   - These must come out identical: the cleaned data, the stage-1 levels and slopes, `compound_gap` and the
     driver-session `levels`.
   - Only these may differ: the fall-off curves, the stage-2 metrics and the strategy.
 - **The model choice comes last.** Don't pick or tune the fall-off model before Steps 1–3 are done. explore/ compares
-  candidates, but the choice (Ridge `tyre_only`, the MLP or the per-compound line) is the user's.
+  candidates, but the choice is the user's. The 2026-11-05 run recommends the MLP (`plus_age_at_start`), with Ridge
+  (`tyre_only`) and the per-compound line within one fold std of it, so those three are the shortlist.
 - **The compound gap must not use the model.** It is fitted from the stage-1 new-set level of each stint, not from
   `fcp − fall_off(model)`. Improving it means better estimation on the data there is, not more data:
   - partial pooling of the driver and session effects
@@ -193,11 +196,12 @@ agreed for it:
   - No qualifying or race data.
 - **Tuned factors must not depend on the model.** The label sweeps in tune_iqr.py and tune_push.py use no model, and
   since Step 1 their CV sweeps score with the model-free stage-1 linear fall-off instead of XGBoost.
-- **Evidence from eda.py #26** to build on:
-  - The per-compound slopes are all significant (SOFT +0.365, MEDIUM +0.227, HARD +0.306 s/lap), but the
-    differences between them aren't (Holm p ≥ 0.08).
-  - Paired within driver-session, a new set is MEDIUM +1.47 s and HARD +1.72 s slower than SOFT.
-  - FP2 is 2.36 s faster than FP1, and FP3 is about the same as FP2.
+- **Evidence from eda.py #26** to build on (Bahrain 2025, 566 laps, since Step 1's tuned thresholds):
+  - The per-compound slopes are SOFT +0.341, MEDIUM +0.227, HARD +0.211 s/lap. SOFT and MEDIUM are significant,
+    HARD is not (95% CI −0.05 to +0.46, p 0.12). The differences between them aren't significant (Holm p ≥ 0.25).
+  - Paired within driver-session, a new set is MEDIUM +1.61 s and HARD +2.23 s slower than SOFT. Only one
+    driver-session ran both MEDIUM and HARD.
+  - FP2 is 2.77 s faster than FP1, and FP3 is about the same as FP2.
 
 ## Data flow / hand-offs
 
@@ -225,7 +229,8 @@ Scripts communicate through CSVs in `data/processed/`, not by importing each oth
   driver's session best or `PUSH_LAP_MAX_STINT_RATIO` × the driver's best in that stint. Stints come from the raw
   `data/raw/stints/`, matched by `lap_start` / `lap_end` as in `feature_engineer.py`. It saves every lap reaching that filter
   with both ratios to `results/process_laps/process_laps_push_ratios_*.csv` (diagnostic only; `tune_push.py` reads it)
-- `process_stints.py` → `data/processed/stints_combined_clean.csv`
+- `process_stints.py` → `data/processed/stints_combined_clean.csv` (dry compounds only: SOFT/MEDIUM/HARD; a compound
+  one-hot column missing in a session is filled with 0 after the concat)
 - `tyre_sets.py`      → `data/processed/tyre_sets_race_inventory.csv` (one row per set every car in practice has
   left for the race: compound and age in laps). OpenF1 has no set ID, so sets are chained by compound and
   `tyre_age_at_start`; practice stand-ins count toward their race car, derived from `data/raw/drivers/` (the FP3
@@ -239,7 +244,8 @@ Scripts communicate through CSVs in `data/processed/`, not by importing each oth
   the aggregates are left unscaled, in physical units)
 - `feature_engineer.py` reads the laps, stints, weather and car data above → `data/processed/final_engineered_dataset.csv`
   (and a copy under `results/feature_engineer/`). It keeps `session_key` and `driver_number` as
-  identifiers only; they are not in `MODEL_FEATURE_COLUMNS`. It builds the `session_FP1/FP2/FP3` one-hot from
+  identifiers only; they are not in `MODEL_FEATURE_COLUMNS`. Laps with no stint or no `date_start` are dropped and
+  counted in the log (0 on Bahrain 2025). It builds the `session_FP1/FP2/FP3` one-hot from
   `process_laps.py`'s `session_name` and `run_laps` (`lap_end − lap_start + 1`, the run's length, a control in
   train_model.py's compound-gap fit). The car-data aggregates (`CARDATA_FEATURE_COLUMNS`) are left-merged on the lap's
   keys. Missing values in `STINT_FILL_COLUMNS` (speed traps, segment counts, car data) are filled with the median of the
