@@ -2,6 +2,7 @@ import sys
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import GroupShuffleSplit
+from sklearn.pipeline import Pipeline
 from xgboost import XGBRegressor
 import matplotlib.pyplot as plt
 import joblib
@@ -9,10 +10,9 @@ import os
 import warnings
 from datetime import datetime
 
-from feature_config import MODEL_FEATURE_COLUMNS as FEATURES
 from feature_config import (
-    COMPOUNDS, FALL_OFF_ANCHOR_AGE, STINT_GROUP_COLUMNS, fall_off_curve, fall_off_rows, fall_off_target,
-    fit_compound_gap, fit_stint_levels, linear_fall_off, multi_lap_rows, stint_shape_errors,
+    COMPOUNDS, FALL_OFF_ANCHOR_AGE, FEATURE_SETS, STINT_GROUP_COLUMNS, fall_off_curve, fall_off_target,
+    fit_compound_gap, fit_stint_levels, linear_fall_off, multi_lap_rows, stint_new_set_levels, stint_shape_errors,
 )
 from env_config import env_str, env_int, env_float
 
@@ -45,6 +45,9 @@ DATASET_PATH = os.path.join(env_str("DATA_DIR"), env_str("PROCESSED_DIR"), env_s
 MODEL_BUNDLE_PATH = env_str("MODEL_BUNDLE_PATH")
 RANDOM_STATE = env_int("RANDOM_STATE")
 TEST_SIZE = env_float("TEST_SIZE")
+# The model's inputs: one of feature_config.FEATURE_SETS (tyre and conditions only)
+FEATURE_SET = env_str("FALL_OFF_FEATURE_SET")
+FEATURES = FEATURE_SETS[FEATURE_SET]
 
 # ======================================================
 # LOAD DATA
@@ -110,20 +113,24 @@ log("Saved feature snapshot.")
 # ======================================================
 # MODEL (chosen in ../explore/explore_master.py)
 # ======================================================
-# The pipeline trains one model. Candidates, tuning and feature sets are
-# compared in explore/; the one picked there goes here, with its settings in .env
+# The only place the fall-off model is defined: an sklearn Pipeline (an optional scaler, then the
+# estimator). Candidates, tuning and feature sets are compared in explore/; the one picked there
+# goes here, with its settings and FALL_OFF_FEATURE_SET in .env. Nothing before this block (stage 1,
+# the compound gap, the race pace level) depends on it (#27). XGBoost is a placeholder until #27 Step 4
 MODEL_NAME = "XGBoost"
-model = XGBRegressor(
-    n_estimators=env_int("XGB_N_ESTIMATORS"),
-    learning_rate=env_float("XGB_LEARNING_RATE"),
-    max_depth=env_int("XGB_MAX_DEPTH"),
-    subsample=env_float("XGB_SUBSAMPLE"),
-    colsample_bytree=env_float("XGB_COLSAMPLE_BYTREE"),
-    random_state=RANDOM_STATE,
-    objective="reg:squarederror",
-)
+model = Pipeline([
+    ("model", XGBRegressor(
+        n_estimators=env_int("XGB_N_ESTIMATORS"),
+        learning_rate=env_float("XGB_LEARNING_RATE"),
+        max_depth=env_int("XGB_MAX_DEPTH"),
+        subsample=env_float("XGB_SUBSAMPLE"),
+        colsample_bytree=env_float("XGB_COLSAMPLE_BYTREE"),
+        random_state=RANDOM_STATE,
+        objective="reg:squarederror",
+    )),
+])
 
-log(f"\nTraining {MODEL_NAME}...")
+log(f"\nTraining {MODEL_NAME} on feature set {FEATURE_SET} ({', '.join(FEATURES)})...")
 model.fit(X_train, y_train)
 pred = model.predict(X_test)
 
@@ -176,20 +183,20 @@ for c in COMPOUNDS:
                    for a in (5, 10, 15) if a <= len(curve_ages))
     log(f"  {c}: {at}")
 
-# Stage 3: the gap between compounds on a new set, net of the model's fall-off, from every
-# training lap (one-lap stints too), with run_laps as a control for the run type
-gap_fall_off = fall_off_rows(model, FEATURES, train_all, conditions)
-compound_gap, pace_levels, run_coef = fit_compound_gap(train_all, gap_fall_off)
-log(f"Stage 3, compound gap on a new set (s, vs SOFT): MEDIUM {compound_gap['MEDIUM']:+.3f}, "
+# Stage 3 (model-free, #27): the gap between compounds on a new set, from each training stint's
+# stage-1 new-set level (one-lap stints too), with run_laps as a control for the run type
+train_stints = stint_new_set_levels(train_all)
+compound_gap, pace_levels, run_coef = fit_compound_gap(train_stints)
+log(f"Stage 3 (model-free), compound gap on a new set (s, vs SOFT): MEDIUM {compound_gap['MEDIUM']:+.3f}, "
     f"HARD {compound_gap['HARD']:+.3f}; run_laps {run_coef:+.3f} s per lap of run; "
-    f"{len(pace_levels)} driver-session levels from {len(train_all)} laps")
+    f"{len(pace_levels)} driver-session levels from {len(train_stints)} stints / {len(train_all)} laps")
 
 
 # ======================================================
 # FEATURE IMPORTANCES
 # ======================================================
-if hasattr(model, "feature_importances_"):
-    imp = pd.Series(model.feature_importances_, index=FEATURES)
+if hasattr(model[-1], "feature_importances_"):
+    imp = pd.Series(model[-1].feature_importances_, index=FEATURES)
 
     imp_file = f"{SCRIPT_NAME}_feature_importance.csv"
     imp.to_csv(f"{RESULTS_DIR}/{imp_file}")
@@ -206,6 +213,8 @@ model_file = os.path.basename(MODEL_BUNDLE_PATH)
 joblib.dump(
     {
         "model": model,
+        "model_name": MODEL_NAME,
+        "feature_set": FEATURE_SET,
         "features": FEATURES,
         "medians": medians.to_dict(),
         "anchor_age": FALL_OFF_ANCHOR_AGE,

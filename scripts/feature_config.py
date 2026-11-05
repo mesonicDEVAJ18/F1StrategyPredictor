@@ -40,18 +40,30 @@ LAP_TIMING_COLUMNS = [
     "stint_avg_pace", "fuel_corrected_pace", "lap_duration",
 ]
 
-# Model input order (WHAT THE MODEL EXPECTS): the fall-off model sees the tyre and the conditions only
-MODEL_FEATURE_COLUMNS = [
+# Feature sets the fall-off model can use (the tyre and the conditions only; never the lap's own timing, #31).
+# train_model.py picks one with FALL_OFF_FEATURE_SET in .env; explore/explore_master.py compares them all
+TYRE = [
     "compound_HARD",
     "compound_MEDIUM",
     "compound_SOFT",
     "tyre_age",                 # tyre_age_at_start + laps_since_stint_start (laps on the set)
-    "track_temperature",
-    "air_temperature",
 ]
+WEATHER = ["air_temperature", "humidity", "pressure", "track_temperature", "wind_direction", "wind_speed"]  # rainfall is constant
+CORE = TYRE + ["track_temperature", "air_temperature"]
 
-_leaks = set(MODEL_FEATURE_COLUMNS) & set(LAP_TIMING_COLUMNS)
-assert not _leaks, f"Model inputs taken from the lap's own timing: {sorted(_leaks)}"
+FEATURE_SETS = {
+    "core": CORE,
+    "tyre_only": TYRE,
+    "all_weather": TYRE + WEATHER,
+    "plus_age_at_start": CORE + ["tyre_age_at_start"],
+    "plus_stint_lap": CORE + ["laps_since_stint_start"],
+}
+for _name, _cols in FEATURE_SETS.items():
+    _leaks = set(_cols) & set(LAP_TIMING_COLUMNS)
+    assert not _leaks, f"Feature set {_name} takes inputs from the lap's own timing: {sorted(_leaks)}"
+
+# The default model input order (FALL_OFF_FEATURE_SET=core)
+MODEL_FEATURE_COLUMNS = FEATURE_SETS["core"]
 
 # One stint of one driver (stint_number is the global per-driver number, so it also pins the session)
 STINT_GROUP_COLUMNS = ["driver_number", "stint_number"]
@@ -160,21 +172,50 @@ def fall_off_rows(model, features, df, conditions):
     return model.predict(X).astype(float) - np.array([anchors[c] for c in compound_of(df)])
 
 
-def fit_compound_gap(df, fall_off):
-    """Stage 3: OLS of (fcp - fall_off) on one level per driver and session + a HARD and a MEDIUM gap
-    to SOFT + run_laps. Compound gaps need comparisons between stints, so run_laps controls for the
-    run type (short quali sim vs long run).
+def stint_new_set_levels(df):
+    """Each stint's pace on a new set, from stage 1 on every row of df (no fall-off model, #27).
+
+    A one-lap stint's level is its own lap with the fall-off removed, so every clean lap counts.
+    new_set_pace = stint level + the compound's slope x FALL_OFF_ANCHOR_AGE: the stint's fcp at a new
+    set's first lap. Returns one row per stint (sorted by STINT_GROUP_COLUMNS) with session_key, the
+    compound one-hot, compound, run_laps, laps (its clean laps) and new_set_pace.
+    """
+    levels, slopes = fit_stint_levels(df)
+    stints = df.assign(compound=compound_of(df)).groupby(STINT_GROUP_COLUMNS).agg(
+        session_key=("session_key", "first"),
+        **{f"compound_{c}": (f"compound_{c}", "first") for c in COMPOUNDS},
+        compound=("compound", "first"),
+        run_laps=("run_laps", "first"),
+        laps=("lap_number", "size"),
+    ).reset_index()
+    stints["new_set_pace"] = (
+        levels.reindex(pd.MultiIndex.from_frame(stints[STINT_GROUP_COLUMNS])).to_numpy()
+        + stints["compound"].map(slopes).to_numpy() * FALL_OFF_ANCHOR_AGE
+    )
+    return stints
+
+
+def fit_compound_gap(stints):
+    """Stage 3 (model-free, #27): OLS of each stint's new_set_pace (stint_new_set_levels) on one level
+    per driver and session + a HARD and a MEDIUM gap to SOFT + run_laps, each stint weighted by its laps.
+    Compound gaps need comparisons between stints, so run_laps controls for the run type (short quali
+    sim vs long run).
+
+    The regressors are constant within a stint and stage 1's residuals sum to zero over each stint, so
+    this equals the per-lap fit of fcp minus the stage-1 linear fall-off.
 
     Returns (gap: {compound: s on a new set, SOFT = 0}, levels: Series indexed by PACE_GROUP_COLUMNS
-    and evaluated at the median run_laps of df, run_laps coefficient in s per lap of run).
+    and evaluated at the median run_laps over the laps, run_laps coefficient in s per lap of run).
     """
-    level_mat, keys = _dummies(df, PACE_GROUP_COLUMNS)
-    extra = df[["compound_HARD", "compound_MEDIUM", "run_laps"]].to_numpy(dtype=float)
-    y = df["fuel_corrected_pace"].to_numpy() - np.asarray(fall_off, dtype=float)
-    coef, *_ = np.linalg.lstsq(np.hstack([level_mat, extra]), y, rcond=None)
+    level_mat, keys = _dummies(stints, PACE_GROUP_COLUMNS)
+    extra = stints[["compound_HARD", "compound_MEDIUM", "run_laps"]].to_numpy(dtype=float)
+    w = np.sqrt(stints["laps"].to_numpy(dtype=float))[:, None]
+    y = stints["new_set_pace"].to_numpy(dtype=float)
+    coef, *_ = np.linalg.lstsq(np.hstack([level_mat, extra]) * w, y * w[:, 0], rcond=None)
     k = len(keys)
     run_coef = float(coef[k + 2])
-    levels = pd.Series(coef[:k] + run_coef * float(df["run_laps"].median()),
+    lap_run_laps = np.repeat(stints["run_laps"].to_numpy(dtype=float), stints["laps"].to_numpy())
+    levels = pd.Series(coef[:k] + run_coef * float(np.median(lap_run_laps)),
                        index=pd.MultiIndex.from_tuples(keys, names=PACE_GROUP_COLUMNS))
     gap = {"SOFT": 0.0, "MEDIUM": float(coef[k + 1]), "HARD": float(coef[k])}
     return gap, levels, run_coef

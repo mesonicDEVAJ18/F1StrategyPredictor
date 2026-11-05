@@ -7,8 +7,8 @@ import warnings
 from scipy.stats import ttest_1samp, wilcoxon, friedmanchisquare, t as t_dist
 
 from feature_config import MODEL_FEATURE_COLUMNS, STINT_FILL_COLUMNS, SECTOR_COLUMNS
-from feature_config import SESSION_COLUMNS, STINT_GROUP_COLUMNS, FALL_OFF_ANCHOR_AGE
-from feature_config import FUEL_EFFECT_K, multi_lap_rows, fit_stint_levels, linear_fall_off, fit_compound_gap
+from feature_config import SESSION_COLUMNS, STINT_GROUP_COLUMNS
+from feature_config import FUEL_EFFECT_K, multi_lap_rows, fit_stint_levels, stint_new_set_levels, fit_compound_gap
 from env_config import env_str, env_int, env_float
 
 warnings.filterwarnings("ignore")
@@ -525,18 +525,9 @@ for _, r in slope_diff_df.iterrows():
 # --- New-set pace of every stint (6b and 6c) ---
 # Stage 1 on all rows: a single-lap stint's level is its own lap with the fall-off removed, so every
 # clean lap counts. New-set pace = level + the compound's slope at FALL_OFF_ANCHOR_AGE
-all_levels, all_slopes = fit_stint_levels(df)
-stint_df = df.groupby(STINT_GROUP_COLUMNS).agg(
-    session_key=("session_key", "first"),
-    session=("session", "first"),
-    compound=("compound", "first"),
-    run_laps=("run_laps", "first"),
-    laps=("lap_number", "size")
-).reset_index()
-stint_df["new_set_pace"] = (
-    all_levels.reindex(pd.MultiIndex.from_frame(stint_df[STINT_GROUP_COLUMNS])).to_numpy()
-    + stint_df["compound"].map(all_slopes) * FALL_OFF_ANCHOR_AGE
-)
+# (stint_new_set_levels, shared with train_model.py's model-free stage 3)
+stint_df = stint_new_set_levels(df)
+stint_df["session"] = df.groupby(STINT_GROUP_COLUMNS)["session"].first().to_numpy()
 
 
 def paired_table(wide, pairs, label):
@@ -572,8 +563,8 @@ save_csv(compound_pace_df, "inference_compound_pace")
 run_mix = ", ".join(f"{c} {stint_df.loc[stint_df['compound'] == c, 'run_laps'].median():.0f}" for c in COMPOUNDS)
 log(f"  Median run length (run_laps) per compound: {run_mix}. Run type still differs between compounds "
     "(short quali sims vs long runs), so this is the same caveat as stage 3's compound gap (#27)")
-stage3_gap, _, _ = fit_compound_gap(df, linear_fall_off(df, all_slopes))
-log(f"  For comparison, stage 3 (fit_compound_gap with the linear fall-off): "
+stage3_gap, _, _ = fit_compound_gap(stint_df)
+log(f"  For comparison, model-free stage 3 (fit_compound_gap, with the run_laps control): "
     f"MEDIUM {stage3_gap['MEDIUM']:+.3f} s, HARD {stage3_gap['HARD']:+.3f} s to SOFT")
 
 

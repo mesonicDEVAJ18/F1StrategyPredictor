@@ -1,18 +1,23 @@
 
 Loaded stints_p1.csv with 90 rows
 [stints_p1] Removed 0 logically invalid stint rows
+[stints_p1] Removed 0 non-dry stint rows
 [stints_p1] Applied OHE for tyre compound
   → Saved cleaned stint file: process_stints_cleaned_stints_p1.csv
 
 Loaded stints_p2.csv with 89 rows
 [stints_p2] Removed 0 logically invalid stint rows
+[stints_p2] Removed 0 non-dry stint rows
 [stints_p2] Applied OHE for tyre compound
   → Saved cleaned stint file: process_stints_cleaned_stints_p2.csv
 
 Loaded stints_p3.csv with 96 rows
 [stints_p3] Removed 0 logically invalid stint rows
+[stints_p3] Removed 0 non-dry stint rows
 [stints_p3] Applied OHE for tyre compound
   → Saved cleaned stint file: process_stints_cleaned_stints_p3.csv
+
+Compound one-hot cells filled with 0 (compound not run in that session): 0
 
 Saved combined stints dataset: process_stints_combined_cleaned.csv
 Saved hand-off dataset: ../data\processed\stints_combined_clean.csv

@@ -1,16 +1,17 @@
-Loaded dataset with 573 rows and 44 columns.
-Reconstructed lap_duration (fcp + k * laps_remaining) against the sector sum: 573 laps with all three sectors, max |difference| = 0.000 s
+Loaded dataset with 566 rows and 44 columns.
+Reconstructed lap_duration (fcp + k * laps_remaining) against the sector sum: 566 laps with all three sectors, max |difference| = 0.000 s
 Units: lap and sector times in s, speeds in km/h, car-data aggregates in physical units; weather columns air_temperature, humidity, pressure, rainfall, track_temperature, wind_speed are z-scores (process_weather.py), wind_direction in degrees.
 Model inputs (train_model.py): compound_HARD, compound_MEDIUM, compound_SOFT, tyre_age, track_temperature, air_temperature
 
 === 1. Summary statistics and missing values ===
-Columns with missing values (10 of 38):
-  i1_speed: 10 (1.7%); FP1 6, FP2 3, FP3 1
-  segments_sector_1: 10 (1.7%); FP1 10, FP2 0, FP3 0
+Columns with missing values (11 of 38):
+  i1_speed: 10 (1.8%); FP1 6, FP2 3, FP3 1
+  segments_sector_1: 10 (1.8%); FP1 10, FP2 0, FP3 0
   segments_sector_2: 4 (0.7%); FP1 4, FP2 0, FP3 0
   st_speed: 3 (0.5%); FP1 1, FP2 1, FP3 1
-  mean_rpm: 2 (0.3%); FP1 2, FP2 0, FP3 0
-  brake_pct: 2 (0.3%); FP1 0, FP2 1, FP3 1
+  mean_throttle: 2 (0.4%); FP1 2, FP2 0, FP3 0
+  mean_rpm: 2 (0.4%); FP1 2, FP2 0, FP3 0
+  brake_pct: 2 (0.4%); FP1 0, FP2 1, FP3 1
   mean_speed: 1 (0.2%); FP1 1, FP2 0, FP3 0
   segments_sector_3: 1 (0.2%); FP1 1, FP2 0, FP3 0
   max_rpm: 1 (0.2%); FP1 0, FP2 0, FP3 1
@@ -18,70 +19,70 @@ Columns with missing values (10 of 38):
 Constant columns (no information for a model): ['segments_sector_1', 'segments_sector_2', 'rainfall']
 
 === 2. Pace distributions by session and compound ===
-  FP1 HARD  :  62 laps, fcp median 99.012 s, IQR 3.356 s, range 95.930-107.766 s
+  FP1 HARD  :  61 laps, fcp median 99.006 s, IQR 3.234 s, range 95.930-105.063 s
   FP1 MEDIUM:  67 laps, fcp median 97.897 s, IQR 4.555 s, range 95.075-109.376 s
-  FP1 SOFT  :  59 laps, fcp median 97.118 s, IQR 5.493 s, range 92.784-104.045 s
+  FP1 SOFT  :  58 laps, fcp median 96.671 s, IQR 5.433 s, range 92.784-104.045 s
   FP2 HARD  :  25 laps, fcp median 97.927 s, IQR 3.555 s, range 92.389-102.781 s
   FP2 MEDIUM: 119 laps, fcp median 98.777 s, IQR 5.014 s, range 91.168-104.204 s
-  FP2 SOFT  : 154 laps, fcp median 98.341 s, IQR 3.013 s, range 90.400-104.306 s
+  FP2 SOFT  : 151 laps, fcp median 98.294 s, IQR 3.014 s, range 90.400-104.306 s
   FP3 HARD  :  18 laps, fcp median 97.411 s, IQR 3.959 s, range 94.860-101.614 s
   FP3 MEDIUM:  13 laps, fcp median 94.782 s, IQR 0.378 s, range 94.467-95.469 s
-  FP3 SOFT  :  56 laps, fcp median 94.060 s, IQR 2.316 s, range 91.541-105.983 s
+  FP3 SOFT  :  54 laps, fcp median 94.054 s, IQR 2.101 s, range 91.541-102.375 s
 
 === 3. Fuel-corrected pace against tyre age (the fall-off the model learns) ===
 Descriptive linear slope of within-stint fcp on tyre age (tested in section 6, #26):
-  SOFT  : +0.3655 s/lap over 182 laps in 35 multi-lap stints (122 stints in all, tyre age 2-19)
+  SOFT  : +0.3408 s/lap over 174 laps in 33 multi-lap stints (122 stints in all, tyre age 2-19)
   MEDIUM: +0.2269 s/lap over 168 laps in 38 multi-lap stints (69 stints in all, tyre age 2-19)
-  HARD  : +0.3059 s/lap over 86 laps in 23 multi-lap stints (42 stints in all, tyre age 2-18)
+  HARD  : +0.2115 s/lap over 85 laps in 23 multi-lap stints (42 stints in all, tyre age 2-18)
 
 === 4. Correlations between candidate inputs and with within-stint pace ===
-Correlations on the 436 laps of multi-lap stints; constant inputs left out: ['rainfall']
+Correlations on the 427 laps of multi-lap stints; constant inputs left out: ['rainfall']
 Input pairs with |Pearson r| >= 0.8: 6, in 1 groups
   Group 1 (4): air_temperature, humidity, pressure, track_temperature
 Correlations with within-stint pace (Pearson / Spearman):
-  laps_since_stint_start   +0.342 / +0.414
-  tyre_age                 +0.227 / +0.296
-  wind_direction           -0.022 / -0.007
-  pressure                 +0.014 / +0.013
-  wind_speed               +0.011 / -0.008
-  track_temperature        -0.009 / -0.022
-  air_temperature          -0.008 / -0.067
-  humidity                 -0.002 / -0.126
-  compound_MEDIUM          +0.000 / +0.022
-  compound_SOFT            -0.000 / -0.014
-  compound_HARD            -0.000 / -0.009
-  tyre_age_at_start        +0.000 / +0.028
+  laps_since_stint_start   +0.379 / +0.425
+  tyre_age                 +0.252 / +0.286
+  wind_speed               -0.020 / -0.020
+  pressure                 +0.014 / +0.002
+  wind_direction           -0.014 / +0.023
+  air_temperature          -0.008 / -0.061
+  track_temperature        -0.008 / -0.006
+  humidity                 -0.006 / -0.157
+  compound_MEDIUM          +0.000 / +0.006
+  compound_SOFT            -0.000 / -0.006
+  compound_HARD            -0.000 / -0.000
+  tyre_age_at_start        +0.000 / +0.003
 
 === 5. Row coverage: all laps and the laps of multi-lap stints (the fall-off rows) ===
-  engineered: 573 rows, 233 stints; by session FP1 188, FP2 298, FP3 87; by compound SOFT 269, MEDIUM 199, HARD 105
-  multi_lap_stints: 436 rows, 96 stints; by session FP1 153, FP2 259, FP3 24; by compound SOFT 182, MEDIUM 168, HARD 86
-Clean laps per stint: median 1, max 14; 137 of 233 stints have a single clean lap (no fall-off)
+  engineered: 566 rows, 233 stints; by session FP1 186, FP2 295, FP3 85; by compound SOFT 263, MEDIUM 199, HARD 104
+  multi_lap_stints: 427 rows, 94 stints; by session FP1 151, FP2 254, FP3 22; by compound SOFT 174, MEDIUM 168, HARD 85
+Clean laps per stint: median 1, max 14; 139 of 233 stints have a single clean lap (no fall-off)
 
 === 6. Statistical inference: degradation, compound pace, session pace ===
 alpha = 0.05, 95% intervals, 2000 bootstrap resamples (seed 42)
 
 6a. Degradation: stage-1 slope per compound (train_model.py's fit_stint_levels), stint cluster bootstrap
-  SOFT  : +0.365 s/lap, 95% CI [+0.299, +0.505], bootstrap p < 0.0005 (significant); per-stint slopes: 35/35 positive, median +0.490, t p 0.0010, Wilcoxon p < 0.0001
-  MEDIUM: +0.227 s/lap, 95% CI [+0.133, +0.336], bootstrap p < 0.0005 (significant); per-stint slopes: 27/38 positive, median +0.176, t p 0.0202, Wilcoxon p 0.0003
-  HARD  : +0.306 s/lap, 95% CI [+0.039, +0.539], bootstrap p 0.0340 (significant); per-stint slopes: 15/23 positive, median +0.140, t p 0.1897, Wilcoxon p 0.1793
+  SOFT  : +0.341 s/lap, 95% CI [+0.287, +0.440], bootstrap p < 0.0005 (significant); per-stint slopes: 33/33 positive, median +0.366, t p 0.0014, Wilcoxon p < 0.0001
+  MEDIUM: +0.227 s/lap, 95% CI [+0.135, +0.336], bootstrap p < 0.0005 (significant); per-stint slopes: 27/38 positive, median +0.176, t p 0.0202, Wilcoxon p 0.0003
+  HARD  : +0.211 s/lap, 95% CI [-0.052, +0.460], bootstrap p 0.1180 (not significant); per-stint slopes: 14/23 positive, median +0.112, t p 0.3659, Wilcoxon p 0.3931
   Slope differences between compounds (Holm over the 3 pairs):
-    SOFT - MEDIUM: +0.139 s/lap, CI [+0.010, +0.298], p 0.0280, Holm p 0.0840 (not significant)
-    SOFT - HARD  : +0.060 s/lap, CI [-0.180, +0.373], p 0.6050, Holm p 1.0000 (not significant)
-    HARD - MEDIUM: +0.079 s/lap, CI [-0.210, +0.330], p 0.6200, Holm p 1.0000 (not significant)
+    SOFT - MEDIUM: +0.114 s/lap, CI [-0.013, +0.244], p 0.0850, Holm p 0.2550 (not significant)
+    SOFT - HARD  : +0.129 s/lap, CI [-0.117, +0.409], p 0.2890, Holm p 0.5780 (not significant)
+    HARD - MEDIUM: -0.015 s/lap, CI [-0.300, +0.240], p 0.8420, Holm p 0.8420 (not significant)
 
 6b. Compound pace on a new set, paired within driver-session (the session and driver can't confound it)
   60 driver-sessions, 44 ran two or more compounds
-  MEDIUM - SOFT: 27 driver-sessions, mean +1.473 s, CI [+0.318, +2.628], median +1.086 s; t p 0.0144 (Holm 0.0144), Wilcoxon p 0.0030 (Holm 0.0034, significant)
-  HARD - SOFT  : 16 driver-sessions, mean +1.718 s, CI [+0.855, +2.581], median +1.894 s; t p 0.0007 (Holm 0.0014), Wilcoxon p 0.0017 (Holm 0.0034, significant)
+  MEDIUM - SOFT: 27 driver-sessions, mean +1.608 s, CI [+0.495, +2.722], median +1.443 s; t p 0.0063 (Holm 0.0063), Wilcoxon p 0.0014 (Holm 0.0014, significant)
+  HARD - SOFT  : 16 driver-sessions, mean +2.231 s, CI [+1.509, +2.954], median +2.201 s; t p < 0.0001 (Holm < 0.0001), Wilcoxon p < 0.0001 (Holm 0.0001, significant)
   HARD - MEDIUM:  1 driver-sessions, too few pairs to test (left out of the Holm family)
   Median run length (run_laps) per compound: SOFT 4, MEDIUM 6, HARD 6. Run type still differs between compounds (short quali sims vs long runs), so this is the same caveat as stage 3's compound gap (#27)
-  For comparison, stage 3 (fit_compound_gap with the linear fall-off): MEDIUM +0.877 s, HARD +0.527 s to SOFT
+  For comparison, model-free stage 3 (fit_compound_gap, with the run_laps control): MEDIUM +0.978 s, HARD +1.228 s to SOFT
 
 6c. Session pace on a new set, paired within driver and compound (a change in compound mix can't pose as evolution)
-  FP2 - FP1    : 15 driver-compounds, mean -2.357 s, CI [-3.423, -1.291], median -2.327 s; t p 0.0003 (Holm 0.0006), Wilcoxon p 0.0006 (Holm 0.0018, significant)
-  FP3 - FP2    : 21 driver-compounds, mean +0.015 s, CI [-0.698, +0.728], median +0.351 s; t p 0.9654 (Holm 0.9654), Wilcoxon p 0.7079 (Holm 0.7079, not significant)
-  FP3 - FP1    : 13 driver-compounds, mean -1.707 s, CI [-2.401, -1.014], median -2.278 s; t p 0.0002 (Holm 0.0005), Wilcoxon p 0.0012 (Holm 0.0024, significant)
-  Friedman over the 11 driver-compounds with all three sessions: p 0.0039 (significant)
+  FP2 - FP1    : 15 driver-compounds, mean -2.765 s, CI [-3.637, -1.892], median -2.479 s; t p < 0.0001 (Holm < 0.0001), Wilcoxon p < 0.0001 (Holm 0.0002, significant)
+  FP3 - FP2    : 21 driver-compounds, mean +0.251 s, CI [-0.337, +0.838], median +0.246 s; t p 0.3844 (Holm 0.3844), Wilcoxon p 0.2722 (Holm 0.2722, not significant)
+  FP3 - FP1    : 13 driver-compounds, mean -1.675 s, CI [-2.345, -1.004], median -2.029 s; t p 0.0001 (Holm 0.0003), Wilcoxon p 0.0007 (Holm 0.0015, significant)
+  Friedman over the 11 driver-compounds with all three sessions: p 0.0008 (significant)
 
 FILES GENERATED:
   - eda_summary_stats.csv

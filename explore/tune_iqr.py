@@ -11,13 +11,14 @@
 #      (process_laps_iqr_residuals_*.csv). A lap <= PUSH_LAP_MAX_BEST_RATIO is a push lap. For each side
 #      and session, the k at which the fence starts removing push laps; the lower-side floor is the
 #      smallest K_GRID value at least LABEL_MARGIN x the largest of them.
-#   B. CV sweep: the data stages rerun for each (k_lower, k_upper); XGBoost (train_model.py's MODEL block)
-#      is scored by grouped CV on the fall-off rows present in every configuration of a weekend, with the
-#      same stint folds for each configuration, so the scores are paired.
+#   B. CV sweep: the data stages rerun for each (k_lower, k_upper); the stage-1 linear fall-off per compound
+#      (no fall-off model, so the tuned fences don't depend on it, #27) is scored by grouped CV on the fall-off
+#      rows present in every configuration of a weekend, with the same stint folds for each configuration, so
+#      the scores are paired.
 #
-# While it runs it switches data/raw/ between weekends and rewrites data/processed/; at the end it
-# switches back to the .env weekend and reruns the data stages at the .env values. It writes no hand-off
-# file: the winner is copied into .env by hand.
+# While it runs it switches data/raw/ between weekends and rewrites data/processed/. A full run then writes
+# the winner into .env (env_config.write_env, with a comment line; --quick never writes), switches back to
+# the .env weekend and reruns the data stages at the new values. It writes no hand-off file.
 import argparse
 import hashlib
 import os
@@ -36,10 +37,9 @@ import matplotlib  # noqa: E402
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from scipy.stats import ttest_rel, wilcoxon  # noqa: E402
-from xgboost import XGBRegressor  # noqa: E402
 
-from env_config import env_str, env_int, env_float, env_list  # noqa: E402
-from feature_config import MODEL_FEATURE_COLUMNS, STINT_GROUP_COLUMNS, stint_shape_errors  # noqa: E402
+from env_config import env_str, env_int, env_float, env_list, write_env  # noqa: E402
+from feature_config import STINT_GROUP_COLUMNS, linear_fall_off, stint_shape_errors  # noqa: E402
 import explore_lib as lib  # noqa: E402
 
 warnings.filterwarnings("ignore")
@@ -190,19 +190,6 @@ def removed_counts():
             for stage in ["iqr_residual_fast", "iqr_residual_slow", "non_push"]}
 
 
-def xgb():
-    # As train_model.py's MODEL block
-    return XGBRegressor(
-        n_estimators=env_int("XGB_N_ESTIMATORS"),
-        learning_rate=env_float("XGB_LEARNING_RATE"),
-        max_depth=env_int("XGB_MAX_DEPTH"),
-        subsample=env_float("XGB_SUBSAMPLE"),
-        colsample_bytree=env_float("XGB_COLSAMPLE_BYTREE"),
-        random_state=RANDOM_STATE,
-        objective="reg:squarederror",
-    )
-
-
 def stint_folds(stint_keys, seed):
     """The same stint -> fold map for every configuration (ngroup() ids change with the data)."""
     keys = sorted(stint_keys)
@@ -211,24 +198,21 @@ def stint_folds(stint_keys, seed):
 
 
 def oof_predictions(df, folds):
-    """Out-of-fold XGBoost fall-off predictions over the stint folds (#31): each fold fits the stage-1
-    stint levels and the input medians on its training rows, as train_model.py / validate_strategy.py do."""
+    """Out-of-fold fall-off predictions over the stint folds (#31), with no fall-off model (#27): each fold
+    fits stage 1 on its training rows and predicts the held-out stints with its linear slope per compound."""
     fold = df["stint_key"].map(folds).to_numpy()
     pred = np.full(len(df), np.nan)
     for f in range(CV_FOLDS):
         train, test = fold != f, fold == f
         if not test.any() or not train.any():
             continue
-        X_train = df.loc[train, MODEL_FEATURE_COLUMNS]
-        medians = X_train.median(numeric_only=True)
-        y_train, _ = lib.fold_target(df.loc[train])
-        model = xgb().fit(X_train.fillna(medians), y_train)
-        pred[test] = model.predict(df.loc[test, MODEL_FEATURE_COLUMNS].fillna(medians))
+        _, slopes = lib.fold_target(df.loc[train])
+        pred[test] = linear_fall_off(df.loc[test], slopes)
     return pred
 
 
 def cv_sweep(year, name, configs, repeats):
-    """Reruns the data stages for each configuration and scores XGBoost on the rows common to all.
+    """Reruns the data stages for each configuration and scores the linear fall-off on the rows common to all.
     Returns (one row per configuration, per-stint MAE on the common rows)."""
     weekend_label = f"{year}_{name}"
     datasets, config_hash, config_info = {}, {}, {}
@@ -478,12 +462,21 @@ def main():
         lines.append(f"   Winner vs current: mean per-stint diff {w['vs_current_mean_diff']:+.4f} s, better on "
                      f"{int(w['vs_current_better_stints'])} of {int(w['stints'])} stints, t p {w['vs_current_t_p']:.4f}, "
                      f"Wilcoxon p {w['vs_current_wilcoxon_p']:.4f}.")
-    lines += ["", f"Copy into .env: IQR_LOWER_MULTIPLIER={winner[0]:g}  IQR_UPPER_MULTIPLIER={winner[1]:g}"]
+    updates = {"IQR_LOWER_MULTIPLIER": f"{winner[0]:g}", "IQR_UPPER_MULTIPLIER": f"{winner[1]:g}"}
+    pick = "  ".join(f"{k}={v}" for k, v in updates.items())
+    lines += ["", f"{'Not written (--quick)' if args.quick else 'Written to .env'}: {pick}"]
     name = f"{SCRIPT_NAME}_recommendation.txt"
     with open(f"{RESULTS_DIR}/{name}", "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
     generated_files.append(name)
     log("\n" + "\n".join(lines))
+
+    # ---------------- write the winner into .env (full runs only) ----------------
+    # Before the restore, so the restored stages use the new values (write_env sets os.environ too)
+    if not args.quick:
+        write_env(updates, f"{SCRIPT_NAME}.py {time.strftime('%Y-%m-%d')}: ({winner[0]:g}, {winner[1]:g}) over "
+                           f"{cv['weekend'].nunique()} weekends, see explore/results/{SCRIPT_NAME}/{name}")
+        log(f"Wrote {pick} into .env")
 
     # ---------------- restore the .env weekend ----------------
     log("\nRestoring the .env weekend and data stages at the .env values...")

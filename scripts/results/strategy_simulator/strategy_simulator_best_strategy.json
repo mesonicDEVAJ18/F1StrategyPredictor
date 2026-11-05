@@ -4,7 +4,7 @@
   "best_compound_sequence": [
     "SOFT",
     "SOFT",
-    "HARD"
+    "MEDIUM"
   ],
   "best_set_ages_at_start": [
     0,
@@ -15,5 +15,5 @@
     14,
     28
   ],
-  "best_total_time": 5649.510125469663
+  "best_total_time": 5625.241294184561
 }

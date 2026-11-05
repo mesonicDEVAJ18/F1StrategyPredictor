@@ -1,25 +1,25 @@
 Loading engineered dataset...
-Dataset rows: 573
-Completed train/test split by stint: 186 stints / 471 laps train, 47 stints / 102 laps test, 0 shared.
-Fall-off rows (stints with >= 2 clean laps): 365 laps / 80 stints train, 71 laps / 16 stints test
-Stage 1, linear fall-off per compound (s per lap of tyre age): SOFT +0.362, MEDIUM +0.210, HARD +0.312
+Dataset rows: 566
+Completed train/test split by stint: 186 stints / 464 laps train, 47 stints / 102 laps test, 0 shared.
+Fall-off rows (stints with >= 2 clean laps): 356 laps / 78 stints train, 71 laps / 16 stints test
+Stage 1, linear fall-off per compound (s per lap of tyre age): SOFT +0.327, MEDIUM +0.210, HARD +0.215
 Inputs median-filled: 0 train rows, 0 test rows
 Saved feature snapshot.
 
-Training XGBoost...
+Training XGBoost on feature set core (compound_HARD, compound_MEDIUM, compound_SOFT, tyre_age, track_temperature, air_temperature)...
 
 Held-out within-stint shape metrics (MAE/RMSE in seconds):
                     MAE    RMSE  R2_within
-XGBoost          1.1198  1.5646     0.1606
+XGBoost          1.1338  1.5905     0.1326
 baseline_flat    1.1976  1.7078     0.0000
-baseline_linear  0.9521  1.4076     0.3206
+baseline_linear  0.9503  1.4105     0.3178
 Saved model metrics table.
 
 Fall-off from a new set's first lap (s), training-median conditions; tyre_age in training 2-19:
-  SOFT: age 5: +1.79 (linear +1.45), age 10: +4.29 (linear +3.25), age 15: +7.64 (linear +5.06)
-  MEDIUM: age 5: +0.86 (linear +0.84), age 10: +1.06 (linear +1.89), age 15: +3.25 (linear +2.93)
-  HARD: age 5: +1.23 (linear +1.25), age 10: +2.44 (linear +2.81), age 15: +5.62 (linear +4.37)
-Stage 3, compound gap on a new set (s, vs SOFT): MEDIUM +2.972, HARD +0.848; run_laps +0.254 s per lap of run; 60 driver-session levels from 471 laps
+  SOFT: age 5: +1.62 (linear +1.31), age 10: +2.28 (linear +2.95), age 15: +4.78 (linear +4.58)
+  MEDIUM: age 5: +1.28 (linear +0.84), age 10: +0.38 (linear +1.89), age 15: +2.43 (linear +2.93)
+  HARD: age 5: +2.01 (linear +0.86), age 10: +1.29 (linear +1.93), age 15: +3.78 (linear +3.00)
+Stage 3 (model-free), compound gap on a new set (s, vs SOFT): MEDIUM +1.156, HARD +0.295; run_laps +0.362 s per lap of run; 60 driver-session levels from 186 stints / 464 laps
 Saved feature importance CSV.
 Saved trained XGBoost model.
 Saved fall-off plot.
@@ -29,5 +29,5 @@ Generated files:
   - train_model_model_metrics.csv
   - train_model_fall_off_curves.csv
   - train_model_feature_importance.csv
-  - train_model_xgb_model.pkl
+  - train_model_fall_off_model.pkl
   - train_model_fall_off_curves.png

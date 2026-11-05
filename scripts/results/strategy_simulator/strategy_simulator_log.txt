@@ -1,9 +1,9 @@
 
 --- STRATEGY SIMULATOR START ---
 
-Loaded trained XGBoost fall-off model.
-Compound gap on a new set (s, vs SOFT): {'SOFT': 0.0, 'MEDIUM': 2.9719629624891724, 'HARD': 0.8479351719880528}
-Race pace level for car 16: 93.06 s (mean of 2 driver-session levels)
+Loaded the trained XGBoost fall-off model (feature set core).
+Compound gap on a new set (s, vs SOFT): {'SOFT': 0.0, 'MEDIUM': 1.1557150225114938, 'HARD': 0.29549265398302005}
+Race pace level for car 16: 94.42 s (mean of 2 driver-session levels)
 Loaded tyre set inventory for car 16: SOFT [0, 0, 0, 0, 6, 6], MEDIUM [0, 0], HARD [0]
 Race weekend: 2025 Bahrain Grand Prix (2025_bahrain), 57 laps
 
@@ -11,18 +11,18 @@ Pricing 4 (compound, set age) pairs: [('SOFT', 0), ('SOFT', 6), ('MEDIUM', 0), (
 Saved stint curves and stint totals.
 
 Curve check (stint of 57 laps; fcp and fall-off in s, by stint lap):
-  SOFT set age 0: lap 1: 93.06 (fall-off +0.00, linear +0.00), lap 18: 101.30 (fall-off +8.24, linear +6.15), lap 57: 101.52 (fall-off +8.46, linear +20.24), max |lap-to-lap step|: 3.55
-  SOFT set age 6: lap 1: 96.63 (fall-off +3.57, linear +2.17), lap 18: 101.52 (fall-off +8.46, linear +8.31), lap 57: 101.52 (fall-off +8.46, linear +22.41), max |lap-to-lap step|: 2.40
-  MEDIUM set age 0: lap 1: 96.03 (fall-off +0.00, linear +0.00), lap 18: 100.51 (fall-off +4.48, linear +3.56), lap 57: 99.69 (fall-off +3.66, linear +11.74), max |lap-to-lap step|: 2.65
-  HARD set age 0: lap 1: 93.91 (fall-off +0.00, linear +0.00), lap 18: 100.86 (fall-off +6.95, linear +5.30), lap 57: 100.53 (fall-off +6.63, linear +17.47), max |lap-to-lap step|: 3.05
+  SOFT set age 0: lap 1: 94.42 (fall-off +0.00, linear +0.00), lap 18: 99.86 (fall-off +5.44, linear +5.56), lap 57: 100.56 (fall-off +6.14, linear +18.33), max |lap-to-lap step|: 1.04
+  SOFT set age 6: lap 1: 96.87 (fall-off +2.45, linear +1.96), lap 18: 100.56 (fall-off +6.14, linear +7.53), lap 57: 100.56 (fall-off +6.14, linear +20.29), max |lap-to-lap step|: 0.88
+  MEDIUM set age 0: lap 1: 95.58 (fall-off +0.00, linear +0.00), lap 18: 99.04 (fall-off +3.46, linear +3.56), lap 57: 98.43 (fall-off +2.85, linear +11.74), max |lap-to-lap step|: 1.47
+  HARD set age 0: lap 1: 94.72 (fall-off +0.00, linear +0.00), lap 18: 99.99 (fall-off +5.28, linear +3.65), lap 57: 99.56 (fall-off +4.85, linear +12.02), max |lap-to-lap step|: 1.70
 Dropped 2109 strategies using fewer than 2 compounds.
 Total strategies to evaluate: 16206
 
 Car 16: 3996 strategies skipped (not enough sets of a compound), 12210 evaluated
-Car 16 best strategy: {'car_number': 16, 'best_compound_sequence': ('SOFT', 'SOFT', 'HARD'), 'best_set_ages_at_start': (0, 0, 0), 'best_pit_laps': [14, 28], 'best_total_time': 5649.510125469663}
+Car 16 best strategy: {'car_number': 16, 'best_compound_sequence': ('SOFT', 'SOFT', 'MEDIUM'), 'best_set_ages_at_start': (0, 0, 0), 'best_pit_laps': [14, 28], 'best_total_time': 5625.241294184561}
 
 OPTIMIZATION COMPLETE
-Car 16: ('SOFT', 'SOFT', 'HARD'), set ages (0, 0, 0), pits [14, 28], time 5649.51 s
+Car 16: ('SOFT', 'SOFT', 'MEDIUM'), set ages (0, 0, 0), pits [14, 28], time 5625.24 s
 
 FILES GENERATED:
   - strategy_simulator_stint_curves.csv

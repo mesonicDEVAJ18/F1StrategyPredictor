@@ -34,7 +34,7 @@ car_data_p1_27.csv,no_input,3140
 car_data_p1_27.csv,out_of_range,0
 car_data_p1_27.csv,outside_lap,4692
 car_data_p1_27.csv,low_coverage_laps,2
-car_data_p1_27.csv,not_in_clean_laps,11
+car_data_p1_27.csv,not_in_clean_laps,12
 car_data_p1_30.csv,duplicate_timestamp,0
 car_data_p1_30.csv,no_input,2562
 car_data_p1_30.csv,out_of_range,0
@@ -70,7 +70,7 @@ car_data_p1_4.csv,no_input,6979
 car_data_p1_4.csv,out_of_range,0
 car_data_p1_4.csv,outside_lap,1673
 car_data_p1_4.csv,low_coverage_laps,2
-car_data_p1_4.csv,not_in_clean_laps,6
+car_data_p1_4.csv,not_in_clean_laps,7
 car_data_p1_44.csv,duplicate_timestamp,0
 car_data_p1_44.csv,no_input,6549
 car_data_p1_44.csv,out_of_range,0
@@ -130,7 +130,7 @@ car_data_p2_10.csv,no_input,2325
 car_data_p2_10.csv,out_of_range,0
 car_data_p2_10.csv,outside_lap,4458
 car_data_p2_10.csv,low_coverage_laps,2
-car_data_p2_10.csv,not_in_clean_laps,9
+car_data_p2_10.csv,not_in_clean_laps,10
 car_data_p2_12.csv,duplicate_timestamp,0
 car_data_p2_12.csv,no_input,2167
 car_data_p2_12.csv,out_of_range,0
@@ -184,7 +184,7 @@ car_data_p2_31.csv,no_input,3848
 car_data_p2_31.csv,out_of_range,0
 car_data_p2_31.csv,outside_lap,2262
 car_data_p2_31.csv,low_coverage_laps,2
-car_data_p2_31.csv,not_in_clean_laps,10
+car_data_p2_31.csv,not_in_clean_laps,11
 car_data_p2_4.csv,duplicate_timestamp,0
 car_data_p2_4.csv,no_input,4548
 car_data_p2_4.csv,out_of_range,0
@@ -196,7 +196,7 @@ car_data_p2_44.csv,no_input,6505
 car_data_p2_44.csv,out_of_range,0
 car_data_p2_44.csv,outside_lap,2106
 car_data_p2_44.csv,low_coverage_laps,3
-car_data_p2_44.csv,not_in_clean_laps,7
+car_data_p2_44.csv,not_in_clean_laps,8
 car_data_p2_5.csv,duplicate_timestamp,0
 car_data_p2_5.csv,no_input,3512
 car_data_p2_5.csv,out_of_range,0
@@ -262,7 +262,7 @@ car_data_p3_14.csv,no_input,4241
 car_data_p3_14.csv,out_of_range,0
 car_data_p3_14.csv,outside_lap,5819
 car_data_p3_14.csv,low_coverage_laps,2
-car_data_p3_14.csv,not_in_clean_laps,8
+car_data_p3_14.csv,not_in_clean_laps,10
 car_data_p3_16.csv,duplicate_timestamp,0
 car_data_p3_16.csv,no_input,2938
 car_data_p3_16.csv,out_of_range,0

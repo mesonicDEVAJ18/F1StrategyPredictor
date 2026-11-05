@@ -51,7 +51,7 @@ LEVELS = bundle["levels"]
 LINEAR_SLOPES = bundle["linear_slopes"]
 ANCHOR_AGE = bundle["anchor_age"]
 
-log("Loaded trained XGBoost fall-off model.")
+log(f"Loaded the trained {bundle['model_name']} fall-off model (feature set {bundle['feature_set']}).")
 log(f"Compound gap on a new set (s, vs SOFT): {COMPOUND_GAP}")
 
 

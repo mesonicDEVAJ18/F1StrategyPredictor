@@ -110,6 +110,10 @@ log("\nAssigning stint numbers to laps...")
 laps, stints = assign_stint_numbers(laps, stints)
 missing = laps["stint_number"].isna().sum()
 log(f"  → Missing stint numbers: {missing}")
+# A lap with no clean stint (e.g. on a non-dry compound, which process_stints.py drops) has no
+# compound or stint level, so it can't be used
+laps = laps[laps["stint_number"].notna()].copy()
+log(f"  → Laps dropped for having no stint: {missing}")
 
 assign_snapshot = f"{SCRIPT_NAME}_laps_with_stints.csv"
 laps.to_csv(f"{RESULTS_DIR}/{assign_snapshot}", index=False)
@@ -155,6 +159,12 @@ log("\nMerging weather on timestamps (lap date_start ~ weather date)...")
 
 laps["date_start"] = pd.to_datetime(laps["date_start"], utc=True, format="ISO8601")
 weather["date"] = pd.to_datetime(weather["date"], utc=True, format="ISO8601")
+
+# OpenF1 leaves date_start empty on some first laps (e.g. 2025 spain FP3); with no timestamp a lap
+# can't be given its weather, and merge_asof refuses null keys
+no_date = laps["date_start"].isna()
+laps = laps[~no_date].copy()
+log(f"  → Laps dropped for having no date_start: {int(no_date.sum())}")
 
 # Sessions are hours apart and weather is sampled ~1/min, so the nearest
 # sample within the tolerance always comes from the lap's own session.

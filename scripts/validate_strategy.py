@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import joblib
 import matplotlib.pyplot as plt
+from sklearn.base import clone
 from sklearn.model_selection import GroupKFold
 from scipy.stats import ttest_rel, wilcoxon
 import os
@@ -11,7 +12,7 @@ from datetime import datetime
 
 from feature_config import (
     COMPOUNDS, STINT_GROUP_COLUMNS, compound_of, fall_off_curve, fall_off_rows, fall_off_target, fit_compound_gap,
-    fit_stint_levels, linear_fall_off, multi_lap_rows, stint_shape_errors,
+    fit_stint_levels, linear_fall_off, multi_lap_rows, stint_new_set_levels, stint_shape_errors,
 )
 from env_config import env_str, env_int, env_float
 
@@ -52,10 +53,10 @@ SIGNIFICANCE_LEVEL = env_float("SIGNIFICANCE_LEVEL")
 # LOAD MODEL + FEATURES
 # ============================================================
 bundle = joblib.load(MODEL_BUNDLE_PATH)
-model = bundle["model"]
+model = bundle["model"]   # an unfitted copy (clone) is fitted in each fold
 FEATURES = bundle["features"]
 
-log("Loaded model and feature metadata.")
+log(f"Loaded the {bundle['model_name']} fall-off model and its inputs ({bundle['feature_set']}: {', '.join(FEATURES)}).")
 
 
 # ============================================================
@@ -103,8 +104,8 @@ for fold, (train_idx, test_idx) in enumerate(kf.split(rows, groups=groups), 1):
 
     levels, slopes = fit_stint_levels(train)
     fold_medians = X_all.iloc[train_idx].median()
-    model.fit(X_all.iloc[train_idx].fillna(fold_medians), fall_off_target(train, levels))
-    pred = model.predict(X_all.iloc[test_idx].fillna(fold_medians))
+    fold_model = clone(model).fit(X_all.iloc[train_idx].fillna(fold_medians), fall_off_target(train, levels))
+    pred = fold_model.predict(X_all.iloc[test_idx].fillna(fold_medians))
 
     errs = {
         "model": stint_shape_errors(fcp[test_idx], pred, groups[test_idx]),
@@ -114,18 +115,18 @@ for fold, (train_idx, test_idx) in enumerate(kf.split(rows, groups=groups), 1):
     for n in ERR_NAMES:
         oof[n][test_idx] = errs[n]
     conditions = fold_medians.to_dict()
-    oof_fall_off[test_idx] = fall_off_rows(model, FEATURES, test, conditions)
+    oof_fall_off[test_idx] = fall_off_rows(fold_model, FEATURES, test, conditions)
     oof_fold[test_idx] = fold
 
     # The fold's curve, to see how much the fall-off moves with the training stints
     for c in COMPOUNDS:
-        curve = fall_off_curve(model, FEATURES, c, CURVE_AGES, conditions)
+        curve = fall_off_curve(fold_model, FEATURES, c, CURVE_AGES, conditions)
         curve_rows += [{"fold": fold, "compound": c, "tyre_age": age, "fall_off": v,
                         "linear_fall_off": slopes[c] * (age - 1)} for age, v in zip(CURVE_AGES, curve)]
 
-    # Stage-3 compound gap on the fold's training stints (one-lap stints too)
+    # Stage-3 compound gap (model-free) on the fold's training stints (one-lap stints too)
     gap_rows = df[~df.set_index(STINT_GROUP_COLUMNS).index.isin(test.set_index(STINT_GROUP_COLUMNS).index.unique())]
-    gap, _, _ = fit_compound_gap(gap_rows, fall_off_rows(model, FEATURES, gap_rows, conditions))
+    gap, _, _ = fit_compound_gap(stint_new_set_levels(gap_rows))
 
     res = {"fold": fold, "test_stints": test_stints, "test_rows": len(test_idx)}
     for n in ERR_NAMES:

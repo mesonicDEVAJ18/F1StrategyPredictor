@@ -18,6 +18,17 @@ fall-off from what is left, and a second linear stage gives the gap between comp
 enumerates legal pit/compound strategies, prices each stint from the fall-off curve of its set, and ranks them by
 total race time.
 
+**Target design (#27, in progress):**
+- Everything before the fall-off model must not depend on which model is chosen: lap cleaning and its tuned
+  thresholds, the stage-1 stint levels, the compound gap and the race pace level.
+- The model is plugged in last. Its only job is to predict each compound's fall-off with tyre age.
+- The simulator turns that fall-off into stint costs and searches every legal strategy for the fastest. This is
+  planned to move from brute force to dynamic programming.
+- XGBoost is a placeholder until #27 Step 4.
+- Since #27 Step 1 nothing upstream uses it: the compound gap is fitted on each stint's stage-1 new-set level
+  (`stint_new_set_levels()`), and the tune scripts' CV sweeps score with the stage-1 linear fall-off. See "Current
+  work" below.
+
 Read [readme.txt](readme.txt) for the full, authoritative narrative (problem statement, data
 dictionary, cleaning rules, feature-engineering rationale, and modelling decisions). When the
 code and this file disagree, trust the code; when the *reasoning* is unclear, trust readme.txt.
@@ -29,7 +40,7 @@ scripts/            # ALL pipeline code lives here; run scripts FROM this direct
   master.py             # orchestrator — runs the whole pipeline in order
   race_weekend.py       # weekend table (session keys, race laps); puts the selected weekend in data/raw/ (cache or OpenF1)
   env_config.py         # loads ../.env into os.environ; env_str/env_int/env_float/env_list getters
-  feature_config.py     # shared column lists (MODEL_FEATURE_COLUMNS, LAP_TIMING_COLUMNS, ...) and the fall-off helpers
+  feature_config.py     # shared column lists (FEATURE_SETS, LAP_TIMING_COLUMNS, ...) and the fall-off / compound-gap helpers
   process_laps.py       # clean lap data (kept in s / km/h, not scaled), tag session_name FP1-3
   process_stints.py     # clean stints, one-hot encode compound
   tyre_sets.py          # infer every car's tyre sets from practice stints -> race inventory
@@ -37,7 +48,7 @@ scripts/            # ALL pipeline code lives here; run scripts FROM this direct
   process_cardata.py    # clean car telemetry (whole field), aggregate per lap, unscaled (EDA, tune_push label; not model inputs)
   feature_engineer.py   # merge laps+stints+weather+car data, build engineered features
   eda.py                # exploratory data analysis of the engineered dataset (read-only, no hand-off)
-  train_model.py        # train the one chosen model (XGBoost for now), persist the bundle
+  train_model.py        # train the one fall-off model (XGBoost as a placeholder until #27 Step 4), persist the bundle
   strategy_simulator.py # enumerate + simulate strategies, pick best
   validate_strategy.py  # cross-validation of the fall-off curve, residual plot, tests vs flat/linear baselines (strategy robustness is planned, not built)
   results/<script>/     # per-script outputs (logs, intermediate CSVs, plots, model)
@@ -92,17 +103,22 @@ python explore_master.py --skip-pipeline --quick   # smoke run
 ```
 
 `explore_master.py` runs `master.py`'s stages up to `eda.py` from `scripts/`, then compares the candidates in its
-experiment block (models, search grids, feature sets: plain code at the top of the file, by design, not `.env`) on the
+experiment block (models and search grids: plain code at the top of the file, by design, not `.env`) over the feature
+sets in `feature_config.FEATURE_SETS` (shared with train_model.py) on the
 fall-off target, with nested CV grouped by stint. Stage 1 (stint levels) is fitted per outer fold, and the score is the
 shape of the curve within each held-out stint (`stint_shape_errors()`), against the flat (no fall-off) and linear
 (stage-1 slope per compound) baselines. Each fold's curve at a few tyre ages is saved (its spread is the curve's
-uncertainty), and each candidate's best configuration is drawn with `fall_off_curve()` and given a compound gap with
-`fit_compound_gap()`, the same shared helpers the pipeline uses, so explore can't drift from the simulator. A candidate
+uncertainty), and each candidate's best configuration is drawn with `fall_off_curve()`, next to the one model-free
+compound gap (`fit_compound_gap(stint_new_set_levels(all laps))`), the same shared helpers the pipeline uses, so explore
+can't drift from the simulator. A candidate
 is recommended only if it beats both baselines and its curve has steps ≤ `PLAUSIBLE_MAX_STEP_S`, rises on every
 compound and doesn't get faster with age over the race length (`MIN_MONOTONE_SHARE`; an RBF SVR reverts past the
 oldest tyre in training). The feature
 sets must never touch `LAP_TIMING_COLUMNS` (asserted). It writes only to `explore/results/explore_master/`: no hand-off
-file, and the bundle is untouched. The winner is copied into `train_model.py`'s MODEL block and `.env` by hand.
+file, and the bundle is untouched. The winner is copied into `train_model.py`'s MODEL block and `.env`
+(`FALL_OFF_FEATURE_SET` and its hyperparameters) by hand.
+Its `--quick` run writes into the same tracked results folder; to keep the full run's results, point `RESULTS_ROOT`
+elsewhere for it (an environment variable wins over `.env`).
 
 ```bash
 cd explore
@@ -113,11 +129,14 @@ python tune_iqr.py --quick   # smoke run: two weekends, small grid
 `tune_iqr.py` picks `IQR_LOWER_MULTIPLIER` / `IQR_UPPER_MULTIPLIER` (#32) with two methods: a label sweep over
 `process_laps.py`'s `process_laps_iqr_residuals_*.csv` (how many push laps, `best_ratio <= PUSH_LAP_MAX_BEST_RATIO`, each fence
 removes at each k), and a CV sweep that reruns `process_laps` → `process_cardata` → `feature_engineer` for each pair of multipliers
-and scores XGBoost's fall-off (stage 1 per fold) by within-stint shape MAE on the rows common to every pair, with the
-same stint folds. It runs the stages from `scripts/` with the
+and scores the model-free stage-1 linear fall-off (fitted per fold, #27) by within-stint shape MAE on the rows common to
+every pair, with the same stint folds. Its winner is the label floor with the current upper fence unless another pair beats
+it on both paired tests. It runs the stages from `scripts/` with the
 settings as environment variables, so while it runs it switches `data/raw/` between weekends and rewrites `data/processed/` and
-those stages' `scripts/results/`; at the end it switches back to the `.env` weekend and reruns them at the `.env` values. Its
-outputs go to `explore/results/tune_iqr/`; the winner is copied into `.env` by hand, with the reasoning in the comment there.
+those stages' `scripts/results/`. A full run then **writes the winner into `.env` itself** (`env_config.write_env()`: the
+`KEY=value` lines in place, with a dated `# tune_iqr.py …` comment line above them; `--quick` never writes), switches back
+to the `.env` weekend and reruns the stages at the new values. Its outputs go to `explore/results/tune_iqr/`. The
+hand-written reasoning comment above the keys in `.env` is not rewritten automatically; update it after a run.
 
 ```bash
 cd explore
@@ -129,12 +148,56 @@ python tune_push.py --quick   # smoke run: two weekends, small grid
 harness (keep the two in step). Its label doesn't use the ratios it tunes. `process_laps` runs with the push filter off and
 `process_cardata` with its z-score filter off, and each lap's `full_throttle_pct`, relative to the driver's 90th percentile in the
 session, labels it a push lap (≥ 0.8) or a cool-down lap (≤ 0.6). The label pick is the pair with the highest Youden J over
-`process_laps_push_ratios_*.csv`. The CV sweep, the switching of weekends and the final restore are as in `tune_iqr.py`. Outputs go
-to `explore/results/tune_push/`.
+`process_laps_push_ratios_*.csv`. The CV sweep, the switching of weekends, the `.env` write and the final restore are as in
+`tune_iqr.py`, except that a full run writes the **label pick**, not the CV winner: the CV sweep favours strict filters (it is
+scored on the strictest setting's rows, #30), so it is reported for information only. Outputs go to `explore/results/tune_push/`.
+Run `tune_iqr.py` before `tune_push.py`, never both at once (they share `data/raw/` and `data/processed/`).
 
 **Known gaps (don't "fix" silently — confirm intent first):**
 - Open issues (the unconfirmed model choice, no statistical inference, etc.) are listed in [diagnostic.md](diagnostic.md). Fixing them
   changes results, so confirm before fixing, and update diagnostic.md when one is resolved.
+
+## Current work: #27 (branch `model-choice-27`)
+
+The full step list, with files, sub-tasks and checks, is in [diagnostic.md](diagnostic.md) under #27. The rules
+agreed for it:
+
+- **Steps run in order, one at a time:**
+  - Step 0: check the workflow.
+  - Step 1: make the pipeline independent of the model.
+  - Step 2: a better compound-gap estimator, with no model involved.
+  - Step 3: dynamic programming in the simulator. This needs a new issue, opened only with the user's OK.
+  - Step 4: plug in the fall-off model.
+  - Step 5: docs, and close #27.
+
+  Start a step only when the user asks. Each step is one commit with its before → after numbers. After each one,
+  `master.py` and `explore_master.py --skip-pipeline` must run end to end.
+- **Swap test** (the acceptance check from Step 1 on): run train_model.py with two different models.
+  - These must come out identical: the cleaned data, the stage-1 levels and slopes, `compound_gap` and the
+    driver-session `levels`.
+  - Only these may differ: the fall-off curves, the stage-2 metrics and the strategy.
+- **The model choice comes last.** Don't pick or tune the fall-off model before Steps 1–3 are done. explore/ compares
+  candidates, but the choice (Ridge `tyre_only`, the MLP or the per-compound line) is the user's.
+- **The compound gap must not use the model.** It is fitted from the stage-1 new-set level of each stint, not from
+  `fcp − fall_off(model)`. Improving it means better estimation on the data there is, not more data:
+  - partial pooling of the driver and session effects
+  - run-type controls or matching
+  - an S ≤ M ≤ H order constraint
+  - bootstrap CIs over whole stints
+
+  Use numpy, scipy and scikit-learn only. No new dependencies without asking.
+- **Data scope:** the user ruled "the project is FP data only". The gap and the model use the selected weekend's
+  FP1–FP3 only.
+  - Don't pool other weekends, even though `data/cache/` holds 12 of them.
+  - tune_iqr.py and tune_push.py use other weekends only to set cleaning thresholds.
+  - No qualifying or race data.
+- **Tuned factors must not depend on the model.** The label sweeps in tune_iqr.py and tune_push.py use no model, and
+  since Step 1 their CV sweeps score with the model-free stage-1 linear fall-off instead of XGBoost.
+- **Evidence from eda.py #26** to build on:
+  - The per-compound slopes are all significant (SOFT +0.365, MEDIUM +0.227, HARD +0.306 s/lap), but the
+    differences between them aren't (Holm p ≥ 0.08).
+  - Paired within driver-session, a new set is MEDIUM +1.47 s and HARD +1.72 s slower than SOFT.
+  - FP2 is 2.36 s faster than FP1, and FP3 is about the same as FP2.
 
 ## Data flow / hand-offs
 
@@ -192,12 +255,15 @@ Scripts communicate through CSVs in `data/processed/`, not by importing each oth
   session pace on a new set, paired within driver-session / driver-compound (t, Wilcoxon, Holm; `SIGNIFICANCE_LEVEL`).
 - `train_model.py` reads the engineered dataset, splits it 80/20 by stint, and on the training side fits stage 1
   (`fit_stint_levels()`: stint levels + a linear slope per compound, on the multi-lap stints), the one model in its
-  MODEL block on `fcp − level` (no comparison: that is `explore/`'s job), and stage 3 (`fit_compound_gap()`: compound
-  gap on a new set + driver-session levels, all training laps). It scores the held-out stints on curve shape against
-  the flat and linear baselines → `results/train_model/train_model_xgb_model.pkl` (a joblib bundle: `{"model",
+  MODEL block on `fcp − level` (no comparison: that is `explore/`'s job), and stage 3 (`fit_compound_gap()` on
+  `stint_new_set_levels()`: compound gap on a new set + driver-session levels, from each training stint's stage-1
+  new-set level weighted by its laps; model-free, #27). The MODEL block is the only place the model is defined (an
+  sklearn `Pipeline` and `MODEL_NAME`); its inputs are `FEATURE_SETS[FALL_OFF_FEATURE_SET]`. It scores the held-out
+  stints on curve shape against the flat and linear baselines → `MODEL_BUNDLE_PATH`,
+  `results/train_model/train_model_fall_off_model.pkl` (a joblib bundle: `{"model", "model_name", "feature_set",
   "features", "medians", "anchor_age", "compound_gap", "levels", "linear_slopes"}`; `medians` are the training rows'
-  medians, used for `fillna` and as the simulator's conditions). `validate_strategy.py` fits its own stage 1 and fill per
-  CV fold from that fold's training rows, not the bundle's
+  medians, used for `fillna` and as the simulator's conditions). `validate_strategy.py` fits a `clone()` of the model,
+  its own stage 1, fill and model-free gap per CV fold from that fold's training rows, not the bundle's
 - `strategy_simulator.py` and `validate_strategy.py` load that `.pkl` bundle. The simulator prices each (compound, set
   age at start) the car has with one curve over stint laps 1..race laps: fcp = race pace level (mean of `SIM_DRIVER`'s
   driver-session levels) + compound gap + `fall_off_curve()` at tyre age = set age + stint lap, with the conditions at
@@ -229,9 +295,11 @@ Every pipeline script follows the same house style — match it when adding or e
 - **Output naming**: intermediate CSVs, plots, and a `<name>_manifest.txt` are prefixed with the
   script name and written into that script's results dir. Track generated paths in the
   `generated_files` list.
-- **Shared feature order**: never hard-code the model's feature list. Import it from
-  [feature_config.py](scripts/feature_config.py) (`MODEL_FEATURE_COLUMNS`). If you change the feature
-  set, change it there so training, simulation, and validation stay consistent.
+- **Shared feature order**: never hard-code the model's feature list. The feature sets live in
+  [feature_config.py](scripts/feature_config.py) (`FEATURE_SETS`, each checked against `LAP_TIMING_COLUMNS`;
+  `MODEL_FEATURE_COLUMNS` is `FEATURE_SETS["core"]`), and train_model.py picks one with `FALL_OFF_FEATURE_SET`. The
+  simulator and validation read `bundle["features"]`. Add or change a set there, so training, simulation, validation
+  and explore/ stay consistent.
 - **Settings live in `.env`**: never hard-code a tunable value or a path/file name in a script. Add a
   commented key to the repo-root `.env` and read it once at module level with the getters from
   [env_config.py](scripts/env_config.py). A missing key raises (there are no silent defaults), and an
@@ -258,7 +326,10 @@ Every pipeline script follows the same house style — match it when adding or e
 ## Working guidelines for agents
 
 - The whole pipeline runs on **one weekend at a time** (`RACE_YEAR` / `RACE_WEEKEND`); the scope is intentionally limited to
-  the three practice sessions. Don't broaden scope (extra sessions, race data) unless asked.
+  the three practice sessions. Don't broaden scope (extra sessions, race data, other weekends' practice data in the model
+  or the compound gap) unless asked.
+- Keep everything before the fall-off model independent of the model (see "Current work"). A change that makes the
+  cleaning, stage 1, the compound gap or the race pace level depend on the model is a regression.
 - Running another weekend rewrites the tracked `data/raw/`, `data/processed/` and `scripts/results/`. Switch back to
   2025 `bahrain` (loaded from `data/cache/` with no requests) before committing, unless the change is intended.
 - Guard against **target leakage** above all else — it's the central design constraint. The target is the lap's

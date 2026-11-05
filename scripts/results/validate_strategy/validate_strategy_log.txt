@@ -1,45 +1,45 @@
-Loaded model and feature metadata.
-Loaded dataset with 573 rows.
-Fall-off rows (stints with >= 2 clean laps): 436 laps, 96 stints
+Loaded the XGBoost fall-off model and its inputs (core: compound_HARD, compound_MEDIUM, compound_SOFT, tyre_age, track_temperature, air_temperature).
+Loaded dataset with 566 rows.
+Fall-off rows (stints with >= 2 clean laps): 427 laps, 94 stints
 
 Running 5-fold cross-validation grouped by stint...
- Fold 1 → 20 stints / 86 rows, 0 shared, shape MAE model 1.2398 s, flat 1.2704 s, linear 1.0879 s; gap MEDIUM +1.71, HARD +1.98 s
- Fold 2 → 19 stints / 87 rows, 0 shared, shape MAE model 1.0938 s, flat 1.1845 s, linear 0.9084 s; gap MEDIUM +2.04, HARD +1.01 s
- Fold 3 → 19 stints / 97 rows, 0 shared, shape MAE model 1.0558 s, flat 0.9898 s, linear 0.9529 s; gap MEDIUM +1.32, HARD +1.29 s
- Fold 4 → 19 stints / 95 rows, 0 shared, shape MAE model 1.2405 s, flat 1.1713 s, linear 1.1080 s; gap MEDIUM +0.78, HARD +0.46 s
- Fold 5 → 19 stints / 71 rows, 0 shared, shape MAE model 1.6161 s, flat 1.4226 s, linear 1.2826 s; gap MEDIUM +1.91, HARD +1.26 s
+ Fold 1 → 19 stints / 98 rows, 0 shared, shape MAE model 1.1007 s, flat 1.1496 s, linear 0.9874 s; gap MEDIUM +1.54, HARD +1.75 s
+ Fold 2 → 19 stints / 68 rows, 0 shared, shape MAE model 1.0704 s, flat 1.1359 s, linear 0.9072 s; gap MEDIUM +0.85, HARD +0.94 s
+ Fold 3 → 19 stints / 106 rows, 0 shared, shape MAE model 1.0666 s, flat 0.9609 s, linear 0.8350 s; gap MEDIUM +0.14, HARD +1.76 s
+ Fold 4 → 19 stints / 91 rows, 0 shared, shape MAE model 0.9306 s, flat 0.9395 s, linear 0.8015 s; gap MEDIUM +0.97, HARD +1.30 s
+ Fold 5 → 18 stints / 64 rows, 0 shared, shape MAE model 1.0984 s, flat 1.0066 s, linear 1.0054 s; gap MEDIUM +1.27, HARD +0.36 s
 
-CV shape MAE = 1.249202537752407 s
-CV shape RMSE = 1.8188541092819104 s
-Out-of-fold predictions: 436 rows, each predicted once
+CV shape MAE = 1.0533522146158805 s
+CV shape RMSE = 1.5689167308824277 s
+Out-of-fold predictions: 427 rows, each predicted once
 
 Fall-off per fold from a new set's first lap (s), over the folds:
                    mean   std   min   max
 compound tyre_age                        
-SOFT     5         1.12  1.15 -0.78  1.98
-         10        4.62  0.57  3.97  5.34
-         15        7.06  0.88  5.59  7.87
-MEDIUM   5         0.18  0.72 -0.92  0.88
-         10        1.69  0.82  1.03  3.10
-         15        3.40  0.90  2.52  4.73
-HARD     5         0.78  0.97 -0.96  1.32
-         10        2.96  0.38  2.36  3.41
-         15        4.96  0.43  4.59  5.62
+SOFT     5         1.26  0.55  0.75  2.16
+         10        2.90  0.82  2.18  4.02
+         15        5.53  1.15  4.02  6.80
+MEDIUM   5         0.33  0.45 -0.28  0.96
+         10        1.81  1.34  0.69  3.62
+         15        3.17  1.22  1.96  5.12
+HARD     5         1.31  0.49  0.54  1.66
+         10        2.13  0.90  0.83  3.17
+         15        3.78  1.27  2.26  5.22
 
 Generating residual plot...
-OOF shape MAE = 1.2312 s, OOF shape RMSE = 1.8193 s
+OOF shape MAE = 1.0508 s, OOF shape RMSE = 1.5712 s
 Residual plot saved.
 
-Testing the model against the flat baseline (shape MAE 1.1940 s, RMSE 1.8523 s)...
-Stints: 96, model better on 48; per-stint MAE difference mean +0.0776 s, median -0.0037 s
-Paired t-test (one-sided): t = 0.8762, p = 0.808441
-Wilcoxon signed-rank (one-sided): p = 0.747002
+Testing the model against the flat baseline (shape MAE 1.0344 s, RMSE 1.5427 s)...
+Stints: 94, model better on 46; per-stint MAE difference mean +0.1010 s, median +0.0214 s
+Paired t-test (one-sided): t = 1.6530, p = 0.949145
+Wilcoxon signed-rank (one-sided): p = 0.927506
 Model does NOT significantly beat the flat baseline at alpha = 0.05
 
-Testing the model against the linear baseline (shape MAE 1.0581 s, RMSE 1.6896 s)...
-Stints: 96, model better on 33; per-stint MAE difference mean +0.1573 s, median +0.1077 s
-Paired t-test (one-sided): t = 1.9208, p = 0.971120
-Wilcoxon signed-rank (one-sided): p = 0.995968
+Testing the model against the linear baseline (shape MAE 0.8999 s, RMSE 1.3862 s)...
+Stints: 94, model better on 28; per-stint MAE difference mean +0.1650 s, median +0.1662 s
+Paired t-test (one-sided): t = 2.8625, p = 0.997404
+Wilcoxon signed-rank (one-sided): p = 0.999799
 Model does NOT significantly beat the linear baseline at alpha = 0.05
 
 Validation summary saved.

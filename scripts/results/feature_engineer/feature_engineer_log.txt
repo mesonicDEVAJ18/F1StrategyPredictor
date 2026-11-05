@@ -1,29 +1,31 @@
 Loading preprocessed data...
-  → Laps:   573 rows
+  → Laps:   566 rows
   → Stints: 275 rows
   → Weather:239 rows
-  → Car data:573 laps
+  → Car data:566 laps
 
 Assigning stint numbers to laps...
   → Missing stint numbers: 0
+  → Laps dropped for having no stint: 0
 
 Merging stints into laps...
-  → Rows before/after merge: 573 / 573
+  → Rows before/after merge: 566 / 566
   → Laps without stint metadata: 0
   → Stints merged successfully
 
 Merging weather on timestamps (lap date_start ~ weather date)...
+  → Laps dropped for having no date_start: 0
   → Laps without weather within 5min: 0
   → Weather merged successfully
 
 Merging per-lap car data (session_key, driver_number, lap_number)...
-  → Rows before/after merge: 573 / 573
-  → Laps without car data: 0 of 573
-  → Laps with some car data masked: 23
+  → Rows before/after merge: 566 / 566
+  → Laps without car data: 0 of 566
+  → Laps with some car data masked: 20
   → Car data merged successfully
 
 Engineering features...
-  → Session one-hot rows: {'session_FP1': 188, 'session_FP2': 298, 'session_FP3': 87}
+  → Session one-hot rows: {'session_FP1': 186, 'session_FP2': 295, 'session_FP3': 85}
   → tyre_age range: 2-19 laps
   → run_laps range: 3-18 laps
   → Missing inputs filled with the median of the stint's earlier laps:
@@ -33,12 +35,13 @@ Engineering features...
 segments_sector_1       10                  0             10
 segments_sector_2        4                  0              4
 segments_sector_3        1                  0              1
-       mean_speed        4                  3              1
-    mean_throttle        3                  3              0
-full_throttle_pct        4                  4              0
+       mean_speed        2                  1              1
+    mean_throttle        4                  2              2
+full_throttle_pct        2                  2              0
         brake_pct        7                  5              2
-         mean_rpm        6                  4              2
+         mean_rpm        4                  2              2
           max_rpm        2                  1              1
+        mean_gear        2                  2              0
      gear_changes        4                  3              1
   → stint_avg_pace on a stint's first lap set to its own lap time: 233 laps
 

@@ -41,8 +41,8 @@ from xgboost import XGBRegressor  # noqa: E402
 
 from env_config import env_str, env_int, env_float  # noqa: E402
 from feature_config import (  # noqa: E402
-    COMPOUNDS, LAP_TIMING_COLUMNS, MODEL_FEATURE_COLUMNS, STINT_GROUP_COLUMNS, fall_off_curve, fall_off_rows,
-    fit_compound_gap, linear_fall_off, stint_shape_errors,
+    COMPOUNDS, FEATURE_SETS, STINT_GROUP_COLUMNS, fall_off_curve, fit_compound_gap, stint_new_set_levels,
+    stint_shape_errors,
 )
 from race_weekend import selected_weekend  # noqa: E402
 import explore_lib as lib  # noqa: E402
@@ -67,19 +67,8 @@ MIN_MONOTONE_SHARE = 0.95           # share of steps over the whole race length 
                                     # kernel, e.g. SVR, drifts back to its mean past the oldest tyre in training)
 CURVE_AGES = [5, 10, 15]            # tyre ages at which each fold's curve is saved (its spread = the curve's uncertainty)
 
-# --- Feature sets (tyre and conditions only; never the lap's own timing, #31) ---
-TYRE = ["compound_HARD", "compound_MEDIUM", "compound_SOFT", "tyre_age"]
-WEATHER = ["air_temperature", "humidity", "pressure", "track_temperature", "wind_direction", "wind_speed"]  # rainfall is constant
-
-FEATURE_SETS = {
-    "core": list(MODEL_FEATURE_COLUMNS),             # train_model.py's inputs
-    "tyre_only": TYRE,
-    "all_weather": TYRE + WEATHER,
-    "plus_age_at_start": list(MODEL_FEATURE_COLUMNS) + ["tyre_age_at_start"],
-    "plus_stint_lap": list(MODEL_FEATURE_COLUMNS) + ["laps_since_stint_start"],
-}
-for _name, _cols in FEATURE_SETS.items():
-    assert not set(_cols) & set(LAP_TIMING_COLUMNS), f"{_name} uses the lap's own timing"
+# --- Feature sets: FEATURE_SETS in scripts/feature_config.py (shared with train_model.py, whose
+# FALL_OFF_FEATURE_SET picks one; the leakage assert is there). Limit a run with RUN_ONLY_FEATURE_SETS ---
 
 # --- Candidates ---------------------------------------------------------
 # name: model factory, search grid (keys are the model's own parameters), scale inputs?
@@ -405,11 +394,13 @@ def main():
             f"[{fall15}], gap M {gap['MEDIUM']:+.2f} H {gap['HARD']:+.2f}, order lap 5 {rm['order_lap5']}, "
             f"lap {ROLLOUT_SLOPE_LAPS} {rm[f'order_lap{ROLLOUT_SLOPE_LAPS}']}, params {params}")
 
+    # The compound gap is model-free (#27): one fit, the same for every candidate
+    gap, _, _ = fit_compound_gap(stint_new_set_levels(all_laps))
     log(f"\nCurves of the best configuration of each candidate (new set, tyre ages 1-{race_laps}; "
-        f"compound gap from stage 3 on all {len(all_laps)} laps):")
+        f"model-free compound gap from stage 3 on all {len(all_laps)} laps: "
+        f"MEDIUM {gap['MEDIUM']:+.3f}, HARD {gap['HARD']:+.3f} s):")
     lin_curves = {c: slopes_all[c] * (ages - 1) for c in COMPOUNDS}
-    lin_gap, _, _ = fit_compound_gap(all_laps, linear_fall_off(all_laps, slopes_all))
-    record("baseline_linear", "-", lin_curves, lin_gap,
+    record("baseline_linear", "-", lin_curves, gap,
            summary[summary["candidate"] == "baseline_linear"].iloc[0], {})
     for _, row in best_per_cand.iterrows():
         cname, fsname = row["candidate"], row["feature_set"]
@@ -419,7 +410,6 @@ def main():
                                        INNER_FOLDS, N_ITER, RANDOM_STATE)
         conditions = df[cols].median().to_dict()
         curves = {c: fall_off_curve(fitted, cols, c, ages, conditions) for c in COMPOUNDS}
-        gap, _, _ = fit_compound_gap(all_laps, fall_off_rows(fitted, cols, all_laps, conditions))
         best_params[cname] = {"feature_set": fsname, "features": cols, "params": params,
                               "cv_MAE": row["MAE_mean"], "cv_MAE_std": row["MAE_std"], "compound_gap": gap}
         record(cname, fsname, curves, gap, row, params)

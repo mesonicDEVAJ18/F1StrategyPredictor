@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 
 from env_config import env_str, env_list
+from feature_config import COMPOUNDS
 
 # ============================================================
 # SETUP SCRIPT-SPECIFIC RESULTS DIRECTORY
@@ -51,6 +52,16 @@ def apply_logical_filters(df, fname):
     removed = before - len(df)
     log(f"[{fname}] Removed {removed} logically invalid stint rows")
     removed_rows_summary.append([fname, "logical_checks", removed])
+
+    # Dry compounds only: an INTERMEDIATE, WET or UNKNOWN stint has no SOFT/MEDIUM/HARD one-hot, so it
+    # would be read as SOFT downstream (compound_of / idxmax). Its laps then match no stint and are dropped
+    # in feature_engineer.py
+    before = len(df)
+    non_dry = df.loc[~df["compound"].isin(COMPOUNDS), "compound"].value_counts().to_dict()
+    df = df[df["compound"].isin(COMPOUNDS)]
+    removed = before - len(df)
+    log(f"[{fname}] Removed {removed} non-dry stint rows" + (f" {non_dry}" if non_dry else ""))
+    removed_rows_summary.append([fname, "non_dry_compound", removed])
 
     return df
 
@@ -103,6 +114,15 @@ for file in stints_files:
 # COMBINE ALL CLEANED STINTS
 # ============================================================
 combined = pd.concat(cleaned_dfs, ignore_index=True)
+# A session without a compound has no column for it, so the concat leaves NaN there: fill with 0
+# (and add a compound no session ran), so every stint has a complete one-hot
+for c in COMPOUNDS:
+    if f"compound_{c}" not in combined.columns:
+        combined[f"compound_{c}"] = 0
+compound_cols = [c for c in combined.columns if c.startswith("compound_")]
+filled = int(combined[compound_cols].isna().sum().sum())
+combined[compound_cols] = combined[compound_cols].fillna(0).astype(int)
+log(f"\nCompound one-hot cells filled with 0 (compound not run in that session): {filled}")
 combined_name = f"{SCRIPT_NAME}_combined_cleaned.csv"
 combined_path = f"{RESULTS_DIR}/{combined_name}"
 combined.to_csv(combined_path, index=False)
