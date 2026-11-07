@@ -1,5 +1,6 @@
 F1 RACE STRATEGY OPTIMISER PIPELINE
 Requirement for Data Science CSE558 at Indraprastha Institute of Information Technology Delhi
+Since then updated, a year after original was built; for better results.
 
 PROBLEM STATEMENT
 Use data collected over 3 practice sessions in a non sprint Formula 1 weekend to predict the optimal tyre strategy for a race where at least two compounds are supposed to be used (out of 3, hard, medium and soft).
@@ -7,7 +8,8 @@ The problem statement limits us to the three practice sessions only. We could br
 
 DATA COLLECTION
 The reference analysis is Bahrain 2025, and the same pipeline runs on any non-sprint 2024 or 2025 weekend: set RACE_YEAR and RACE_WEEKEND in .env (e.g. 2024 and saudi_arabia, the names are in scripts/race_weekend.py).
-The model is trained on the whole field (20 drivers per session in Bahrain 2025), and the race strategy is simulated for one car, SIM_DRIVER in .env (default 16, Ferrari), using that car's own tyre sets.
+The model is trained on the whole field (20 drivers per session in Bahrain 2025), and the race strategy is simulated for one car, SIM_DRIVER in .env (default 16, Ferrari), using that car's own tyre sets. The only reason to set SIM_DRIVER is to adjust for tyre age and limits on number of tyres available for a specific driver. When unset (SIM_DRIVER= in .env) it is assumed fresh tyres are available: new sets of every compound, as many as a strategy needs, and the field's pace level (#35).
+
 All data comes from https://openf1.org/
 
 scripts/race_weekend.py is the first step of master.py and does steps 1-6 below by itself. If data/raw/ already holds the selected weekend it does nothing, otherwise it fetches it, waiting OPENF1_REQUEST_DELAY_S between requests and retrying HTTP 429/5xx and network errors.
@@ -398,7 +400,7 @@ Every stint is priced from its own set: for each compound and set age that the c
 fuel_corrected_pace on stint lap n = race pace level + compound gap + fall_off(compound, set age + n)
 fall_off: the model's curve from a new set's first lap (fall_off_curve in feature_config.py, shared with explore/), with the weather at the training medians.
 compound gap: stage 3 of train_model.py, model-free (SOFT 0, MEDIUM +1.156 s, HARD +0.295 s on the current data). So the curve is the only place the model's choice enters.
-race pace level: the mean of SIM_DRIVER's driver-session levels from stage 3 (94.42 s for car 16). It is the same for every strategy, so it only shifts the totals, not the ranking.
+race pace level: the mean of SIM_DRIVER's driver-session levels from stage 3 (94.42 s for car 16), or of every driver-session level when SIM_DRIVER is blank (95.73 s). It is the same for every strategy, so it only shifts the totals, not the ranking.
 Nothing is fed back from one lap to the next.
 A fuel penalty of 0.035 x (laps of fuel remaining in the race) is added to each race lap a stint covers, so a stint's time is its summed fcp plus the fuel of its race laps.
 Per-lap curves are saved to strategy_simulator_stint_curves.csv and the summed fcp per stint length to strategy_simulator_stint_totals.csv. The log has a curve check: fcp and fall-off at stint laps 1, 18 and 57 next to the stage-1 linear fall-off, and the largest step.
@@ -417,6 +419,7 @@ Current output for SIM_DRIVER = 16 (set ages at the start of each stint in brack
 SOFT(0)-SOFT(0)-MEDIUM(0), pits on laps 14 and 28, 5625.24 s, tied with SOFT(0)-MEDIUM(0)-SOFT(0) (pits on 14 and 43) and MEDIUM(0)-SOFT(0)-SOFT(0) (29 and 43), the same three stints in another order.
 Moving a pit lap by one is 0.11 s slower, the best strategy with the HARD (MEDIUM(0)-SOFT(0)-HARD(0), pits on 29 and 43) 2.35 s, the best 1-stop (SOFT(0)-MEDIUM(0), pit on lap 14) 7.53 s, and the best without the MEDIUM (HARD(0)-SOFT(0)-SOFT(0), pits on 23 and 40) 15.79 s. The used SOFT(6) set is never the best choice of set.
 Other cars differ only through their sets and their pace level.
+With SIM_DRIVER blank (fresh tyres) the car has a new set of every compound for each stint, so no strategy is skipped (16,206 evaluated) and every set age is 0. On the current data the ranking is the same as car 16's, whose best plans already use only new sets: SOFT(0)-SOFT(0)-MEDIUM(0), pits on laps 14 and 28, 5699.67 s (74.4 s more than car 16 from the slower field pace level alone). The gaps to the alternatives are the same as for car 16 (e.g. the best 1-stop 7.53 s, the best without the MEDIUM 15.79 s).
 2 stops win because the curves fall off steeply (3.5-5.4 s by stint lap 18), so fresh tyres are worth a stop.
 This is still not a valid recommendation:
 The 29-lap MEDIUM stint runs past the oldest tyre in training, where the tree's curve is flat, which flatters long stints.

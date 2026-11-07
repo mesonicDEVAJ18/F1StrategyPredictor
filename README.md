@@ -14,7 +14,7 @@ Use data collected over the 3 practice sessions (FP1, FP2, FP3) of a non sprint 
 
 The problem statement limits us to the practice sessions, and for this project we stick to that: no qualifying, no race data, and no other weekends' practice data in the model.
 
-The reference weekend is **Bahrain 2025**, and the same pipeline runs on any non-sprint 2024 or 2025 weekend. The model is trained on the whole field, and the race is simulated for one car (`SIM_DRIVER`, default 16, Ferrari) using that car's own tyre sets.
+The reference weekend is **Bahrain 2025**, and the same pipeline runs on any non-sprint 2024 or 2025 weekend. The model is trained on the whole field, and the race is simulated for one car (`SIM_DRIVER`, default 16, Ferrari) using that car's own tyre sets. Leave `SIM_DRIVER` blank to simulate on fresh tyres (new sets of every compound, no limit on their number).
 
 The full methodology, with every cleaning rule, number and decision, is in [readme.txt](readme.txt). Known issues and open work are in [diagnostic.md](diagnostic.md).
 

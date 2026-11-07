@@ -58,26 +58,42 @@ log(f"Compound gap on a new set (s, vs SOFT): {COMPOUND_GAP}")
 # ============================================================
 # LOAD TYRE SET INVENTORY
 # ============================================================
-# Sets each car has left for the race, inferred from practice by tyre_sets.py.
-# The race is simulated for one car, SIM_DRIVER; the model itself is trained on the whole field
-SIM_DRIVER = env_int("SIM_DRIVER")
-all_inventory = pd.read_csv(os.path.join(env_str("DATA_DIR"), env_str("PROCESSED_DIR"), env_str("TYRE_SETS_FILE")))
-inventory = all_inventory[all_inventory["car_number"] == SIM_DRIVER]
-if inventory.empty:
-    raise ValueError(
-        f"SIM_DRIVER={SIM_DRIVER} has no tyre set inventory. Cars available: "
-        f"{sorted(all_inventory['car_number'].unique().tolist())} (a practice stand-in counts as its race car, see tyre_sets.py)")
+# The model is trained on the whole field. SIM_DRIVER only picks whose tyre sets the race can use:
+#   set   -> that car's sets left for the race (ages and counts, inferred from practice by tyre_sets.py)
+#            and that car's pace level
+#   blank -> fresh tyres: an unlimited supply of new sets of every compound, and the field's pace level
+STOP_COUNTS = env_list("STOP_COUNTS", cast=int)
+_sim_driver = env_str("SIM_DRIVER").strip()
+SIM_DRIVER = int(_sim_driver) if _sim_driver else None
+CAR_LABEL = SIM_DRIVER if SIM_DRIVER is not None else "field"
 
-# Race pace level: the mean of the car's driver-session levels from train_model.py's compound-gap fit.
-# It is the same for every strategy, so it only shifts the totals, not the ranking
-car_levels = [v for k, v in LEVELS.items() if k[PACE_GROUP_COLUMNS.index("driver_number")] == SIM_DRIVER]
-if not car_levels:
-    raise ValueError(f"SIM_DRIVER={SIM_DRIVER} has no pace level in the model bundle (no training laps)")
-RACE_REFERENCE = float(np.mean(car_levels))
-log(f"Race pace level for car {SIM_DRIVER}: {RACE_REFERENCE:.2f} s (mean of {len(car_levels)} driver-session levels)")
+# Race pace level: the mean of the driver-session levels from train_model.py's compound-gap fit (the car's,
+# or the whole field's when SIM_DRIVER is blank). It is the same for every strategy, so it only shifts the
+# totals, not the ranking
+if SIM_DRIVER is None:
+    # Enough new sets of every compound for the longest strategy, so no plan is short of sets
+    ages_by_compound = {c: [0] * (max(STOP_COUNTS) + 1) for c in COMPOUNDS}
+    RACE_REFERENCE = float(np.mean(list(LEVELS.values())))
+    log(f"SIM_DRIVER is blank: fresh tyres (new sets of every compound, no limit on their number)")
+    log(f"Race pace level for the field: {RACE_REFERENCE:.2f} s (mean of {len(LEVELS)} driver-session levels)")
+else:
+    all_inventory = pd.read_csv(os.path.join(env_str("DATA_DIR"), env_str("PROCESSED_DIR"), env_str("TYRE_SETS_FILE")))
+    inventory = all_inventory[all_inventory["car_number"] == SIM_DRIVER]
+    if inventory.empty:
+        raise ValueError(
+            f"SIM_DRIVER={SIM_DRIVER} has no tyre set inventory. Cars available: "
+            f"{sorted(all_inventory['car_number'].unique().tolist())} (a practice stand-in counts as its race car, "
+            f"see tyre_sets.py; leave SIM_DRIVER blank for fresh tyres)")
+    ages_by_compound = {c: inventory.loc[inventory["compound"] == c, "age"].astype(int).tolist() for c in COMPOUNDS}
 
-log(f"Loaded tyre set inventory for car {SIM_DRIVER}: " + ", ".join(
-    f"{c} {sorted(inventory.loc[inventory['compound'] == c, 'age'].tolist())}" for c in ["SOFT", "MEDIUM", "HARD"]))
+    car_levels = [v for k, v in LEVELS.items() if k[PACE_GROUP_COLUMNS.index("driver_number")] == SIM_DRIVER]
+    if not car_levels:
+        raise ValueError(f"SIM_DRIVER={SIM_DRIVER} has no pace level in the model bundle (no training laps)")
+    RACE_REFERENCE = float(np.mean(car_levels))
+    log(f"Race pace level for car {SIM_DRIVER}: {RACE_REFERENCE:.2f} s (mean of {len(car_levels)} driver-session levels)")
+
+    log(f"Loaded tyre set inventory for car {SIM_DRIVER}: " + ", ".join(
+        f"{c} {sorted(inventory.loc[inventory['compound'] == c, 'age'].tolist())}" for c in ["SOFT", "MEDIUM", "HARD"]))
 
 
 # ============================================================
@@ -90,7 +106,6 @@ WEEKEND = selected_weekend()
 NUM_LAPS = WEEKEND["race_laps"]
 PIT_WINDOW_START_LAP = env_int("PIT_WINDOW_START_LAP")     # earliest pit lap
 PIT_WINDOW_END_BUFFER = env_int("PIT_WINDOW_END_BUFFER")   # no pit in the last laps
-STOP_COUNTS = env_list("STOP_COUNTS", cast=int)
 MIN_COMPOUNDS_USED = env_int("MIN_COMPOUNDS_USED")         # two-compound rule
 SMOOTHNESS_AGES = env_list("SMOOTHNESS_CHECK_AGES", cast=int) + [NUM_LAPS]  # 18 is near the oldest tyre in training
 
@@ -266,7 +281,7 @@ def generate_strategies(total_laps):
 # ============================================================
 def optimize_strategy(total_laps):
     # One curve per (compound, set age) the car can fit
-    set_types = sorted(set(zip(inventory["compound"], inventory["age"].astype(int))),
+    set_types = sorted({(c, a) for c, ages in ages_by_compound.items() for a in ages},
                        key=lambda t: (COMPOUNDS.index(t[0]), t[1]))
     log(f"\nPricing {len(set_types)} (compound, set age) pairs: {set_types}")
     stint_totals, fuel_prefix = precompute_stint_totals(total_laps, set_types)
@@ -275,7 +290,6 @@ def optimize_strategy(total_laps):
     log(f"Total strategies to evaluate: {len(strategies)}")
 
     rows = []
-    ages_by_compound = {c: inventory.loc[inventory["compound"] == c, "age"].astype(int).tolist() for c in COMPOUNDS}
     options_by_seq = {}
     infeasible = 0
     best_time = float("inf")
@@ -295,7 +309,7 @@ def optimize_strategy(total_laps):
             for ages in options
         )
         rows.append({
-            "car_number": SIM_DRIVER,
+            "car_number": CAR_LABEL,
             "compound_sequence": compounds,
             "set_ages": set_ages,
             "pit_laps": pit_laps,
@@ -306,17 +320,17 @@ def optimize_strategy(total_laps):
             best_time = t
             best_strategy = (compounds, set_ages, pit_laps)
 
-    log(f"\nCar {SIM_DRIVER}: {infeasible} strategies skipped (not enough sets of a compound), "
+    log(f"\nCar {CAR_LABEL}: {infeasible} strategies skipped (not enough sets of a compound), "
         f"{len(strategies) - infeasible} evaluated")
 
     best = {
-        "car_number": SIM_DRIVER,
+        "car_number": CAR_LABEL,
         "best_compound_sequence": best_strategy[0],
         "best_set_ages_at_start": best_strategy[1],
         "best_pit_laps": best_strategy[2],
         "best_total_time": float(best_time),
     }
-    log(f"Car {SIM_DRIVER} best strategy: {best}")
+    log(f"Car {CAR_LABEL} best strategy: {best}")
 
     # Save all evaluated strategies
     strategies_df = pd.DataFrame(rows)

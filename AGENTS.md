@@ -8,7 +8,9 @@ An end-to-end data-science pipeline that predicts the **optimal tyre strategy** 
 the three practice sessions (FP1/FP2/FP3) only. The reference weekend is **Bahrain 2025**; any non-sprint 2024 or 2025
 weekend can be chosen with `RACE_YEAR` / `RACE_WEEKEND` in `.env` (names in `scripts/race_weekend.py`). The model is
 trained on the whole field; the race is simulated for one car, `SIM_DRIVER` (default 16, Ferrari), using that car's
-tyre sets. All raw data comes from the free [OpenF1 API](https://openf1.org/).
+tyre sets (their ages and how many are left). Left blank (`SIM_DRIVER=`), the race runs on fresh tyres: unlimited new
+sets of every compound and the field's pace level (#35). All raw data comes from the free
+[OpenF1 API](https://openf1.org/).
 
 The model learns **tyre fall-off with age** (#31). Each lap's fuel-corrected pace is a level for its stint (driver,
 session, fuel plan, run type: everything constant over a run) plus a fall-off that depends on the compound, tyre age
@@ -193,7 +195,9 @@ code changes can break:
 - `strategy_simulator.py` loads the bundle. For each (compound, set age) the car has: fcp = race pace level (mean of
   `SIM_DRIVER`'s driver-session levels) + compound gap + `fall_off_curve()` at tyre age = set age + stint lap. A stint
   of L laps costs the cumulative sum of its first L laps; nothing is fed back between laps. Each set is fitted at most
-  once; an unknown car number raises.
+  once; an unknown car number raises. A blank `SIM_DRIVER` skips the inventory: new sets only (age 0, enough for
+  `max(STOP_COUNTS) + 1` stints of each compound), race pace level = mean of all driver-session levels, and
+  `car_number` = `"field"` in the outputs.
 - `validate_strategy.py` fits a `clone()` of the bundle's model, its own stage 1, fill and model-free gap per CV fold
   from that fold's training rows, not the bundle's.
 

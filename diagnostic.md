@@ -267,3 +267,7 @@ None at the moment.
 - [x] **#28 Redirected output crashes on non-ASCII log text**
   - **Problem:** redirected stdout on Windows is cp1252, which can't hold `→`, so `print` raised `UnicodeEncodeError` and `python master.py > run.txt` stopped at `process_laps.py`.
   - **Fixed:** `log()` encodes the printed copy with `sys.stdout.encoding` and `errors="replace"`; the UTF-8 log file keeps the original text.
+
+- [x] **#35 SIM_DRIVER can't be left unset for a fresh-tyre race**
+  - **Problem:** readme.txt says `SIM_DRIVER` only adds one car's set ages and set limits, and that unset means fresh tyres, but `strategy_simulator.py` read it with `env_int()`, so a blank value crashed.
+  - **Fixed:** a blank `SIM_DRIVER=` gives new sets of every compound (enough for `max(STOP_COUNTS) + 1` stints of each), the field's pace level (mean of all driver-session levels) and `car_number` = `"field"`. A set value works as before (car 16's outputs byte-identical). Blank on Bahrain 2025: 0 strategies skipped (car 16: 3,996), same ranking and gaps as car 16, total +74.4 s from the field pace level.
