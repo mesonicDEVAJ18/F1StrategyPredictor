@@ -1,10 +1,10 @@
 # Diagnostic: TODO list
 
-The pipeline runs end to end (`python master.py` from `scripts/`), but the open items below affect how far the current output can be trusted. Fixed items are ticked and say what changed.
+The pipeline runs end to end (`python master.py` from `scripts/`), but the open items below affect how far the current output can be trusted.
 
-The file lists the open items first, then ideas to explore, then the fixed items. Within each group, items are split by priority and sorted by ID.
+Open items come first, then ideas to explore, then the fixed items. Within each group, items are split by priority and sorted by ID. Fixed items are kept short: what was wrong, what changed and the effect that matters now. The full before → after numbers of each fix are in its commit and its closed GitHub issue.
 
-Items keep a stable ID (`#N`), which is also the item's GitHub issue number (open items are open issues, fixed ones are closed). `readme.txt` marks every place an item applies with a `[TODO #N, P?, see diagnostic.md]` line. When an item is fixed, tick it, say what changed, move it to its priority under **Fixed**, and remove or update its tags in `readme.txt`. Close the issue too, and open a new issue for a new item so the numbers stay in step.
+Every item keeps a stable ID (`#N`), which is also its GitHub issue number (open items are open issues, fixed ones are closed). `readme.txt` marks every place an open item applies with a `[TODO #N, P?, see diagnostic.md]` line. When an item is fixed: tick it, say what changed, move it under **Fixed** at its priority, remove or update its tags in `readme.txt`, and close the issue. Open a new issue for a new item, so the numbers stay in step.
 
 **Priorities**
 - **P1, results are invalid until fixed.** The training data, the target or the strategy objective is wrong, so the recommendation can't be trusted.
@@ -17,302 +17,108 @@ Items keep a stable ID (`#N`), which is also the item's GitHub issue number (ope
 
 ### P2: method or validation is misleading
 
-- [ ] **#27 The model choice rests on three untuned models and untested reasoning**
-  - **Where (since Step 1, a72dd8c):**
-    - `scripts/train_model.py`: its MODEL block is the one place the model is defined (an sklearn `Pipeline` and `MODEL_NAME`; still XGBoost, depth 7, from `XGB_*` in `.env`), on `FEATURE_SETS[FALL_OFF_FEATURE_SET]`. The bundle is `train_model_fall_off_model.pkl`.
-    - `scripts/feature_config.py`: `FEATURE_SETS` (shared with explore/), `stint_new_set_levels()` and the model-free `fit_compound_gap()`.
-    - `scripts/validate_strategy.py` and `scripts/strategy_simulator.py`: they read the bundle (`bundle["features"]`, `predict`), and validation fits a `clone()` per fold. The simulator enumerates 1- and 2-stop strategies by brute force (Step 3).
-    - `explore/tune_iqr.py` / `explore/tune_push.py`: their CV sweeps are scored with the model-free stage-1 linear fall-off.
-    - `explore/explore_master.py` + `explore/explore_lib.py`: where the comparison lives.
-    - The "Reasoning" paragraph in `readme.txt` ML Modelling step 3.
-  - **Problem** (as first raised, about the old next-lap pipeline; the experiments below have since answered most of it):
-    - Only three models are compared, each with one configuration, on one held-out split (10 stints, 25 rows since #18; 31 rows before). XGBoost at max depth 7 with 36 inputs on 153 rows is likely to overfit, but no other setting has been tried.
-    - XGBoost is saved regardless of the comparison. It is the best of the three on the held-out stints (MAE 2.37 / 1.32 / 1.12 s, R² −1.002 / 0.250 / 0.353 for LR/RF/XGB), but only XGBoost gets grouped CV, and with 10 test stints its lead over Random Forest is close to noise. Its rank has changed with the fixes: it was last before #4 (the history is under #13).
-    - There is no naive baseline, so it isn't known whether any model beats a trivial forecast.
-    - The reasoning is asserted, not tested. "Random Forest produces noisy, stepwise predictions, unstable in autoregressive simulations" and "XGBoost: stable rollouts" were never checked: only XGBoost is ever rolled out. The "aligns with real-world motorsport pipelines" line has no source.
-  - **Fix:**
-    - [x] **Grouped CV for the current three:** run the grouped CV by stint (#18) for Linear Regression, Random Forest and XGBoost, not just XGBoost. Then either keep XGBoost with metrics that support it, or save the best model. This is the comparison from #13; the items below widen it. Done in `explore/` (nested, 5 folds x 2 repeats, all candidates).
-    - [x] **Baselines:** the next lap equals lap *t*'s fcp, and the next lap equals `stint_avg_pace`. Every model has to beat these to count. Since #5, `validate_strategy.py` scores the first (persistence) per fold and tests XGBoost against it per stint; the `stint_avg_pace` baseline and the other candidates are still to do. Done in `explore/`: persistence, `stint_avg_pace` and the training mean (the mean beats the other two).
-    - [x] **More candidates:** regularised linear models (Ridge / Lasso), a simple per-compound linear degradation model, ExtraTrees and `HistGradientBoostingRegressor` from scikit-learn. LightGBM or others would be a new dependency, so confirm first. Done in `explore/`, plus SVR, k-nearest neighbours and an MLP (scikit-learn only).
-    - [x] **Fewer inputs:** try reduced feature sets (e.g. without the car-data aggregates, the 3 constant inputs or the collinear groups found by `eda.py`, see #25), since 36 inputs on 153 rows is a lot. Done in `explore/` (6 feature sets).
-    - [x] **Rollout comparison:** roll each serious candidate out through the simulator's `rollout_stint()`. Compare stability (largest lap-to-lap step, drift), whether pace rises with tyre age, and whether compounds come out in a plausible order. One-step error alone doesn't show how a model behaves when rolled forward. Done in `explore/` (a by-name copy of `rollout_stint()`).
-    - [x] **Report:** per-fold MAE / RMSE / R² with the spread for every candidate, not a single split. Done: `explore/results/explore_master/explore_master_cv_folds.csv` / `_summary.csv`.
-    - **Remaining work, in steps (planned 2026-11-01): make the pipeline independent of the model, then plug the model in last.**
-      - **Goal:**
-        - Nothing up to the fall-off model depends on which model is chosen: lap cleaning and its tuned factors, the stage-1 stint levels, the compound gap and the race pace level.
-        - The model is plugged in last. It only predicts each compound's fall-off with tyre age.
-        - The simulator takes that fall-off and searches every legal strategy for the fastest.
-        - Data scope is unchanged: the selected weekend's FP1–FP3 only.
-      - **Where XGBoost leaked upstream (as of 2026-11-01; all fixed by Step 1):**
-        - The compound gap is fitted on `fcp − fall_off(model)` (`fall_off_rows` in train_model.py, validate_strategy.py and explore).
-        - `IQR_UPPER_MULTIPLIER=3` (#32) was kept partly on tune_iqr.py's CV sweep. That sweep was scored with XGBoost and ran before #31 changed the target to fall-off.
-        - tune_push.py's CV sweep is scored with XGBoost too. The push ratios (#30) came from the label sweep, with the CV sweep set aside, so they don't depend on the model.
-        - `IQR_LOWER_MULTIPLIER=60` came from the label sweep.
-        - The model is hard-coded in train_model.py's MODEL block, in the bundle name (`train_model_xgb_model.pkl`) and in the simulator's log line.
-        - validate_strategy.py refits the loaded model object in place.
-        - `MODEL_FEATURE_COLUMNS` is separate from explore's feature sets.
-        - Downstream, the strategy depends on the model twice: through the fall-off curves, and through the gap fitted on them. validate_strategy.py's CV figures are XGBoost's.
-      - **Already independent of the model:**
-        - stage 1 (the stint levels and the linear slopes per compound)
-        - the flat and linear baselines
-        - all of eda.py, including 6a–6c and its stage-3 comparison line, which uses the linear fall-off
-        - explore's comparison. Only its `XGBoost_current` row reads `XGB_*`, and its compound-order check uses the gap.
-      - **Decisions (2026-11-01, user):**
-        - **Order:** make the pipeline independent of the model first, and plug the model in last.
-          - The compound gap was first proposed as Step 1. It moved to Step 2 because removing the model from the gap is part of Step 1, and Step 2 then improves the estimator.
-          - Dynamic programming in the simulator is part of the target design ("DP over all strategies to find the fastest").
-        - **The compound gap needs better ML for the data constraints, not more data.** The user ruled "the project is FP data only".
-          - Pooling the other 11 cached weekends in a hierarchical model was proposed and rejected.
-          - Only the selected weekend's FP1–FP3 is used.
-        - **Nothing starts without the user asking.** Each step starts only when asked. The model choice in Step 4 and the new DP issue in Step 3 need the user's OK.
-        - **Branch:** `model-choice-27`, off `fall-off-target-31`.
-      - **Workflow:** the steps run in order. After each one, `master.py` and `explore_master.py --skip-pipeline` must run end to end. Each step is one commit with its before → after numbers.
-      - **Acceptance check from Step 1 on (swap test):** run train_model.py with two different models (e.g. XGBoost and Ridge).
-        - These must come out identical: the cleaned data, the stage-1 levels and slopes, `compound_gap` and the driver-session `levels`.
-        - Only these may differ: the fall-off curves, the stage-2 metrics and the strategy.
-    - [x] **Step 0: check the workflow as it stands** (no code changes).
-      - Run `master.py` and `explore_master.py --skip-pipeline --quick`. The tracked outputs should come back unchanged.
-      - The eda log should still show 436 rows / 96 multi-lap stints, so the 2026-10-28 explore run below still applies.
-      - **Done (2026-11-01):**
-        - `master.py` exited 0, and every tracked file in `data/` and `scripts/results/` came back byte-identical.
-        - eda shows 573 rows / 233 stints, with 436 rows / 96 multi-lap stints.
-        - validate CV shape MAE 1.2492 (flat 1.1940, linear 1.0581).
-        - Strategy: SOFT(0)–SOFT(0)–HARD(0), pits on laps 14 and 28, 5649.51 s.
-        - `--quick` passed. It was run with `RESULTS_ROOT` pointed outside the repo, since otherwise it overwrites the tracked full-run results.
-        - The full `explore_master.py --skip-pipeline` also reproduced every number. Only the timings in its log changed. Ridge (`tyre_only`) 1.0478 is still the recommendation.
-    - [x] **Step 1: a model-independent pipeline** (XGBoost stays the model; only the gap moves).
-      - **Where:**
-        - `scripts/feature_config.py`, `scripts/train_model.py`, `scripts/validate_strategy.py`, `scripts/strategy_simulator.py`, `scripts/eda.py`
-        - `explore/explore_master.py`, `explore/tune_iqr.py`, `explore/tune_push.py`
-        - `.env`
-      - [x] **Compound gap without the model:**
-        - `fit_compound_gap()` fits on each stint's new-set level, not on `fcp − fall_off(model)`.
-        - A new helper, `stint_new_set_levels(df)` in feature_config.py, gives one row per stint, weighted by its laps:
-          - stage 1 on all laps
-          - level + slope × anchor age
-        - eda.py 6b does this inline today and will reuse the helper.
-        - The regression structure stays as it is: driver-session levels, HARD/MEDIUM, `run_laps`.
-        - train_model.py stage 3, validate_strategy.py's per-fold gap and explore's `record()` no longer use `fall_off_rows` for the gap.
-      - [x] **Model plug-in point:**
-        - explore's `FEATURE_SETS` move into feature_config.py, with the leakage assert on each set, so explore and the pipeline share them.
-        - train_model.py's MODEL block becomes the only place the model is defined: an sklearn `Pipeline` (optional scaler + estimator) and `MODEL_NAME`.
-        - Its feature set is picked by a new `.env` key, `FALL_OFF_FEATURE_SET` (default `core`, today's 6 inputs).
-        - `MODEL_FEATURE_COLUMNS` becomes `FEATURE_SETS["core"]`.
-        - The bundle gains `model_name` and is renamed `train_model_fall_off_model.pkl` (`MODEL_BUNDLE_PATH`).
-      - [x] **Consumers that work with any model:**
-        - Each consumer reads only `bundle["features"]` and calls `predict`.
-        - validate_strategy.py refits `sklearn.base.clone(model)` in each fold.
-        - The simulator logs `model_name`.
-        - Feature importances are saved only if the model has them.
-      - [x] **Tuned factors without the model:**
-        - tune_iqr.py / tune_push.py's CV scorer switches from XGBoost to the model-free stage-1 linear fall-off, with the same shape MAE, stint folds and common rows.
-        - Their label sweeps use no model already. They are the basis of `IQR_LOWER_MULTIPLIER=60` and the push ratios, and they back `IQR_UPPER_MULTIPLIER=3` (≥ 3 removes 1 push lap).
-        - Rerunning the 12-weekend CV sweeps is optional.
-        - `XGB_*` is then read only by train_model.py's MODEL block and explore's `XGBoost_current`.
-      - **Verify:**
-        - The swap test passes.
-        - `master.py` exits 0 with XGBoost restored.
-        - The gap equals eda.py 6b's model-free stage-3 line (MEDIUM +0.877, HARD +0.527 s).
-      - **Done (2026-11-02, Bahrain 2025, car 16).** Committed in a72dd8c (2026-11-05); the full explore rerun finished the same day.
-        - **Decisions (user, 2026-11-02):**
-          - Stage 3 in train_model.py keeps the train/test split: it fits on the training stints, not all laps.
-          - tune_iqr.py and tune_push.py were rerun in full, and a full run now writes its pick into `.env` itself
-            (`env_config.write_env()`, with a dated comment line; `--quick` never writes). The reasoning comment above the
-            keys is still updated by hand.
-          - tune_iqr.py writes its own winner (the label floor unless a pair beats it on both paired CV tests).
-          - tune_push.py writes the label pick, not the CV winner, because the CV favours strict filters (#30).
-        - **Code:**
-          - `stint_new_set_levels()` and a lap-weighted `fit_compound_gap(stints)` in feature_config.py. Stage 1's residuals
-            sum to zero within a stint, so it equals the old per-lap fit with the linear fall-off (checked to 1e-11 on all
-            laps and on the training split).
-          - `FEATURE_SETS` moved to feature_config.py; train_model.py's model is a `Pipeline`; the bundle is
-            `train_model_fall_off_model.pkl`, with `model_name` / `feature_set`. validate_strategy.py fits a `clone()` per
-            fold.
-          - The tune CV scorer is the stage-1 linear fall-off per fold, which also makes it fast: tune_iqr.py takes 10 min
-            (was 87).
-        - **Two pre-existing data bugs** found by the 12-weekend reruns, both inert on Bahrain (its `data/processed/` is
-          byte-identical), fixed with the user's OK. See the new item under Fixed P1.
-        - **Swap test** (XGBoost vs Ridge with a scaler, both on `core`): `compound_gap`, `levels`, `linear_slopes`,
-          `medians` and `features` are identical (`==`). Only the curves, the stage-2 metrics (Ridge 0.965 vs XGB 1.120)
-          and the strategy differ (Ridge: SOFT–SOFT–HARD, pits 18/37).
-        - **Before → after A (code only, thresholds (60, 3) / (1.15, off)):**
-          - Unchanged: the data, eda's slopes and tests, the stage-2 metrics (XGB 1.1198), validate CV shape MAE 1.2492,
-            the curves.
-          - Bundle gap MEDIUM +2.972 / HARD +0.848 (net of XGBoost's fall-off) → **+1.037 / −0.352** (model-free, training
-            split). run_laps +0.254 → +0.333 s per lap of run. On all 573 laps it is +0.877 / +0.527 (= eda's line).
-          - validate's per-fold gap MEDIUM 0.78–2.04 → **0.49–1.07**, HARD 0.46–1.98 → **0.10–0.94** s.
-          - Race pace level 93.06 → 94.30 s. Strategy SOFT(0)–SOFT(0)–HARD(0), pits 14/28, 5649.51 s →
-            MEDIUM(0)–MEDIUM(0)–HARD(0), pits 16/43, 5634.38 s.
-        - **Tune reruns (12 weekends, model-free scorer):**
-          - tune_iqr.py: label floor 60 → **62** (largest lower k needed 49.71 → 51.23, 2025 spain FP2, from #33's rebuilt
-            sectors). No pair beats (62, 3); (62, 3) vs (3, 3) 0.9722 vs 0.9725 s per-stint MAE (t p 0.37). Written:
-            `IQR_LOWER_MULTIPLIER=62`, `IQR_UPPER_MULTIPLIER=3`. On Bahrain the cleaned data at 62 equals that at 60.
-          - tune_push.py: label pick (1.15, 1.10), J 0.986 vs 0.985 for (1.15, off); push laps kept 99.4%, cool-down 0.8%.
-            The CV again prefers the strict (1.10, 1.06), 0.452 vs 0.490 s, for information only. Written:
-            `PUSH_LAP_MAX_STINT_RATIO=1.1` (was 100 = off).
-        - **After A → after B (tuned thresholds; the stint test removes 7 Bahrain laps):**
-          - Data: 573 → 566 laps; multi-lap 436 / 96 → 427 rows / 94 stints.
-          - eda: slopes S +0.366 → +0.341, M +0.227 → +0.227, H +0.306 → +0.211 s/lap (HARD now not significant, CI
-            [−0.05, +0.46]); 6b paired M − S +1.47 → +1.61 s, H − S +1.72 → +2.23 s; FP2 − FP1 −2.36 → −2.77 s.
-          - Model-free gap on all laps +0.877 / +0.527 → **+0.978 / +1.228** (S < M < H). Bundle (training split)
-            +1.037 / −0.352 → +1.156 / +0.295.
-          - Stage 2 held out: XGB 1.1198 → 1.1338, linear 0.9521 → 0.9503. validate CV shape MAE 1.2492 → 1.0534 (flat
-            1.0344, linear 0.8999; XGB better on 46 / 28 of 94 stints); per-fold gap MEDIUM 0.14–1.54, HARD 0.36–1.76 s.
-          - Race pace level 94.30 → 94.42 s. Strategy → **SOFT(0)–SOFT(0)–MEDIUM(0), pits 14/28, 5625.24 s**.
-          - **explore (full, `--skip-pipeline`, 2026-11-05, 57 configurations, 26 min):** the first full run after Step 1
-            stopped at 56/57 on 2026-11-02 and was rerun. Compared with the 2026-10-28 run (436 laps / 96 stints, before the
-            tuned thresholds):
-            - Baselines: flat 1.200 → **1.035 ± 0.116**, linear 1.064 → **0.905 ± 0.111** s (a different dataset, so compare
-              ranks, not the raw MAE).
-            - Lowest MAE: SVR again (`plus_age_at_start` 0.877; was `plus_stint_lap` 1.026), but its curve gets faster with
-              age (monotone share 0.50), so the rule rejects it.
-            - **Recommendation: Ridge (`tyre_only`) → MLP (`plus_age_at_start`), 0.888 ± 0.113 s.** It beats linear on 53
-              of 94 stints (Wilcoxon p 0.038, the first rule-passing candidate to beat linear significantly). Curve: one
-              hidden layer of 32, alpha 10; slopes S 0.18 / M 0.17 / H 0.17 s/lap; fall-off at age 15 S +2.54 / M +2.17
-              / H +2.09 s; largest step 0.18 s; monotone; order S < M < H at laps 5 and 20.
-            - Ridge (`tyre_only`) 0.890 (one 0.255 s/lap slope, Wilcoxon p 0.61 vs linear, the most stable fold curve, std
-              0.21 s at age 15) and PerCompoundFallOff (= linear, 0.905) are within one fold std of the MLP. The MLP's
-              lead is 0.002 s against a fold std of ~0.11 s, so the pick moved on noise.
-            - Then ExtraTrees 0.909, XGBoost_monotone 0.923, tuned XGBoost 0.926, RandomForest 0.928, HistGB 0.930,
-              KNeighbors 0.932, HistGB_monotone 0.935, PerCompoundIsotonic 0.946. XGBoost_current 1.008–1.060 is still the
-              worst.
-            - Gap: one model-free gap for every candidate (stage 3 on all 566 laps), MEDIUM +0.978, HARD +1.228 s. Before
-              Step 1 it ranged over MEDIUM +0.15 to +2.05 and HARD +0.34 to +2.12 across candidates.
-            - Step 1's "explore runs end to end" check is met.
-        - **Still to do here:** none. readme.txt, README.md and AGENTS.md were brought up to date on 2026-11-05; the
-          reasoning rewrite is Step 5. The training-split gap is still unstable (HARD −0.35 → +0.30 between two nearly
-          identical datasets), which is Step 2.
-    - [ ] **Step 2: a better compound-gap estimator** (model-free; from #31).
-      - **Problem:** stage 3's gap on a new set is unstable, and on the training split it is implausible. Since Step 1 it is model-free, so these are the estimator's own numbers (Bahrain 2025, 566 laps):
-        - Training split (the bundle): MEDIUM +1.156 s, HARD +0.295 s, so MEDIUM is slower than HARD. On all 566 laps: MEDIUM +0.978, HARD +1.228 (S < M < H).
-        - It moves a lot with the data: across validate_strategy.py's folds MEDIUM +0.14 to +1.54 s and HARD +0.36 to +1.76 s. On the training split HARD went from −0.35 to +0.30 s when the stint test removed 7 laps (Step 1, after A → after B).
-        - Why:
-          - With one fixed level per driver-session, it is identified only within the 44 driver-sessions that ran two or more compounds.
-          - HARD and MEDIUM are compared directly in just 1 of them.
-          - `run_laps` is nearly collinear with compound within a driver-session (median run SOFT 4, MEDIUM / HARD 6 laps).
-        - eda.py 6b's paired new-set comparison gives MEDIUM +1.61 s and HARD +2.23 s, with no `run_laps` control.
-          - Stage 3 with the `run_laps` control gives MEDIUM +0.98 s and HARD +1.23 s on all laps, with `run_laps` at +0.36 s per lap of run on the training split. How much of the difference it accounts for hasn't been measured yet; G1 vs G0 in Step 2 measures it.
-        - Session evolution is large (eda.py 6c: FP2 2.77 s faster than FP1, FP3 about the same as FP2), so G3's session effect must be fitted, not pooled away.
-      - **Where:**
-        - `explore/explore_lib.py`
-        - `explore/explore_master.py`: a new `--gap-only` section
-        - then `fit_compound_gap()` in `scripts/feature_config.py`, plus `.env`
-      - [ ] **Candidates**, on Step 1's stint new-set levels, using numpy / scipy / scikit-learn only:
-        - **G0:** today's structure.
-        - **G1:** no `run_laps` control.
-        - **G2:** run-type controls (`run_laps`, used-set start, a short/long-run indicator).
-        - **G3:** crossed partial pooling.
-          - A driver effect, a session effect and a driver × session deviation shrunk with a ridge penalty (≙ random effects).
-          - The penalty is tuned by grouped CV.
-          - Driver-sessions on a single compound then count through the shared driver effect.
-        - **G4:** G3 with S ≤ M ≤ H enforced (`scipy.optimize.lsq_linear` on non-negative increments).
-        - **G5:** G3 on run-type-matched stints only.
-      - [ ] **Scoring:**
-        - Grouped CV by stint, predicting each held-out stint's new-set pace. Lap-weighted MAE, with the same scored stints for every candidate.
-        - A stint cluster bootstrap for 95% CIs of the MEDIUM and HARD gaps and P(S < M < H).
-        - The spread of the gap across folds.
-        - The order of the compounds, against eda.py 6b.
-        - Pick rule: the best prediction among the candidates with a plausible order, with the narrowest CI breaking ties.
-      - [ ] **Apply the winner** in `fit_compound_gap()`. Its tunable values become commented `.env` keys.
-      - **Verify:**
-        - validate_strategy.py's per-fold gap is narrower than now and plausibly ordered in every fold.
-        - The swap test still gives an identical gap.
-        - `master.py` exits 0.
-    - [ ] **Step 3: dynamic programming over strategies in the simulator** (new issue, to open; readme.txt "Future work").
-      - **Where:** `scripts/strategy_simulator.py`, `.env`.
-      - **Input:** the per-(compound, set age) stint cost table the simulator already builds (cumulative fall-off + gap + race pace level + fuel). This is the only place the model's output enters.
-      - **State:** race lap, the set on the car, a bitmask of the car's sets already used, the compounds used and the stops made.
-      - **Transitions:**
-        - Either continue on the current set, or pit at the end of the lap onto an unused set.
-        - Pits only within the pit window, each adding `PIT_LOSS_S`.
-        - `MIN_COMPOUNDS_USED` is enforced at the finish.
-        - `MAX_STOPS` (`.env`) replaces `STOP_COUNTS`.
-      - **Output:** the best strategy, plus the best per stop count and per compound sequence (for the alternatives table), with back-pointers for the pit laps and sets.
-      - **Verify:**
-        - With `MAX_STOPS=2`, run it once side by side with today's brute force: the best strategy and total must be the same.
-        - With 3 stops allowed, it finishes in seconds.
-        - Each total equals its stint totals + fuel + pit loss.
-    - [ ] **Step 4: plug in the fall-off model.** This replaces the old "Choose the fall-off model" and "Tuning" items.
-      - **Where:**
-        - train_model.py's MODEL block
-        - `.env`: `FALL_OFF_FEATURE_SET` and the model's hyperparameter keys, e.g. `RIDGE_ALPHA`, with the reasoning in a comment
-      - Rerun `explore_master.py --skip-pipeline` after Steps 2 and 3. Its curve and order checks use the model-free gap, which Step 2 changes. The 2026-11-05 run (Step 1) already uses the model-free gap.
-      - Choose between (2026-11-05 run):
-        - The MLP (`plus_age_at_start`): the rule's pick now, 0.888 s, the only rule-passing candidate that beats linear significantly (Wilcoxon p 0.038).
-        - Ridge (`tyre_only`): the rule's pick on 2026-10-28, now 0.890 s; one shared slope, the most stable fold curve. eda.py 6a finds no significant slope difference between compounds.
-        - The per-compound line: 0.905 s, = the linear baseline.
-      - The current XGBoost (depth 7) beats neither baseline.
-      - **Verify:**
-        - The swap test passes: nothing upstream of stage 2 moves.
-        - validate_strategy.py's shape MAE matches explore's for that configuration.
-        - The curves are smooth and rise on every compound.
-        - The DP strategy is logged.
-    - [ ] **Step 5: documentation, and close #27.** This replaces the old "Update the reasoning" item. The docs' facts and numbers were brought up to date after Step 1 (2026-11-05); what is left is below, after Steps 2–4.
-      - **`readme.txt`:**
-        - ML Modelling steps 2–3: the model-free stage 3 and the plug-in model.
-        - The measured reasoning: keep each claim only if the experiments back it, and drop or source the "real-world pipelines" line.
-        - The results table and the "XGBoost is kept" sentence.
-        - Race Simulation: DP and the current output.
-        - Evaluation.
-        - The `[TODO #27]` tags.
-      - **`README.md`:** results and strategy.
-      - **`AGENTS.md`:** the model plug-in point, the bundle name, `FEATURE_SETS`, the tune scorer and DP.
-      - **Here:** move #27 to Fixed (P2), update #15's "Depends on", and close the issues.
-  - **First explore run (2026-10-26, Bahrain 2025, 153 rows / 50 stints):**
-    - Outer-CV MAE: MLP (all inputs, delta target) 1.19 ± 0.21 s, SVR (all inputs) 1.20 ± 0.27, ExtraTrees 1.22, Random Forest 1.23, current XGBoost 1.25 ± 0.31, tuned XGBoost 1.30; linear models 1.44-1.62; training mean 1.59, persistence 1.82. The top ~20 configurations sit within the fold spread (about 0.09 s standard error), so the data doesn't separate them.
-    - Feature sets: the constant inputs and the car-data aggregates can go without loss for the trees; the rollout-only set costs about 0.05-0.1 s. The delta target helps only the MLP and ExtraTrees.
-    - Rollouts: every model reverts to roughly the training mean (~100-101 s) within a few laps, and the compounds barely separate. Trees are flat after lap 3 (0.03-0.06 s/lap); SVR rises then falls back; the MLP and the regularised linear models with the delta target climb 0.3-0.8 s/lap without limit. No model reproduces the per-compound degradation in eda.py (SOFT 0.17 s/lap, MEDIUM/HARD 0.04-0.05). The harness's rule picks SVR (stable, positive early slope), but its curve is hump-shaped, so the slope check needs tightening.
-  - **Since #29:** the data now has 273 target rows in 56 stints (was 153 / 50), so the run above and the row counts in this item predate it. The pipeline's XGBoost has grouped CV MAE 1.17 s (was 1.23 s), and no longer significantly beats persistence (Wilcoxon p = 0.052). Rerun `explore_master.py` before choosing a model.
-  - **Since #31:** the target changed from next-lap pace to fall-off within the stint. The runs above, the delta target, the persistence / `stint_avg_pace` / training-mean baselines, the 36-input feature sets and the rollout findings all predate it. `explore/` was rewritten for the new target (#31) and rerun.
-    - **Run (2026-10-28, Bahrain 2025):**
-      - **Setup:** 436 laps in 96 multi-lap stints; 13 candidates × up to 5 feature sets (57 configurations); nested CV 5 folds × 2 repeats by stint; scored on the within-stint shape MAE.
-      - **Baselines:** flat (no fall-off) 1.200 ± 0.236 s; linear (stage-1 slope per compound) 1.064 ± 0.230 s.
-    - **Leaderboard** (shape MAE, s):
-      - SVR (`plus_stint_lap`) 1.026 ± 0.250, better than linear on 54 of 96 stints (Wilcoxon p = 0.043)
-      - SVR on the other sets 1.033–1.049
-      - Ridge (`tyre_only`) 1.048 ± 0.246
-      - MLP (`plus_age_at_start`) 1.048 ± 0.239
-      - ExtraTrees 1.053
-      - PerCompoundFallOff = the linear baseline (degree 1 chosen), 1.064
-      - RandomForest 1.069
-      - XGBoost_monotone 1.071
-      - XGBoost tuned 1.076
-      - HistGB_monotone 1.076
-      - HistGradientBoosting 1.083
-      - PerCompoundIsotonic 1.085
-      - KNeighbors 1.092
-      - XGBoost_current 1.160–1.246, the worst: train_model.py's depth-7 setting overfits
-      - The top ~17 configurations are within 0.04 s, against a fold std of ~0.24 s (standard error ~0.08 s over 10 folds), so the data doesn't separate them. Only SVR is significantly better than the linear baseline, and not by much.
-    - **Curves:**
-      - **SVR:** fits best in CV, but past the oldest tyre in training (19 laps) its curve gets faster again: SOFT +7.03 s at age 19 → +4.19 s at 57. The RBF kernel reverts to its mean, and its curve is non-decreasing on only 34–39% of steps over the race.
-      - **Trees** (all of them, including the monotone-constrained ones): steps of 1.1–4.6 s. They are flat past age 19.
-      - **Ridge** (`tyre_only`, alpha 43): one shared slope, 0.265 s/lap for every compound, so it says nothing about how the compounds differ. Its curve is the most stable across folds (std 0.27 s at age 15; others 0.6–1.5 s).
-      - **MLP:** S 0.21, M 0.19, H 0.21 s/lap; fall-off at age 15 S +3.10, M +2.30, H +2.84; it keeps rising past 19 (+9.5 to +9.8 s at 57).
-      - **The linear baseline:** S 0.365, M 0.227, H 0.306 s/lap; it keeps rising (+12.7 to +20.5 s at 57).
-      - **Compound gap:** stage 3 depends on the model's fall-off: MEDIUM +0.15 to +2.05 s and HARD +0.34 to +2.12 s across the candidates. MEDIUM comes out slower than HARD for most of them (fix item below).
-    - **Recommendation rule:**
-      - **The fix:** the first run picked SVR, because its slope check covered tyre ages 2–20 only. `MIN_MONOTONE_SHARE` (0.95, the share of steps over the whole race that don't get faster) was added to the experiment block, and the run was repeated with it. All the numbers are seeded and unchanged; only the recommendation moves.
-      - **Rule:** beats both baselines, stable steps (≤ 1 s), positive slope on every compound, monotone.
-      - **Result:** **Ridge (`tyre_only`) 1.048 s**, with MLP (`plus_age_at_start`) within one fold std. Neither is significantly better than the linear baseline (Wilcoxon p = 0.83 / 0.11).
-    - **Since #27 Step 1:** rerun on 2026-11-05 on the tuned data (427 laps / 94 stints) with the model-free gap. The rule now picks the MLP (`plus_age_at_start`) by 0.002 s over Ridge; see Step 1's "Done" block above.
-    - **Not done yet: the choice.** train_model.py still fits XGBoost (depth 7), which beats neither baseline (validate_strategy.py: 1.053 s vs flat 1.034 and linear 0.900). Choose between the MLP (the rule's pick, nearly the same slope on every compound), Ridge (most stable, but no compound difference) and the per-compound line (interpretable, compound-specific, rises without limit past age 19). Copying the choice into train_model.py's MODEL block and `.env` is Step 4 above, after Steps 2–3. Any of them works with the bundle and the simulator, which read `bundle["features"]` and call `predict`. The chosen feature set goes into `FALL_OFF_FEATURE_SET`.
-  - **Depends on:** nothing left (#18, grouped CV, is fixed). #13 is merged into this item.
-  - **readme.txt:** ML Modelling step 3, model choice, reasoning and results table.
+- [ ] **#27 The model choice rests on three untuned models and untested reasoning** (now: the fall-off model and the compound gap are not settled)
+  - **Where:**
+    - `scripts/train_model.py`: its MODEL block is the one place the model is defined (an sklearn `Pipeline` and `MODEL_NAME`; still XGBoost, depth 7, from `XGB_*` in `.env`), on `FEATURE_SETS[FALL_OFF_FEATURE_SET]`. Bundle: `train_model_fall_off_model.pkl`.
+    - `scripts/feature_config.py`: `FEATURE_SETS`, `stint_new_set_levels()` and the model-free `fit_compound_gap()`.
+    - `scripts/validate_strategy.py` and `scripts/strategy_simulator.py`: they read `bundle["features"]` and call `predict`; validation fits a `clone()` per fold. The simulator enumerates 1- and 2-stop strategies by brute force.
+    - `explore/explore_master.py` + `explore/explore_lib.py`: the model comparison.
+    - `readme.txt`: ML Modelling step 3 (model choice, reasoning, results table) and Race Simulation step 4.
+  - **Problem now:**
+    - The pipeline's XGBoost is a placeholder from the old next-lap model and beats neither baseline: validate CV shape MAE 1.053 s against flat 1.034 s and linear 0.900 s (better than flat on 46 of 94 stints, than linear on 28).
+    - explore/ (2026-11-05) can hardly separate the better candidates: the MLP (`plus_age_at_start`) 0.888 ± 0.113 s, Ridge (`tyre_only`) 0.890 and the per-compound line 0.905 are within one fold std. The MLP is the only rule-passing candidate that beats linear significantly (Wilcoxon p 0.038).
+    - The compound gap is unstable (Step 2), and the strategy rests mostly on it, since the shortlisted curves have nearly the same slope on every compound.
+    - The simulator's brute force can't search more stops or every set choice exactly (Step 3).
+  - **Plan (2026-11-01): make the pipeline independent of the model, then plug the model in last.**
+    - **Goal:** nothing up to the fall-off model depends on which model is chosen (lap cleaning and its tuned factors, the stage-1 stint levels, the compound gap, the race pace level). The model only predicts each compound's fall-off with tyre age. The simulator takes that fall-off and searches every legal strategy for the fastest. Data scope is unchanged: the selected weekend's FP1–FP3 only.
+    - **Decisions (user, 2026-11-01):**
+      - Make the pipeline independent first, plug the model in last. Dynamic programming in the simulator is part of the target design.
+      - The compound gap needs better estimation for the data constraints, not more data ("the project is FP data only"). Pooling the other cached weekends in a hierarchical model was proposed and rejected.
+      - Nothing starts without the user asking. The model choice (Step 4) and the new DP issue (Step 3) need the user's OK.
+      - Branch: `model-choice-27`, off `fall-off-target-31`.
+    - **Workflow:** the steps run in order. After each one, `master.py` and `explore_master.py --skip-pipeline` must run end to end. Each step is one commit with its before → after numbers.
+    - **Swap test** (acceptance check from Step 1 on): run train_model.py with two different models (e.g. XGBoost and Ridge). The cleaned data, the stage-1 levels and slopes, `compound_gap` and the driver-session `levels` must come out identical; only the fall-off curves, the stage-2 metrics and the strategy may differ.
+  - [x] **Step 0: check the workflow** (done 2026-11-01, no code changes). `master.py` reproduced every tracked file byte for byte, and `explore_master.py --skip-pipeline` reproduced every number (then 573 laps, 436 rows / 96 multi-lap stints; Ridge `tyre_only` 1.0478 recommended). `--quick` must run with `RESULTS_ROOT` outside the repo, or it overwrites the tracked full-run results.
+  - [x] **Step 1: a model-independent pipeline** (done 2026-11-02, commit a72dd8c; full explore rerun 2026-11-05).
+    - **Code:**
+      - The compound gap is fitted on each stint's stage-1 new-set level (`stint_new_set_levels()`, lap-weighted `fit_compound_gap()`), not on `fcp − fall_off(model)`. It equals the old per-lap fit with the linear fall-off (checked to 1e-11).
+      - `FEATURE_SETS` moved to feature_config.py (leak-asserted); train_model.py's model is a `Pipeline` picked by `FALL_OFF_FEATURE_SET`; the bundle is `train_model_fall_off_model.pkl` with `model_name` / `feature_set`; validate_strategy.py fits a `clone()` per fold; feature importances are saved only if the model has them.
+      - tune_iqr.py / tune_push.py score their CV sweeps with the model-free stage-1 linear fall-off (tune_iqr.py 87 → 10 min). A full run writes its pick into `.env` itself (`env_config.write_env()`); `--quick` never writes.
+    - **Decisions (user, 2026-11-02):** stage 3 keeps the train/test split (it fits on the training stints). tune_iqr.py writes its own winner; tune_push.py writes the label pick, not the CV winner (#30).
+    - **Swap test** (XGBoost vs Ridge on `core`): `compound_gap`, `levels`, `linear_slopes`, `medians` and `features` identical; only the curves, the stage-2 metrics and the strategy differ.
+    - **Tune reruns (12 weekends):** `IQR_LOWER_MULTIPLIER` 60 → **62** (largest k needed 51.23, 2025 Spain FP2), `IQR_UPPER_MULTIPLIER=3`; `PUSH_LAP_MAX_STINT_RATIO` off → **1.1** (label pick (1.15, 1.10), J 0.986). The stint test removes 7 Bahrain laps (573 → 566; multi-lap 436 / 96 → 427 / 94).
+    - **Before → after (Bahrain 2025, car 16):**
+      - Bundle gap MEDIUM +2.972 / HARD +0.848 (net of XGBoost's fall-off) → **+1.156 / +0.295** (model-free, training split). On all 566 laps: **+0.978 / +1.228**.
+      - validate's per-fold gap MEDIUM 0.78–2.04 → 0.14–1.54 s, HARD 0.46–1.98 → 0.36–1.76 s. Validate CV shape MAE 1.2492 → 1.0534 (flat 1.0344, linear 0.8999).
+      - eda slopes S +0.366 → +0.341, M +0.227, H +0.306 → +0.211 s/lap (HARD now not significant).
+      - Race pace level 93.06 → 94.42 s. Strategy SOFT(0)–SOFT(0)–HARD(0), pits 14/28, 5649.51 s → **SOFT(0)–SOFT(0)–MEDIUM(0), pits 14/28, 5625.24 s**.
+    - **explore (2026-11-05, 57 configurations, 26 min):** baselines flat 1.035, linear 0.905. SVR fits best (0.877) but its curve gets faster with age, so the rule rejects it. Recommendation moved from Ridge (`tyre_only`, the 2026-10-28 pick) to the **MLP (`plus_age_at_start`) 0.888**: slopes S 0.18 / M 0.17 / H 0.17 s/lap, largest step 0.18 s, monotone. Its lead over Ridge (0.890) is 0.002 s against a fold std of ~0.11 s. One model-free gap is shared by every candidate (before Step 1 it ranged over MEDIUM +0.15 to +2.05 s across them).
+  - [ ] **Step 2: a better compound-gap estimator** (model-free).
+    - **Problem:** stage 3's gap on a new set is unstable, and on the training split it is implausible. Since Step 1 these are the estimator's own numbers (Bahrain 2025, 566 laps):
+      - Training split (the bundle): MEDIUM +1.156 s, HARD +0.295 s, so MEDIUM is slower than HARD. On all 566 laps: MEDIUM +0.978, HARD +1.228 (S < M < H).
+      - It moves a lot with the data: across validate_strategy.py's folds MEDIUM +0.14 to +1.54 s and HARD +0.36 to +1.76 s. On the training split HARD went from −0.35 to +0.30 s when the stint test removed 7 laps.
+      - Why:
+        - With one fixed level per driver-session, it is identified only within the 44 driver-sessions that ran two or more compounds.
+        - HARD and MEDIUM are compared directly in just 1 of them.
+        - `run_laps` is nearly collinear with compound within a driver-session (median run SOFT 4, MEDIUM / HARD 6 laps).
+      - eda.py 6b's paired new-set comparison gives MEDIUM +1.61 s and HARD +2.23 s, with no `run_laps` control. Stage 3 with the control gives MEDIUM +0.98 s and HARD +1.23 s on all laps, with `run_laps` at +0.36 s per lap of run on the training split. How much of the difference it accounts for hasn't been measured yet; G1 vs G0 measures it.
+      - Session evolution is large (eda.py 6c: FP2 2.77 s faster than FP1, FP3 about the same as FP2), so G3's session effect must be fitted, not pooled away.
+    - **Where:** `explore/explore_lib.py`; `explore/explore_master.py` (a new `--gap-only` section); then `fit_compound_gap()` in `scripts/feature_config.py`, plus `.env`.
+    - [ ] **Candidates**, on Step 1's stint new-set levels, numpy / scipy / scikit-learn only:
+      - **G0:** today's structure.
+      - **G1:** no `run_laps` control.
+      - **G2:** run-type controls (`run_laps`, used-set start, a short/long-run indicator).
+      - **G3:** crossed partial pooling: a driver effect, a session effect and a driver × session deviation shrunk with a ridge penalty (≙ random effects), the penalty tuned by grouped CV. Driver-sessions on a single compound then count through the shared driver effect.
+      - **G4:** G3 with S ≤ M ≤ H enforced (`scipy.optimize.lsq_linear` on non-negative increments).
+      - **G5:** G3 on run-type-matched stints only.
+    - [ ] **Scoring:**
+      - Grouped CV by stint, predicting each held-out stint's new-set pace. Lap-weighted MAE, with the same scored stints for every candidate.
+      - A stint cluster bootstrap for 95% CIs of the MEDIUM and HARD gaps and P(S < M < H).
+      - The spread of the gap across folds.
+      - The order of the compounds, against eda.py 6b.
+      - Pick rule: the best prediction among the candidates with a plausible order, with the narrowest CI breaking ties.
+    - [ ] **Apply the winner** in `fit_compound_gap()`. Its tunable values become commented `.env` keys.
+    - **Verify:** validate_strategy.py's per-fold gap is narrower than now and plausibly ordered in every fold; the swap test still gives an identical gap; `master.py` exits 0.
+  - [ ] **Step 3: dynamic programming over strategies in the simulator** (new issue, to open with the user's OK; readme.txt "Future work").
+    - **Where:** `scripts/strategy_simulator.py`, `.env`.
+    - **Input:** the per-(compound, set age) stint cost table the simulator already builds (cumulative fall-off + gap + race pace level + fuel). This is the only place the model's output enters.
+    - **State:** race lap, the set on the car, a bitmask of the car's sets already used, the compounds used and the stops made.
+    - **Transitions:**
+      - Either continue on the current set, or pit at the end of the lap onto an unused set.
+      - Pits only within the pit window, each adding `PIT_LOSS_S`.
+      - `MIN_COMPOUNDS_USED` is enforced at the finish.
+      - `MAX_STOPS` (`.env`) replaces `STOP_COUNTS`.
+    - **Output:** the best strategy, plus the best per stop count and per compound sequence (for the alternatives table), with back-pointers for the pit laps and sets.
+    - **Verify:** with `MAX_STOPS=2`, run it once side by side with today's brute force: the best strategy and total must be the same. With 3 stops allowed, it finishes in seconds. Each total equals its stint totals + fuel + pit loss.
+  - [ ] **Step 4: plug in the fall-off model.**
+    - **Where:** train_model.py's MODEL block; `.env`: `FALL_OFF_FEATURE_SET` and the model's hyperparameter keys (e.g. `RIDGE_ALPHA`), with the reasoning in a comment.
+    - Rerun `explore_master.py --skip-pipeline` after Steps 2 and 3: its curve and order checks use the model-free gap, which Step 2 changes.
+    - Choose between (2026-11-05 run):
+      - The MLP (`plus_age_at_start`): the rule's pick, 0.888 s, the only rule-passing candidate that beats linear significantly (Wilcoxon p 0.038).
+      - Ridge (`tyre_only`): 0.890 s; one shared slope, the most stable fold curve. eda.py 6a finds no significant slope difference between compounds.
+      - The per-compound line: 0.905 s, = the linear baseline (interpretable, compound-specific, rises without limit past age 19).
+    - **Verify:** the swap test passes (nothing upstream of stage 2 moves); validate_strategy.py's shape MAE matches explore's for that configuration; the curves are smooth and rise on every compound; the DP strategy is logged.
+  - [ ] **Step 5: documentation, and close #27.** The docs were brought up to date after Step 1 (2026-11-05, rewritten 2026-11-08); what is left comes after Steps 2–4.
+    - **`readme.txt`:** ML Modelling steps 2–3 (the plug-in model), the reasoning (keep each claim only if the experiments back it), the results table, Race Simulation (DP and the current output), Evaluation, and the `[TODO #27]` tags.
+    - **`README.md`:** results, strategy and project status.
+    - **`AGENTS.md`:** the model plug-in point, the tune scorer and DP.
+    - **Here:** move #27 to Fixed (P2), update #15's "Depends on", and close the issues.
+  - **History:** #13 (the three-model comparison) is merged into this item. The first explore runs (2026-10-26 on the next-lap target, 2026-10-28 on the fall-off target before the tuned thresholds) built the harness: grouped nested CV, 13 candidates, flat / linear baselines, the curve checks and `MIN_MONOTONE_SHARE` (added after SVR's curve was found to fall back past the training ages). Their numbers are superseded by the 2026-11-05 run.
+  - **Depends on:** nothing left.
 
 ### P3: completeness and cleanup
 
 - [ ] **#15 Results documentation**
-  - **Problem:** results currently exist only as raw files in `scripts/results/<script>/` and a few numbers in the readmes.
-  - **Depends on:** all P1 items, plus #27 (#9 is fixed). The numbers will change once those are fixed, so write this up afterwards.
+  - **Problem:** results exist only as raw files in `scripts/results/<script>/` and a few numbers in the readmes.
+  - **Depends on:** #27. The numbers will change once it is settled, so write this up afterwards.
   - **readme.txt:** Known Issues.
   - Cover:
-    - [ ] **Data cleaning:** rows removed per session and per filter (from the `*_removed_rows_summary.csv` files and the weather z-score summary), and the final row counts. This includes car data: samples and laps removed per stage, and the laps kept per driver and session.
-    - [ ] **Feature engineering:** final dataset shape, how many laps matched a stint, and how many rows are usable for training.
-    - [ ] **Model comparison:** test MAE, RMSE and R² for all three models, in seconds rather than z-scores, with the metric chart and prediction overlay plots and what they show.
-    - [ ] **Feature importance:** top features for Random Forest and XGBoost, and whether they match tyre physics (tyre age, compound, track temperature).
-    - [ ] **Validation:** CV results per fold with the spread, the residual plot and what it shows about bias, and the model-vs-persistence test (#5, done).
-    - [ ] **Strategy:** recommended strategy (compound sequence and pit laps), predicted race time in seconds, the next-best alternatives and the gap to them, and predicted pace by compound across the race.
-    - [ ] **Limitations:** a short note on which results depend on items still open above.
+    - [ ] **Data cleaning:** rows removed per session and per filter (from the `*_removed_rows_summary.csv` files and the weather z-score summary) and the final row counts, including car data.
+    - [ ] **Feature engineering:** final dataset shape, the multi-lap stints and the rows the model learns from.
+    - [ ] **Model comparison:** explore/'s leaderboard with the fold spread, the fall-off curves per compound and what they show.
+    - [ ] **Validation:** CV per fold with the spread, the tests against the flat and linear baselines, the residual plot and the curve uncertainty.
+    - [ ] **Strategy:** the recommended strategy (compound sequence, sets and pit laps), predicted race time, the next-best alternatives and the gap to them.
+    - [ ] **Limitations:** which results depend on items still open.
     - [ ] Decide where this lives (a results section in `readme.txt` / `README.md`, or a separate `RESULTS.md`) and link it from both readmes.
 
 ---
@@ -321,7 +127,7 @@ Items keep a stable ID (`#N`), which is also the item's GitHub issue number (ope
 
 Ideas that could make more data usable, not confirmed bugs. Each one changes the results, so check the effect before adopting it.
 
-Context: the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 566 (186 / 295 / 85; 573 before #27 Step 1 turned on the stint test). Since #31 the model learns fall-off within stints, so the 427 laps of the 94 stints with two or more clean laps are its rows (273 next-lap rows before #31), and the compound-gap fit uses all 566. Removed by `process_laps.py`: 275 pit-out laps, 5 invalid-sector or extreme lap times (7 before #33 rebuilt 2 sectors), 1 for "unrealistic speed" (102 before #29), 67 IQR outliers (all slow; 70 before #33, 103 before #32), 336 non-push laps on the session test (331 before #33) and 7 more on the stint test (`PUSH_LAP_MAX_STINT_RATIO=1.1`, since #27 Step 1).
+Context (Bahrain 2025): the 1,257 raw practice laps (426 / 522 / 309) are cleaned down to 566 (186 / 295 / 85). The model learns from the 427 laps of the 94 stints with two or more clean laps; the compound-gap fit uses all 566. Removed by `process_laps.py`: 275 pit-out laps, 5 invalid-sector or extreme lap times, 1 for unrealistic speed, 67 IQR outliers (all slow), 336 non-push laps on the session test and 7 more on the stint test.
 
 None at the moment.
 
@@ -332,645 +138,132 @@ None at the moment.
 ### P1: results are invalid until fixed
 
 - [x] **#1 Weather comes from a different event**
-  - **Where:** `data/raw/weather/weather.csv`, and the download URL in `readme.txt` / `README.md`.
-  - **Problem:** the weather was downloaded with `meeting_key=1253`, which is Bahrain pre-season testing (sessions 9683–9685, 26–28 Feb 2025). The laps, stints and car data are from `meeting_key=1257`, the Grand Prix weekend (11–12 Apr 2025).
-  - **Effect:** the weather features describe a different week. The timestamps can't line up, so `feature_engineer.py` spreads the weather rows evenly over the lap numbers ("pseudo time"). Each lap's weather is therefore effectively arbitrary.
-  - **Fix:** download `https://api.openf1.org/v1/weather?meeting_key=1257&csv=true`, then merge per session on timestamps (`date_start` against `date`).
-  - **readme.txt:** Data Collection step 4; Feature Engineering, pseudo time alignment.
-  - **Fixed:** `data/raw/weather/weather.csv` re-downloaded for `meeting_key=1257`. `process_weather.py` keeps only the practice sessions (the `session_key`s in `laps_p*.csv`), dropping qualifying and race. `feature_engineer.py` replaces pseudo time with `merge_asof` on `date_start` ~ `date` (nearest, 5 min tolerance); all 839 laps match, within 30 s. Held-out R² went from 0.306/0.232/0.102 to 0.425/0.474/0.419 (LR/RF/XGB).
+  - **Problem:** the weather was downloaded with `meeting_key=1253` (Bahrain pre-season testing), not 1257 (the Grand Prix), so `feature_engineer.py` spread it over the laps by "pseudo time" and each lap's weather was arbitrary.
+  - **Fixed:** weather re-downloaded for 1257; `process_weather.py` keeps the practice sessions only; `feature_engineer.py` joins on timestamps (`merge_asof` on `date_start` ~ `date`, 5 min tolerance), every lap within 30 s.
 
 - [x] **#2 Stint merge joins on the wrong stint number**
-  - **Where:** `scripts/feature_engineer.py`: `assign_stint_numbers()` and the `laps.merge(stints[...], on=["driver_number", "stint_number"])` that follows it.
-  - **Problem:** laps get a `global_stint_number`, which runs 1–18 per driver across all three sessions. The merge then matches it against the stints table's own `stint_number`, which runs 1–9 and restarts in every session.
-  - **Effect:**
-    - A lap can match the same-numbered stint from up to three sessions, so it is duplicated, sometimes with different compounds. The 839 cleaned laps become 1126 rows.
-    - Laps whose global number has no per-session match get no `lap_start`, `lap_end`, compound or tyre age, so 507 rows have no `fuel_corrected_pace`.
-  - **Fix:** merge on `global_stint_number`, or keep `session_key` and merge on `(session_key, driver_number, stint_number)`.
-  - **Depends on:** shares a fix with #3 (keep `session_key`).
-  - **readme.txt:** Feature Engineering, stint number and merge; ML Modelling, training (1126 → 613 rows).
-  - **Fixed** (together with #3): the merge now uses the stints' `global_stint_number`, renamed to `stint_number`, on `(driver_number, stint_number)`. The global number is unique per driver, so the merge is one-to-one (`validate="many_to_one"`). All 839 cleaned laps keep exactly one row, all of them get a stint, and none is missing `fuel_corrected_pace`. Every lap's compound and lap range were checked against the raw `stints_p*.csv` of its own session, with 0 mismatches. 821 rows remain after the target shift (was 613).
-    - **Effect on metrics:** held-out R² fell from 0.425/0.474/0.419 to 0.043/0.060/−0.039 (LR/RF/XGB). The old figures were inflated by the duplicated rows. The target is still mostly cross-driver (#4): only 5.5% of target pairs are the same driver's next lap (was 2.0%). As a diagnostic only, building the target per `(session_key, driver_number, stint_number)` with lap + 1 gives 514 rows and RF R² 0.617.
+  - **Problem:** laps got a global stint number (1–18 per driver across sessions) but were merged against the per-session `stint_number` (1–9), so laps were duplicated with different compounds (839 laps → 1,126 rows) and 507 rows had no `fuel_corrected_pace`.
+  - **Fixed** (with #3): the merge uses the global number on both sides, one-to-one (`validate="many_to_one"`). Every lap's compound and lap range checked against its own session's raw stints, 0 mismatches. The old metrics were inflated by the duplicates.
 
 - [x] **#3 Laps are assigned to stints without checking the session**
-  - **Where:** `scripts/feature_engineer.py`: the mask in `assign_stint_numbers()`.
-  - **Problem:** `session_key` is dropped during cleaning, so a lap is matched on driver and lap-number range only. Lap numbers restart every session, so FP1 lap 5 can be given an FP2 stint that also covers lap 5. Whichever matching stint is processed last wins.
-  - **Fix:** keep `session_key` through cleaning and include it in the mask.
-  - **Depends on:** shares a fix with #2.
-  - **readme.txt:** Data Preparation step 1 (session keys removed); Feature Engineering, stint number.
-  - **Fixed:** `process_laps.py` and `process_stints.py` now drop only `meeting_key`, so `session_key` reaches `data/processed/laps_combined_clean.csv` and `data/processed/stints_combined_clean.csv`. `assign_stint_numbers()` adds `session_key` to the mask. It also numbers the global stints in order of `(driver_number, session_key, stint_number)` rather than `lap_start`, which interleaved the sessions. `feature_engineer.py` drops `session_key` from the final dataset along with `driver_number`, so the engineered dataset's schema is unchanged. #4 decides which id to keep there.
+  - **Problem:** `session_key` was dropped in cleaning, so a lap was matched on driver and lap range only, and FP1 lap 5 could get an FP2 stint.
+  - **Fixed:** `process_laps.py` / `process_stints.py` drop only `meeting_key`, and `assign_stint_numbers()` matches on the session too, numbering global stints by `(driver_number, session_key, stint_number)`.
 
 - [x] **#4 The "next lap" target can come from another driver**
-  - **Where:** `df.groupby("stint_number")["fuel_corrected_pace"].shift(-1)` in both `scripts/train_model.py` and `scripts/validate_strategy.py`.
-  - **Problem:** `driver_number` is dropped in `feature_engineer.py`, so the target is shifted within `stint_number` only. Every driver's stint 1 is one group, sorted by lap number, so a row's "next lap" is often another driver's lap.
-  - **Fix:** keep a driver/session identifier in the engineered dataset (not as a model input). Group by it plus the stint, and check that the next lap number is exactly the current one plus 1.
-  - **readme.txt:** Data Preparation step 3, encoding (driver number removed); Feature Engineering, final drop list; ML Modelling, training.
-  - **Fixed:** `feature_engineer.py` keeps `session_key` and `driver_number` in the engineered dataset as identifiers. They are not in `MODEL_FEATURE_COLUMNS`, so the model still has the same 22 inputs. `feature_config.py` has a shared `build_next_lap_target()`, used by both `train_model.py` and `validate_strategy.py`. It groups by `(driver_number, stint_number)` (the global stint number, so one stint in one session) and keeps a row only if the next row is `lap_number + 1`.
-    - **Rows:** 839 → 514. 260 are the last lap of a stint and 65 have a gap to the next lap (laps removed in cleaning). All 514 pairs were checked: same driver, stint and session, and lap + 1.
-    - **Effect on metrics:** held-out R² rose from 0.043/0.060/−0.039 to 0.534/0.625/0.652 (LR/RF/XGB), and MAE to 0.504/0.435/0.419 (z-score units). XGBoost 5-fold CV MAE is 0.409 and RMSE 0.578. Part of this may be leakage through `stint_avg_pace` (#17).
+  - **Problem:** the target was shifted within `stint_number` only, after `driver_number` was dropped, so a row's "next lap" was often another driver's lap.
+  - **Fixed:** `session_key` and `driver_number` stay in the engineered dataset as identifiers (not inputs), and the target was built per driver and stint, only where the next lap was `lap_number + 1`. (The next-lap target itself was replaced in #31.)
 
 - [x] **#7 The simulator mixes units**
-  - **Where:** `scripts/strategy_simulator.py`, with the scaling done in `scripts/process_laps.py`.
-  - **Problem:** `lap_duration` is standardised in `process_laps.py` (z-scores, one scaler per session), so the model predicts in z-score units. The fuel correction (`0.035`/lap), `FUEL_PENALTY_PER_LAP` and `PIT_LOSS = 22.0` are in seconds.
-  - **Effect:** the best strategy totals 84.89 over 57 laps (about 1.49 per lap), so one pit stop costs as much as roughly 15 laps of racing. The optimiser therefore always picks 0 stops. The reported total is not a race time in seconds.
-  - **Fix:** either model in seconds (don't scale `lap_duration`), or convert predictions back to seconds with the per-session scaler before simulating.
-  - **readme.txt:** Data Preparation step 4, normalization; Race Simulation steps 3 and 4.
-  - **Fixed:** the model now works in seconds, so the target, the fuel term, the pit loss and the metrics share one unit.
-    - **No lap scaling:** `process_laps.py` no longer scales `lap_duration`, the sector times or the speeds. Linear Regression, Random Forest and XGBoost don't change under a global rescale. The scaler's only real effect was the per-session part, which removed each session's pace level and left no race session to convert back to. Converting back with pooled session statistics was considered and rejected: the race pace level would have been a fixed convention, not something the model learns.
-    - **Session one-hot:** `process_laps.py` tags each lap with `session_name` (FP1/FP2/FP3, from the `laps_p*` file name). `feature_engineer.py` one-hot encodes it to `session_FP1/FP2/FP3` (`SESSION_COLUMNS` in `feature_config.py`), a model input, so session-level pace offsets are separated from conditions and tyres. `session_key` stays an identifier. 25 model inputs (was 22).
-    - **Simulator:**
-      - The base feature vector is the training medians (saved in the bundle as `medians`). All-zero inputs only meant "average" while everything was a z-score.
-      - The race is not a practice session, so each lap is predicted under each session one-hot and averaged, weighted by each session's share of training rows (bundle `session_weights`: FP1 0.407, FP2 0.385, FP3 0.208).
-      - Totals are labelled in seconds (`"time_units": "seconds"` in `best_strategy.json`).
-    - **Checks:** the sector times sum to `lap_duration` exactly. `fuel_corrected_pace − 0.035 × (lap_end − lap_number)` equals the raw `lap_duration` of `laps_p*.csv` for all 839 laps. Every row has exactly one session one-hot, matching its `session_key`.
-    - **Effect on metrics** (now in seconds): held-out MAE 12.12 / 10.65 / 10.51 s, RMSE 16.61 / 15.50 / 15.13 s and R² 0.586 / 0.640 / 0.656 (LR/RF/XGB; R² was 0.534 / 0.625 / 0.652). XGBoost 5-fold CV MAE 9.81 s, RMSE 14.05 s. The errors are large in seconds because the target still includes slow non-push laps (#20). The session one-hots have XGB importance 0.020 / 0.009 / 0.045. `stint_avg_pace` is still top at 0.260 (#17).
-    - **Effect on strategy:** predicted laps are 103–112 s and the best total is 6055.98 s (SOFT–SOFT–SOFT, pits on laps 10 and 11). This is still **not** a valid recommendation. Pitting on consecutive laps leaves an empty middle stint, and the two laps never summed are worth more than the 44 s of pit loss (#11). The middle compound doesn't matter, so SOFT–MEDIUM–SOFT and SOFT–HARD–SOFT tie (#8).
+  - **Problem:** `lap_duration` was standardised per session, so the model predicted z-scores while the fuel term and the 22 s pit loss were in seconds; one stop cost as much as ~15 laps and the optimiser always picked 0 stops.
+  - **Fixed:** lap times, sectors and speeds are no longer scaled, so the target, predictions, fuel, pit loss and metrics are all in seconds. A per-session scaler would remove each session's pace level, with no race session to convert back with. Session offsets went into a session one-hot (now absorbed by the stint level, #31).
 
 - [x] **#8 Illegal strategies are allowed**
-  - **Where:** `generate_strategies()` in `scripts/strategy_simulator.py`.
-  - **Problem:** it includes 0-stop strategies and sequences that use a single compound, which the two-compound rule forbids. The current recommendation (HARD, no stop) is one of these.
-  - **Fix:** keep only sequences with `len(set(seq)) >= 2`.
-  - **readme.txt:** Race Simulation steps 1 and 4.
-  - **Fixed:** `generate_strategies()` skips every compound sequence with fewer than `MIN_COMPOUNDS_USED` (`.env`, 2) distinct compounds and logs how many strategies it dropped. A 0-stop strategy has one compound, so the filter rules it out even if `STOP_COUNTS` includes 0. `STOP_COUNTS` in `.env` is now `1,2`.
-    - **Strategy space:** 18,318 → 16,206. 1-stop: 6 sequences × 37 pit laps = 222. 2-stop: 24 sequences × 666 pit pairs = 15,984. The 2,109 dropped (3 × 37 + 3 × 666) are SOFT–SOFT, HARD–HARD–HARD and the like. Checked on `strategy_simulator_all_strategy_results.csv`: every row uses ≥2 compounds, and none has 0 stops.
-    - **Effect on strategy:** none on the winner, which already used two compounds. It is still HARD–HARD–SOFT, pits on laps 12 and 24, 6023.36 s. The best 1-stop is still HARD–SOFT, pit on lap 11, 6144.94 s. The previous best 0-stop (MEDIUM, 6178.24 s) is no longer a candidate. It is still **not** a valid recommendation, because of #11.
+  - **Problem:** `generate_strategies()` included 0-stop and single-compound strategies, which the two-compound rule forbids.
+  - **Fixed:** sequences with fewer than `MIN_COMPOUNDS_USED` (2) distinct compounds are skipped and counted; `STOP_COUNTS=1,2`. Bahrain: 18,318 → 16,206 strategies (222 one-stop, 15,984 two-stop).
 
 - [x] **#10 Tyre age does not reset after a pit stop**
-  - **Where:** `precompute_lap_predictions()` / `stint_time()` in `scripts/strategy_simulator.py`.
-  - **Problem:** predictions are indexed by race lap, and `laps_since_stint_start` is set to the race lap number. A stint that starts on lap 30 is priced as if its tyres were already 30 laps old.
-  - **Fix:** predict each stint from tyre age 1, i.e. index by stint length rather than by race lap.
-  - **readme.txt:** Race Simulation step 2.
-  - **Fixed** (together with #9): `precompute_stint_rollouts()` rolls every compound out for every stint length L = 1..57, always from tyre age 1 (`laps_since_stint_start` = 1 on the stint's first lap). `stint_time()` prices a stint as the summed predicted fcp of the L-lap rollout plus the race fuel term (`FUEL_PENALTY_PER_LAP` × fuel on board) of the race laps it covers. So a stint costs the same wherever it starts, apart from the fuel. Race stints originally always started on a new set; since #21 they start at the age of the set the car fits.
-    - **Training range:** `laps_since_stint_start` is 2–18 in training (pit-out laps are cleaned out). Age 1 is treated like 2. Beyond 18, XGBoost's response to tyre age is flat, so any later change comes from the fed-back inputs (#9).
+  - **Problem:** predictions were indexed by race lap, so a stint starting on lap 30 was priced as if its tyres were 30 laps old.
+  - **Fixed** (with #9): each stint is priced from its own start, so a stint costs the same wherever it starts, apart from the fuel. Since #21 it starts at the age of the set the car fits.
 
 - [x] **#11 The pit lap is missing from the race-time sum**
-  - **Where:** `simulate_strategy_fast()` in `scripts/strategy_simulator.py`.
-  - **Problem:** stints are summed over `(last, p - 1)`, then `last = p + 1`, so lap `p` is never counted. The pit loss replaces a whole lap instead of being added to it.
-  - **Effect:** now that #7 is fixed, a dropped lap (~100–110 s) outweighs the 22 s pit loss, so every extra stop makes a strategy look faster. The optimiser picks 2 stops on consecutive laps (12 and 13 since #9/#10; 10 and 11 before). The middle "stint" is empty and two laps go missing from the total.
-  - **Fix:** sum every race lap exactly once and add the pit loss on top.
-  - **readme.txt:** Race Simulation step 3.
-  - **Fixed:** stints are now summed over `(last, p)`, then `last = p + 1`. "Pit on lap `p`" means the car comes in at the end of lap `p`: lap `p` is the in-lap, the last lap of the old stint, and the next stint starts on lap `p + 1`. The in- and out-lap time loss is all in `PIT_LOSS_S`, which is added once per stop on top of the laps. The pit window (laps 10–46) and the strategy space are unchanged. Consecutive pit laps now give a 1-lap middle stint instead of an empty one.
-    - **Checks:** on all 24,420 rows of `strategy_simulator_all_strategy_results.csv`, the stint lengths sum to 57 and are each ≥ 1. Each `total_time` equals the summed `stint_totals` of its stints + the full-race fuel term + 22 s × stops, to within 3e-12 s. The rollouts and stint totals are unchanged; only the race sum moved. Because every lap is counted once, the race fuel term is the same for every strategy, so a total depends only on which (compound, set age, stint length) stints it uses.
-    - **Effect on strategy:** each total rises by about one lap per stop. 2 stops still win, but by about 100 s instead of ~210 s, and consecutive pit laps no longer do (best one is 104–113 s behind the winner).
-      - **Car 16:** SOFT(0)–SOFT(0)–HARD(0), pits on laps 19 and 38 (three 19-lap stints), 6113.18 s. SOFT–HARD–SOFT and HARD–SOFT–SOFT on the same sets and laps tie with it. Swapping in the used SOFT(6) set is 3.42 s slower. Best 1-stop: SOFT(6)–HARD(0), pit on lap 38, 6214.55 s (+101.37 s). Was SOFT(6)–SOFT(0)–HARD(0), 18 and 38, 5890.48 s.
-      - **Car 44:** MEDIUM(3)–SOFT(4)–SOFT(5), pits on laps 17 and 40, 6082.41 s. Any order of the same three sets with stints of 17, 17 and 23 laps ties with it, e.g. pits on 17 and 34. Best 1-stop: MEDIUM(3)–SOFT(4), pit on lap 17, 6185.01 s (+102.60 s). Was the same sets, 18 and 38, 5856.92 s.
-      - 2 stops still win because each rollout steps up 6–13 s within about 14–20 stint laps and then plateaus, so three short stints keep more laps on the fast early part. That shape comes from practice data with #20 still open, and #19 is still open, so this is still **not** a valid recommendation.
+  - **Problem:** stints were summed over `(last, p − 1)`, so lap `p` was never counted, and each extra stop dropped a ~100 s lap for 22 s of pit loss: the optimiser picked 2 stops on consecutive laps.
+  - **Fixed:** every race lap is summed once. "Pit on lap `p`" means lap `p` is the in-lap and the next stint starts on `p + 1`; `PIT_LOSS_S` is added on top. Checked: stint lengths sum to the race, and every total equals its stints + race fuel + 22 s × stops (to 3e-12 s).
 
 - [x] **#19 The fuel correction has the wrong sign and horizon**
-  - **Where:** `fuel_corrected_pace` in `scripts/feature_engineer.py`.
-  - **Problem:**
-    - `fuel_corrected_pace = lap_duration + 0.035 × laps_remaining` adds the fuel effect. Laps with more fuel on board are already slower, so the correction should subtract it.
-    - `laps_remaining = lap_end - lap_number` counts the laps left in the *stint*, not the fuel on board. In practice, the fuel load depends on the run plan, which the data doesn't record.
-  - **Effect:** the target is not fuel-free pace. The simulator still adds race fuel (`0.035 ×` laps of fuel remaining) on top of it, so early-stint fuel is counted twice in training and differently in simulation.
-  - **Fix:** subtract the term, and decide on a fuel proxy (e.g. laps left in the stint as an approximation of the run's fuel, stated as an assumption), or drop the correction and let the model learn it from `laps_since_stint_start`.
-  - **readme.txt:** Feature Engineering, fuel_corrected_pace.
-  - **Fixed:** `feature_engineer.py` now subtracts the fuel term: `fuel_corrected_pace = lap_duration − k × laps_remaining`, with `laps_remaining = lap_end − lap_number + 1`.
-    - **Fuel proxy (assumption):** practice fuel loads aren't recorded, so the laps left in the stint, counting lap *t*, stand in for the fuel on board at the start of lap *t*. This assumes each run is fuelled for its own length. `lap_end` comes from the stints, so laps removed in cleaning still count. The `+ 1` matches the race term, which counts the current lap (`FUEL_PENALTY_PER_LAP × (NUM_LAPS − lap + 1)`), so fcp is fuel-free pace in both and the race fuel is added once, in the simulator only. `laps_remaining` is 1–17 in training, so the term moves fcp by −0.035 to −0.595 s (it was +0 to +0.56 s).
-    - **Simulator:** `rollout_stint()` inverts the new definition. The seed is `fcp = raw − k × L`, and each later lap is `raw = fcp + k × (L − age + 1)`. The race fuel term is unchanged.
-    - **Checks:** `fuel_corrected_pace + 0.035 × (lap_end − lap_number + 1)` equals `lap_duration` on all 839 laps (514 rows after the target, unchanged). On all 11,571 rollout rows, `raw − fcp = 0.035 × (L − age + 1)`, the sectors sum to the raw lap, and every stint lap 1 is the 98.98 s seed. On all 24,420 result rows, the totals equal the summed stint totals + the race fuel term + 22 s × stops (to 3e-12 s).
-    - **Effect on metrics:** almost none, since the target moves by at most ~1.2 s per lap. Held-out MAE is 16.64 / 12.42 / 12.19 s, RMSE 20.48 / 17.02 / 16.06 s and R² 0.374 / 0.568 / 0.615 (LR/RF/XGB; was 16.62 / 12.37 / 11.97 s and R² 0.373 / 0.574 / 0.620). XGBoost 5-fold CV MAE is 11.92 s, RMSE 16.36 s (was 11.77 / 16.16 s). XGB's top features are `i2_speed` 0.133, `tyre_age` 0.094, `track_temperature` 0.079 and `duration_sector_3` 0.077.
-    - **Rollout behaviour** (57-lap stint, fcp in s):
-      - The seed fcp is now 96.98 s (98.98 − 0.035 × 57), below the predicted laps rather than above them.
-      - New sets still predict a slow second lap (111.7–112.2 s, a step of up to 15.2 s from the seed), then 102–105 s, and step up to ~110.7–110.9 s around stint lap 20.
-      - Used sets have no jump: 100.7–103 s, stepping up to ~110.3 s at stint lap 14 (SOFT 6), 15 (SOFT 5), 16 (SOFT 4) and 17 (MEDIUM 3). Every set steps up at tyre age ~20, near the top of the training range (2–21), so this is the model running out of data, not tyre physics.
-      - All rollouts stay within 96.98–112.19 s.
-    - **Effect on strategy:** both cars now pick new sets. SOFT(0)–SOFT(0)–HARD(0), pits on laps 19 and 38 (three 19-lap stints), 6005.04 s, tied with SOFT–HARD–SOFT and HARD–SOFT–SOFT on the same sets.
-      - **Car 16:** the same strategy as before, 108.14 s faster (was 6113.18 s). The best strategy with a used set is SOFT(6)–SOFT(0)–HARD(0), pits on 14 and 33, +25.23 s. The best 1-stop is SOFT(0)–HARD(0), pit on lap 19, +114.18 s.
-      - **Car 44:** was MEDIUM(3)–SOFT(4)–SOFT(5) at 6082.41 s. Swapping one stint to MEDIUM(3) is +3.43 s. The best 1-stop is SOFT(4)–HARD(0), pit on lap 38, +113.37 s.
-      - Used sets now lose because they reach the tyre-age ~20 step sooner, which outweighs the new-set second lap. Neighbouring pit laps are 4–7 s behind, and consecutive pit laps 124.53 s.
-      - No P1 items are left, but the rollout shape still comes from practice laps that include cool-down laps (#20), and the metrics come from a shuffled split (#18). This is still **not** a valid recommendation.
+  - **Problem:** `fuel_corrected_pace = lap_duration + 0.035 × laps_remaining` added the fuel effect instead of removing it, with `laps_remaining = lap_end − lap_number`.
+  - **Fixed:** `fuel_corrected_pace = lap_duration − k × laps_remaining`, `laps_remaining = lap_end − lap_number + 1`. Assumption: practice fuel isn't recorded, so the laps left in the stint (counting lap *t*) stand in for the fuel on board; this matches the race term, so race fuel is added once, in the simulator only.
 
-- [x] **#? Other weekends' stints and laps break stage 1** (found by #27 Step 1's 12-weekend tune reruns; GitHub issue to open, with the user's OK)
-  - **Where:** `scripts/process_stints.py`, `scripts/feature_engineer.py`.
-  - **Problem:** three data cases that Bahrain 2025 doesn't have, so the pipeline never hit them:
-    - A session that ran no stint on a compound has no column for it after `get_dummies`, so the concat leaves NaN there (2025 australia FP1, no HARD: 144 fall-off rows). Stage 1's least squares fails on the NaN ("SVD did not converge"), which crashed tune_iqr.py's CV sweep.
-    - Non-dry stints (2025 austria 30 `UNKNOWN`, 2025 netherlands 6 `INTERMEDIATE`) have SOFT/MEDIUM/HARD one-hots of all 0, so `compound_of()` / tyre_sets.py's `idxmax` read them as SOFT.
-    - OpenF1 leaves `date_start` empty on some first laps (2025 spain FP3: 11). #33's sector rebuild keeps one alive at k = (3, 1.5), and the weather `merge_asof` refuses null keys.
-  - **Effect:** the tune scripts' CV sweeps could not run on all 12 weekends since #31 (stage 1 per fold) and #33. Any of these weekends selected in `.env` would crash or mislabel compounds.
-  - **Fixed (2026-11-02):**
-    - process_stints.py keeps only SOFT/MEDIUM/HARD stints (a logged `non_dry_compound` filter), and fills a compound column missing in a session with 0 after the concat.
-    - feature_engineer.py drops laps with no stint and laps with no `date_start`, logging both counts.
-    - Bahrain's `data/processed/` is byte-identical; only the logs and `process_stints_removed_rows_summary.csv` gained 0-count lines. On australia, austria and netherlands every lap has exactly one compound, and stage 1 and the gap fit run; no laps were lost there.
+- [x] **#34 Other weekends' stints and laps break stage 1** (found by #27 Step 1's 12-weekend tune reruns)
+  - **Problem:** three cases Bahrain 2025 doesn't have: a session with no stint on a compound left a NaN one-hot column (2025 Australia FP1, no HARD), which crashed stage 1's least squares; non-dry stints (2025 Austria `UNKNOWN`, Netherlands `INTERMEDIATE`) had all-0 one-hots and read as SOFT; and laps with no `date_start` (2025 Spain FP3: 11) broke the weather `merge_asof`.
+  - **Fixed (2026-11-02):** process_stints.py keeps only SOFT / MEDIUM / HARD and fills a missing compound column with 0 after the concat; feature_engineer.py drops (and counts) laps with no stint or no `date_start`. Bahrain's `data/processed/` is byte-identical.
 
 ### P2: method or validation is misleading
 
 - [x] **#5 The t-test is a placeholder**
-  - **Where:** the "T-TEST EXAMPLE" block in `scripts/validate_strategy.py`.
-  - **Problem:** it compares two sets of random numbers (`np.random.normal(4800, 10)` against `np.random.normal(4820, 10)`), unseeded. The p-value says nothing about the model or the strategy, and it changes every run.
-  - **Fix:** replace it with a meaningful test (e.g. per-fold errors of two models, or simulated race times of the top strategies), or remove it.
-  - **readme.txt:** Evaluation step 1, t-test.
-  - **Fixed:** the placeholder is replaced by a test of whether the model beats a naive forecast on unseen stints ("BASELINE SIGNIFICANCE TEST" in `validate_strategy.py`).
-    - **Baseline (persistence):** lap *t+1*'s fcp = lap *t*'s `fuel_corrected_pace`. Nothing is fitted, so it is out-of-sample for every row, like the out-of-fold predictions (#6).
-    - **Test:** laps of one stint aren't independent (#18), so each stint is one paired observation: the mean |error| of the OOF prediction against the mean |error| of the baseline, over its rows. A one-sided paired t-test (`ttest_rel`, `alternative="less"`) and, because the residuals are right-skewed, a one-sided Wilcoxon signed-rank test, judged at `SIGNIFICANCE_LEVEL` (`.env`, 0.05). Both are deterministic.
-    - **Outputs:** `validate_strategy_baseline_test_stints.csv` (one row per stint: `session_key`, rows, fold, `model_MAE`, `baseline_MAE`, `diff`) replaces `_ttest_samples.csv`. `validate_strategy_cv_fold_metrics.csv` gains `baseline_MAE`, `validate_strategy_oof_predictions.csv` gains `baseline_pred`, and the summary's `t_test_p` is replaced by `baseline_MAE`, `baseline_RMSE`, `paired_t_stat`, `paired_t_p` and `wilcoxon_p`.
-    - **Checks:** the CV and OOF metrics are unchanged (CV MAE 1.23 s, RMSE 1.70 s; OOF MAE 1.18 s). The stint table has 50 stints covering 153 rows, `diff = model_MAE − baseline_MAE`, and the per-fold baseline MAE matches the per-row errors (to 1e-15 s). Two runs give byte-identical summary and stint CSVs.
-    - **Result:** baseline MAE 1.80 s, RMSE 3.32 s (model OOF 1.18 / 1.69 s). The model is better on 32 of 50 stints. Per-stint MAE difference: mean −1.60 s, median −0.14 s. Paired t = −3.32, p = 0.0008. Wilcoxon p = 0.011. So the model beats persistence at 0.05.
-      - The mean is driven by a few single-row stints where lap *t* was 9–12 s off its next lap and persistence carries that error forward. The typical gain is the median, 0.14 s, and the Wilcoxon p is the more honest of the two.
-      - Per fold, the baseline MAE is 2.13 / 2.72 / 1.08 / 2.01 / 1.27 s against the model's 1.12 / 1.68 / 1.08 / 0.75 / 1.51 s. The model ties persistence in fold 3 and loses in fold 5.
-      - This only shows that the model beats a trivial one-step forecast. It says nothing about how the strategy holds up (planned Strategy Validation), and it doesn't compare candidate models (#13, #27).
+  - **Problem:** `validate_strategy.py`'s "T-TEST EXAMPLE" compared two sets of unseeded random numbers, so its p-value meant nothing.
+  - **Fixed:** replaced by a per-stint paired test of the model against a naive baseline (one-sided paired t-test and Wilcoxon at `SIGNIFICANCE_LEVEL`), each stint one observation since its laps aren't independent. Since #31 the baselines are flat (no fall-off) and linear (stage-1 slope per compound).
 
 - [x] **#6 The residual plot mixes training and test data**
-  - **Where:** `pred_full = model.predict(X)` in `scripts/validate_strategy.py`.
-  - **Problem:** the model from the last cross-validation fold predicts every row, including the 80% that fold was trained on, so the residuals look better than they really are.
-  - **Fix:** plot out-of-fold predictions (collect each fold's test predictions), or use the held-out split only.
-  - **readme.txt:** Evaluation step 1, residual plot.
-  - **Fixed:** the CV loop in `validate_strategy.py` now stores each fold's test predictions in `oof_pred`. The residual plot uses those, so every row is scored by the one model that held its stint out. GroupKFold (#18) holds each row out exactly once, so all 153 rows are plotted, and the script raises if any row has no prediction. The `N = min(3000, len(y))` slice (first rows in sort order, not a sample) is gone.
-    - **Outputs:** `validate_strategy_oof_predictions.csv` (ids, target, OOF prediction, residual, fold). `validate_strategy_validation_summary.csv` gains `OOF_MAE`, `OOF_RMSE` and `OOF_mean_residual`. The plot title says it is out-of-fold.
-    - **Checks:** the fold metrics are unchanged (CV MAE 1.23 s, RMSE 1.70 s). Every fold holds 10 stints, every row has exactly one prediction, and `residual = target − prediction` to 1e-14 s.
-    - **Effect:** pooled OOF MAE 1.18 s, RMSE 1.69 s, mean residual −0.20 s. The old plot (last fold's model on all rows) gave MAE 0.23 s and RMSE 0.85 s, so it understated the error about 5× (MAE) and 2× (RMSE).
-    - **What the plot shows:** no clear trend against predicted pace (slope −0.09, correlation −0.07). The residuals are right-skewed: median −0.32 s, 5th–95th percentile −2.31 to +3.75 s, with a handful of laps 4–5 s slower than predicted. The predictions span 96.4–104.2 s against targets of 95.9–107.8 s, so the model doesn't reach the slowest laps. The per-fold mean residual ranges from −1.00 s (fold 5) to +0.12 s, so the small overall bias depends on which stints are held out.
+  - **Problem:** the last CV fold's model predicted every row, including the ones it was trained on, which understated the error ~5× (MAE).
+  - **Fixed:** the plot uses out-of-fold predictions, each row scored by the model that held its stint out (`validate_strategy_oof_predictions.csv`).
 
 - [x] **#9 The simulation does not roll predictions forward**
-  - **Where:** `precompute_lap_predictions()` in `scripts/strategy_simulator.py`.
-  - **Problem:**
-    - Each lap is predicted on its own, with every feature other than the compound, the session one-hot and `laps_since_stint_start` fixed at its training median (fixed at 0 before #7).
-    - `fuel_corrected_pace` is set to 0.0 as a placeholder. It isn't a model input anyway, because the vector is cut down to `FEATURES`.
-    - `readme.txt` says each prediction is fed into the next lap, which doesn't happen.
-  - **Effect:** "degradation" comes only from the model's response to `laps_since_stint_start`.
-  - **Fix:** roll the lap-*t* feature vector forward from each prediction, or change `readme.txt` to describe the per-lap approach that is actually used.
-  - **readme.txt:** ML Modelling step 2 (autoregressive, emergent degradation); Race Simulation step 2; Evaluation, planned critical checks.
-  - **Fixed** (together with #10): `rollout_stint()` in `scripts/strategy_simulator.py` rolls each stint forward lap by lap.
-    - **Seed:** lap 1 of a stint is a median lap. Its state is the training medians (bundle `medians`) with the compound set, and its lap time is the sum of the median sector times (98.98 s).
-    - **Step:** the model predicts lap *a+1*'s fcp from lap *a*'s state (the training relationship), still averaged over the session one-hots (`predict_fcp()`).
-    - **Feedback:** the prediction is turned back into a raw lap time by undoing training's fuel term, `raw = fcp − FUEL_EFFECT_K × (L − age)` for a stint of L laps. This needs one rollout per (compound, L): 4959 laps in total, about 6 s. It then becomes the next state:
-      - the sector times are the median sector shares scaled to sum to `raw`
-      - `stint_avg_pace` is the mean of the stint's earlier raw laps (the causal form #17 proposed; training uses it too since #17 was fixed)
-      - `laps_since_stint_start` goes up by one
-      - `fuel_corrected_pace` holds the lap's fcp instead of a 0.0 dummy
-    - **Held fixed:** speeds, segment counts and weather stay at the medians. The k = 0.035 used to build fcp is now `FUEL_EFFECT_K` in `feature_config.py`, shared by `feature_engineer.py` and the simulator.
-    - **Outputs:** `strategy_simulator_stint_rollouts.csv` has one row per compound, stint length and tyre age, with fcp, raw lap time, sectors and `stint_avg_pace`. `strategy_simulator_stint_totals.csv` is compound × stint length. They replace `_precomputed_predictions.csv` and `_prefix_sums.csv`.
-    - **Checks:**
-      - sectors sum to the raw lap
-      - `fcp − raw = 0.035 × (L − age)` on every row
-      - every age-1 lap is the seed
-      - `stint_avg_pace` is the mean of the earlier raw laps
-      - stint totals equal the rollout sums
-    - **Rollout behaviour** (57-lap stint, fcp in s; logged on every run):
-      - SOFT: 100.94 at age 1, 99.34 at 18, 114.05 at 57
-      - MEDIUM: 100.94 → 114.82 → 118.40
-      - HARD: 100.94 → 115.06 → 119.42
-      - The largest lap-to-lap step is 5.7–6.4 s. For the first ~8 laps the predictions zig-zag by ±3 s: a slow fed-back lap is followed by a fast prediction.
-      - MEDIUM and HARD step up by about 12 s around ages 11–15. SOFT stays near 99 s until about age 48.
-      - SOFT degrading least is not tyre physics. It is what the model has learnt from FP data that still has #17 and #20 open.
-      - Predictions stay within 96.1–120.1 s over all rollouts, so there's no runaway drift.
-    - **Effect on strategy:** the best total went from 6055.98 s to 5695.12 s, now SOFT–SOFT–SOFT with pits on laps 12 and 13. SOFT–MEDIUM–SOFT and SOFT–HARD–SOFT tie with it, and SOFT–SOFT–SOFT with pits on 45 and 46 is 2.3 s behind. The best 1-stop is SOFT–SOFT, pit on lap 13, 5775.17 s. The best 0-stop is SOFT at 5847.05 s. It is still **not** a valid recommendation, because of #8 and #11.
+  - **Problem:** each lap was predicted on its own from fixed median features, while `readme.txt` claimed an autoregressive rollout.
+  - **Fixed** (with #10): a lap-by-lap rollout fed each prediction back into the next lap's state. Since #31 it is replaced by a fall-off curve per (compound, set age), and nothing is fed back between laps.
 
 - [x] **#13 The saved model is the weakest of the three on the test split**
-  - **Merged into #27:** its fix, a grouped-CV comparison of the three current models, is the first item of #27's Fix. Closed here so the ID stays in step with the GitHub issue.
-  - **Metric history** (held-out split, LR / RF / XGB): before #4 R² 0.043 / 0.060 / −0.039. After #4: 0.534 / 0.625 / 0.652. After #7 (seconds, 25 inputs with the session one-hot): 0.586 / 0.640 / 0.656, MAE 12.12 / 10.65 / 10.51 s. After #17 (causal `stint_avg_pace`): 0.373 / 0.565 / 0.620, MAE 16.62 / 12.54 / 12.06 s. After #21 and #19 (fuel term subtracted): 0.374 / 0.568 / 0.615, MAE 16.64 / 12.42 / 12.19 s. After #20 (non-push laps dropped, 153 target rows): 0.157 / 0.505 / 0.590, MAE 1.67 / 1.13 / 1.03 s. After #16 (10 car-data inputs, 36 in all): 0.308 / 0.460 / 0.510, MAE 1.44 / 1.20 / 1.07 s. After #18 (split grouped by stint, 10 test stints): −1.002 / 0.250 / 0.353, MAE 2.37 / 1.32 / 1.12 s.
+  - **Merged into #27:** its fix, a grouped-CV comparison of the candidate models, became #27's first fix item (done in `explore/`). Closed so the ID stays in step with the GitHub issue.
 
 - [x] **#17 `stint_avg_pace` contains the target lap**
-  - **Where:** the leave-one-out `stint_avg_pace` in `scripts/feature_engineer.py`.
-  - **Problem:** it averages `lap_duration` over every other lap of the stint, and that includes lap *t+1*. The target is lap *t+1*'s `fuel_corrected_pace`, which is that same `lap_duration` plus a fuel term, so part of the target is fed in as an input.
-  - **Effect:** it is the top feature by far (importance 0.25 XGB, 0.46 RF), so the R² of ~0.65 after #4 is probably inflated. The simulator sets it to 0, so the model's main signal is missing when it predicts.
-  - **Fix:** use only laps before *t* (an expanding mean of the stint so far, NaN or median on the first lap), or drop the feature.
-  - **readme.txt:** Feature Engineering, stint_avg_pace.
-  - **Fixed:** `feature_engineer.py` now builds `stint_avg_pace` as the mean `lap_duration` of the stint's earlier laps only (per `(driver_number, stint_number)`, ordered by `lap_number`: `shift(1).expanding().mean()`). Lap *t* itself is left out, since it is already an input through the sector times. This is the definition the simulator's rollout already used (#9), so training and simulation now agree.
-    - **First lap:** NaN on the first cleaned lap of each stint (260 rows). `train_model.py` already fills it with the training median, which is also the simulator's lap-1 seed. `validate_strategy.py` passed NaN straight to XGBoost; it now fills with the bundle's `medians` too, so CV sees the same inputs as training.
-    - **Checks:** on all 839 laps, the value equals the mean of the earlier laps of the same driver and stint (0 mismatches), and it is NaN on exactly the 260 first laps. Rows are unchanged: 839 engineered, 514 after the target.
-    - **Effect on metrics:** held-out MAE 16.62 / 12.54 / 12.06 s, RMSE 20.44 / 17.03 / 15.91 s and R² 0.373 / 0.565 / 0.620 (LR/RF/XGB; was 0.586 / 0.640 / 0.656). XGBoost 5-fold CV MAE 12.02 s, RMSE 16.32 s (was 9.81 / 14.05 s). XGBoost is still the best of the three (#13). These still use the shuffled per-lap split (#18).
-    - **Feature importance:** `stint_avg_pace` fell from 0.260 to 0.045 (XGB, now 10th) and from 0.492 to 0.037 (RF, now 7th). XGB's top five are now `track_temperature` 0.110, `i2_speed` 0.106, `st_speed` 0.073, `duration_sector_3` 0.072 and `pressure` 0.065. RF's are led by `i2_speed` 0.233 and `duration_sector_3` 0.212.
-    - **Rollout behaviour** (57-lap stint, fcp in s):
-      - SOFT: 100.94 at age 1, 109.30 at 18, 109.72 at 57
-      - MEDIUM: 100.94 → 106.62 → 110.23
-      - HARD: 100.94 → 108.72 → 109.84
-      - Each compound stays near 99–102 s for a few laps, then steps up by 7–8 s over 2–4 laps (HARD from age ~5, SOFT ~11, MEDIUM ~16) and plateaus near 109–110 s. The early ±3 s zig-zag is gone; the largest lap-to-lap step is 2.8–5.2 s (was 5.7–6.4 s). All rollouts stay within 98.98–110.39 s.
-      - HARD degrading first and MEDIUM last is still not tyre physics (#18, #20).
-    - **Effect on strategy:** the best total is now 6023.36 s, HARD–HARD–SOFT with pits on laps 12 and 24 (was SOFT–SOFT–SOFT, 12 and 13, 5695.12 s). Neighbouring pit laps are within 1 s. The best 1-stop is HARD–SOFT, pit on lap 11, 6144.94 s, and the best 0-stop is MEDIUM at 6178.24 s. Each extra stop still drops its ~100–110 s pit lap for 22 s of pit loss, so #11 still favours more stops and this is still **not** a valid recommendation. The winner happens to use two compounds, but #8 is still open.
+  - **Problem:** the leave-one-out stint mean included lap *t+1*, the next-lap target, so part of the target was an input (top feature, inflated R²).
+  - **Fixed:** `stint_avg_pace` is the mean of the stint's *earlier* laps only (`shift(1).expanding().mean()`), the lap's own time on its first lap (#33). Since #31 it is not a model input at all (`LAP_TIMING_COLUMNS`).
 
 - [x] **#18 Train/test splits mix laps from the same stint**
-  - **Where:** `train_test_split(..., shuffle=True)` in `scripts/train_model.py` and `KFold(n_splits=5, shuffle=True)` in `scripts/validate_strategy.py`.
-  - **Problem:** rows are shuffled one lap at a time, so most stints have laps in both the training and the test set. Consecutive laps of one stint are highly correlated (same driver, car, tyre, fuel and conditions), and before #17 was fixed the test laps' own lap times were spread through the training rows.
-  - **Effect:** the test and CV scores measure interpolation within stints the model has already seen, not prediction on a new stint (which is what the simulator does). They overstate the model.
-  - **Fix:** split by stint with `GroupShuffleSplit` / `GroupKFold`, grouped on `(driver_number, stint_number)` (or by session, or by driver, for a stricter test). Both id columns are in the engineered dataset since #4.
-  - **readme.txt:** ML Modelling, training (80/20 split); Evaluation step 1, cross-validation.
-  - **Fixed:** both splits are grouped by stint, on `TARGET_GROUP_COLUMNS` = `(driver_number, stint_number)` from `feature_config.py` (the global stint number, so one group is one stint in one session). A stint's laps are now all in train or all in test.
-    - **`train_model.py`:** `GroupShuffleSplit(n_splits=1, test_size=TEST_SIZE, random_state=RANDOM_STATE)`. `TEST_SIZE` (0.20) is now a share of stints, so the test row count depends on which stints are drawn: 40 stints / 128 rows train, 10 stints / 25 rows test (was 122 / 31 rows). The test set is 12 FP1, 10 FP2 and 3 FP3 rows; 12 SOFT, 8 MEDIUM, 5 HARD. The medians, session weights and bundle format are unchanged.
-    - **`validate_strategy.py`:** `GroupKFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)` (shuffle needs scikit-learn ≥ 1.6; 1.7.2 is pinned). Each fold holds out 10 stints (23–41 rows). `validate_strategy_cv_fold_metrics.csv` gains `test_stints` and `test_rows`. Fold 1 happens to hold out the same 10 stints as the held-out split, so its scores equal XGBoost's held-out ones.
-    - **Checks:** both scripts log the stints shared between train and test: 0 in the held-out split and in every fold. The folds' test sets cover all 50 stints and 153 rows once.
-    - **Effect on metrics:** held-out MAE 2.37 / 1.32 / 1.12 s, RMSE 2.74 / 1.68 / 1.56 s and R² −1.002 / 0.250 / 0.353 (LR/RF/XGB; was 1.44 / 1.20 / 1.07 s, 1.90 / 1.68 / 1.60 s and 0.308 / 0.460 / 0.510). XGBoost grouped 5-fold CV MAE 1.23 s, RMSE 1.70 s (was 1.13 / 1.60 s), with per-fold MAE 0.75–1.68 s and RMSE 1.18–2.19 s.
-      - Linear Regression collapses on unseen stints (worse than predicting the test mean); with 36 inputs on 128 rows it was fitting within-stint detail. RF and XGB lose about 0.1–0.2 in R² but keep their order, so XGBoost is still the best of the three (#13).
-      - Different stints in the training set also change the saved model, so the feature importances and rollouts below move too. With only 10 test stints, the held-out scores are noisy: the per-fold spread (MAE 0.75–1.68 s) is the better guide.
-    - **Feature importance:** XGB's top five are now `session_FP2` 0.210, `drs_open_pct` 0.116, `stint_avg_pace` 0.087, `full_throttle_pct` 0.085 and `i2_speed` 0.069; `tyre_age` is 7th (0.030). RF is led by `i2_speed` 0.151, `duration_sector_2` 0.139 and `full_throttle_pct` 0.115.
-    - **Rollout behaviour** (57-lap stint, fcp in s): the seed is unchanged (97.15 s). Every compound and set age predicts 99.0–99.4 s on stint lap 2 and 99.9–100.5 s on lap 3, then stays within 99.74–100.87 s (about 0.7 s faster than before). The largest lap-to-lap step is 1.85–2.28 s. Still almost flat; the used SOFT(6) set is ~0.5 s slower per lap than the new sets.
-    - **Effect on strategy** (car 16): MEDIUM(0)–HARD(0), pit on lap 10, 5774.26 s. SOFT(0)–HARD(0) on the same lap is +0.02 s, and the reverse orders and neighbouring pit laps are +0.07–0.54 s. The best 2-stop is MEDIUM(0)–MEDIUM(0)–HARD(0), pits on laps 10 and 20, +17.16 s. No kept strategy uses the SOFT(6) set. Was HARD(0)–SOFT(6), pit on lap 45, 5840.85 s; the ~67 s drop is the faster rollouts, not a better strategy.
-      - The top strategies are still within ~0.5 s, so the compound and pit-lap choice are still close to arbitrary. The metrics are now honest about new stints, but the model has still learnt almost no compound or tyre-age effect from 153 rows (#27). This is still **not** a valid recommendation.
+  - **Problem:** laps were shuffled one at a time, so most stints were on both sides and the scores measured interpolation within seen stints, not prediction on new ones.
+  - **Fixed:** train_model.py uses `GroupShuffleSplit` and validate_strategy.py `GroupKFold` (shuffled, scikit-learn ≥ 1.6), grouped on `(driver_number, stint_number)`; both log 0 stints shared between train and test.
 
 - [x] **#20 The cleaned laps still include slow non-push laps**
-  - **Where:** the filters in `scripts/process_laps.py`.
-  - **Problem:** the filters drop pit-out laps, invalid sectors, laps over 2× the median and IQR residual outliers. Cool-down, in- and traffic laps under 2× the median remain. Cleaned laps have a median of about 100–117 s per session, but a mean of 111–121 s and a 90th percentile of about 147–159 s.
-  - **Effect:** the target mixes push laps with slow laps, so the errors in seconds are large (XGB MAE about 10.5 s). The simulator's median-feature lap (103–112 s) is slower than race pace.
-  - **Since #21:** with the real `tyre_age` as an input, the model predicts a ~113 s second lap on every new set (push lap then cool-down lap in practice), so the optimiser prefers used sets.
-  - **Fix:** flag or drop non-push laps, e.g. laps more than a set margin slower than the driver's best on that compound in the session, or train only on long-run stints.
-  - **readme.txt:** Data Preparation, laps cleaning.
-  - **Fixed:** `apply_push_lap_filter()` in `process_laps.py` runs after the IQR filter and drops every lap slower than `PUSH_LAP_MAX_BEST_RATIO` (`.env`, 1.15) × the driver's best lap in that session.
-    - **Threshold:** after the other filters, laps divided by the driver's session best split into two groups: push laps and long runs at ≤ 1.10× (FP2's long runs sit at 1.06–1.10×), and cool-down laps from about 1.3×. Few laps fall in between, with a gap around 1.14–1.16×.
-    - **Driver's best, not per compound:** the compound only reaches the laps in `feature_engineer.py` (from the stints). The gap between compounds (about 1 s, ~1%) is well inside the 15% margin.
-    - **Rows:** 839 → 467 cleaned laps (145 / 109 / 118 removed in FP1 / FP2 / FP3, leaving 164 / 221 / 82). Median 98.1 / 98.8 / 94.9 s, mean 98.4 / 97.8 / 95.7 s and 90th percentile 101.8 / 101.3 / 99.9 s.
-    - **Target rows:** 514 → 153 (223 are a stint's last lap, 91 have a gap to the next lap). Practice runs alternate push and cool-down laps, so dropping the cool-down lap breaks most lap + 1 pairs. 50 stints remain (SOFT 64, MEDIUM 63, HARD 26 rows), and FP3 has only 7 rows: session weights are now FP1 0.294, FP2 0.660, FP3 0.046. In training, `laps_since_stint_start` runs 2–13 and `tyre_age` 2–18.
-    - **Car data:** 90 → 55 laps (5–14 per driver and session), since `process_cardata.py` keeps only the laps in `data/processed/laps_combined_clean.csv`.
-    - **Checks:** every lap in `data/processed/laps_combined_clean.csv` is within 1.15× its driver's session best (max 1.1475). The removed counts add up: 839 − 372 = 467.
-    - **Effect on metrics:** held-out MAE 1.67 / 1.13 / 1.03 s, RMSE 2.10 / 1.61 / 1.46 s and R² 0.157 / 0.505 / 0.590 (LR/RF/XGB; was 16.64 / 12.42 / 12.19 s and R² 0.374 / 0.568 / 0.615). XGBoost 5-fold CV MAE 1.19 s, RMSE 1.67 s (was 11.92 / 16.36 s).
-      - The errors are about 10× smaller because the slow laps are gone.
-      - R² fell because there is much less variance left to explain.
-      - The test set is now 31 rows from a shuffled split (#18).
-    - **Feature importance:** XGB's top five are `i2_speed` 0.144, `stint_avg_pace` 0.120, `duration_sector_2` 0.084, `wind_speed` 0.077 and `session_FP1` 0.074. `tyre_age` is 10th (0.042) and `track_temperature` 16th (0.020). RF is led by `duration_sector_2` 0.265, `i2_speed` 0.182, `duration_sector_1` 0.120 and `stint_avg_pace` 0.109.
-    - **Rollout behaviour** (57-lap stint, fcp in s):
-      - The seed is now 99.15 s raw (median sectors of the training rows; was 98.98 s), so fcp 97.15 s on stint lap 1.
-      - Every compound and set age predicts about 99.4–99.7 s on stint lap 2 and about 101 s on lap 3. It then stays at 100.5–101.7 s to lap 57, with all seven (compound, set age) pairs within 0.3 s of each other.
-      - The new-set second-lap jump is gone. The largest lap-to-lap step is 2.2–2.5 s (laps 1–3), and every rollout stays within 97.15–101.70 s.
-    - **Effect on strategy:** both cars now pick 1 stop.
-      - **Car 16:** SOFT(6)–MEDIUM(0), pit on lap 46, 5838.86 s. It ties with MEDIUM(0)–SOFT(6), pit on lap 11 (the same two stints in reverse order); SOFT(6)–HARD(0) is +0.09 s. The best 2-stop is MEDIUM(0)–SOFT(6)–SOFT(6), pits on laps 18 and 44, +9.44 s.
-      - **Car 44:** SOFT(6)–MEDIUM(3), pit on lap 46, 5838.15 s (ties with the reverse, pit on lap 11). The best 2-stop is +11.21 s.
-      - Neighbouring pit laps are within about 1 s. The rollouts are almost flat, so tyre age barely matters, and an extra stop can't win back its 22 s. The model has learnt almost no compound or tyre-age effect from 153 rows. Every new stint also gets a fast median seed lap, which narrows the gap to 2 stops.
-      - The metrics still come from a shuffled split (#18). This is still **not** a valid recommendation.
+  - **Problem:** cool-down, in- and traffic laps under 2× the median stayed in, so the target mixed push and slow laps (XGB MAE ~10.5 s) and new sets showed a fake slow second lap.
+  - **Fixed:** `apply_push_lap_filter()` drops laps slower than `PUSH_LAP_MAX_BEST_RATIO` (1.15) × the driver's session best, the natural gap between push laps / long runs (≤ 1.10×) and cool-down laps (≥ ~1.3×). Errors fell ~10×. Tuned further in #30.
 
 - [x] **#29 Speed filter drops laps with a missing speed trap, not just slow ones**
-  - **Where:** `scripts/process_laps.py`: `df[(df[speed_cols] > MIN_SPEED_KMH).all(axis=1)]` in `apply_domain_filters()`.
-  - **Problem:** `NaN > MIN_SPEED_KMH` is False, so a lap missing any of `i1_speed` / `i2_speed` / `st_speed` was dropped as "unrealistic speed". The filter removed 102 laps (25 / 70 / 7), but only 1 of them (FP1) had a recorded speed ≤ 50 km/h. The non-pit-out raw laps with a missing speed number 24 / 71 / 7 (`i1_speed` 18 / 44 / 3, `st_speed` 11 / 35 / 4, `i2_speed` never), so the rest were missing data, not slow laps. `readme.txt` described only the slow-lap rule.
-  - **Effect:** FP2, the session with the long runs, lost the most laps: the missing-speed laps there are mostly long-run laps (median 1.09× the driver's session best).
-  - **readme.txt:** Data Preparation step 2, laps cleaning.
-  - **Fixed:** the filter now drops a lap only when a recorded speed is ≤ `MIN_SPEED_KMH`: `df[~(df[speed_cols] <= MIN_SPEED_KMH).any(axis=1)]` (`NaN <= 50` is False, so missing speeds pass). It logs how many kept laps have a missing speed. The speeds are model inputs, so a missing one gets the training median, as other missing inputs do (`train_model.py`, the bundle `medians` in `validate_strategy.py`, `SimpleImputer` in `explore/`); the medians are 231 / 247 / 298 km/h (i1 / i2 / st). Nothing downstream changed.
-    - **Speed filter:** 102 → 1 lap removed (1 / 0 / 0). 24 / 70 / 7 laps are kept with a missing speed; in the engineered dataset `i1_speed` is missing on 61 laps (11.3%) and `st_speed` on 40 (7.4%).
-    - **Side effect on the IQR filter:** its bounds come from the whole session's residuals, so they depend on which laps reach it. In FP2 the extra long-run laps make the residuals denser: IQR 10.8 → 5.3 s, bounds [−33.1, +42.6] → [−16.4, +21.0] s, and the filter removes 95 laps instead of 31 (68 slow ones, most of which the push filter would have removed anyway, and 27 fast ones). FP1 goes 2 → 7, FP3 stays at 1. The non-push filter then removes 146 / 65 / 120 (was 145 / 109 / 118).
-      - 16 laps that used to be kept are now dropped (4 FP1, 12 FP2): fast laps (91.6–100.5 s, mostly 92–97 s) run between cool-down laps, whose 5-lap rolling median is a cool-down lap. That is a weakness of the session-wide IQR on residuals, not of this fix; #32 fixed it (the 16 laps are back).
-    - **Rows:** 467 → 540 cleaned laps (164 / 221 / 82 → 182 / 271 / 87): 89 laps added, all with a missing speed, and 16 lost. Median 98.4 / 99.0 / 94.9 s, 90th percentile 102.0 / 101.2 / 100.9 s.
-    - **Target rows:** 153 → 273 (219 are a stint's last lap, 48 have a gap to the next lap; was 223 and 91). 56 stints (was 50); FP1 70, FP2 191, FP3 12 rows; SOFT 131, MEDIUM 101, HARD 41. Session weights FP1 0.256, FP2 0.700, FP3 0.044 (was 0.294 / 0.660 / 0.046). In training, `laps_since_stint_start` runs 2–15 (was 2–13) and `tyre_age` 2–18.
-    - **Car data:** 448 → 515 laps (1–16 per driver and session); 25 of the 540 laps have none (was 19 of 467).
-    - **Checks:** no lap with a recorded speed ≤ 50 km/h is left in `data/processed/laps_combined_clean.csv`. Every added lap has a missing speed, and every lap lost is removed by the IQR filter. The model's input matrix has no NaN after the median fill. The pipeline ran end to end on Bahrain 2025 from the cache.
-    - **EDA:** the degradation slopes are +0.17 / +0.06 / +0.04 s/lap (SOFT / MEDIUM / HARD; was +0.17 / +0.04 / +0.05), from 31 / 31 / 21 multi-lap stints. Collinear groups: 3 (the mean-throttle / full-throttle pair dropped below 0.8). The strongest target correlations are now `i2_speed` (+0.36), `stint_avg_pace` (+0.35) and `session_FP2` (−0.29).
-    - **Effect on metrics:**
-      - Grouped 5-fold CV MAE 1.17 s, RMSE 1.64 s (was 1.23 / 1.70 s), per fold MAE 0.93–1.35 s (was 0.75–1.68 s). OOF MAE 1.16 s, RMSE 1.63 s, mean residual −0.25 s (was 1.18 / 1.69 / −0.20 s).
-      - Held-out split: 12 stints / 64 rows (was 10 / 25), MAE 1.35 s, RMSE 1.81 s, R² 0.074 (was 1.12 / 1.56 / 0.353). It is a different and larger test set, so the CV is the better guide; fold 1 again holds out the same stints.
-      - **Persistence test:** baseline MAE 1.45 s, RMSE 2.75 s. The model has the lower MAE in all 5 folds and is better on 33 of 56 stints, paired t p = 0.0017, but Wilcoxon p = 0.052 and median per-stint gain 0.06 s (was 0.011 and 0.14 s). Both tests must pass, so the model **no longer significantly beats persistence** at 0.05. Persistence got better too (1.80 → 1.45 s): the added long-run laps are steady, so lap *t* is a good guess for lap *t+1*.
-    - **Feature importance:** XGB's top five are `session_FP3` 0.134, `drs_open_pct` 0.082, `full_throttle_pct` 0.070, `duration_sector_3` 0.058 and `air_temperature` 0.055 (was led by `session_FP2` 0.210). `tyre_age` is 12th (0.032).
-    - **Rollout behaviour** (car 16, 57-lap stint, fcp in s):
-      - The seed is 99.23 s raw (was 99.15 s), so fcp 97.23 s on stint lap 1.
-      - Every compound and set age predicts 99.7–100.0 s on stint lap 2 and 100.3–100.6 s on lap 3, then 100.1–101.4 s to lap 57. The new sets are about 0.1 s apart on average (at most 0.45 s); the used SOFT(6) is no slower on average (−0.8 to +1.0 s lap by lap).
-      - The largest step is 2.43–2.73 s (stint lap 1 to 2), and every rollout stays within 97.23–101.40 s. Still nearly flat: no compound or tyre-age effect.
-    - **Effect on strategy (car 16):** MEDIUM(0)–HARD(0), pit on lap 33, 5819.52 s, tied with HARD(0)–MEDIUM(0) on lap 24 (was MEDIUM(0)–HARD(0) on lap 10, 5774.26 s). Neighbouring pit laps are +0.10–0.64 s, the best SOFT(0)–MEDIUM(0) +0.96 s, SOFT(0)–HARD(0) +2.56 s, the best 2-stop (MEDIUM(0)–HARD(0)–MEDIUM(0), pits on 19 and 36) +11.87 s, and the best with SOFT(6) +8.78 s. The total rose by 45 s because the rollouts sit about 0.8 s/lap higher. 1 stop still wins because the rollouts are flat; this is still **not** a valid recommendation.
-    - **Not rerun:** `explore/` (#27). Its first run used the 153-row data.
-
-- [x] **#32 IQR residual filter drops fast push laps run between cool-down laps**
-  - **Where:** `scripts/process_laps.py`: `apply_iqr_residual_filter()` (`ROLLING_MEDIAN_WINDOW=5`, then `IQR_MULTIPLIER=3` in `.env`).
-  - **Problem:**
-    - The residual is lap time minus the driver's 5-lap centred rolling median, taken over the whole session rather than per stint. When a push lap sits among cool-down laps (~110 s and up), its rolling median is a cool-down time, so a normal ~93 s push lap gets a residual of about −17 s.
-    - The bounds come from the whole session's residuals, so they shift with the session's mix of laps. Since #29 kept FP2's long-run laps (residuals near 0), FP2's IQR fell from 10.8 to 5.3 s and the bounds from [−33.1, +42.6] to [−16.4, +21.0] s, so those push laps now fall outside.
-  - **Effect:** the filter removed 7 / 95 / 1 laps (2 / 31 / 1 before #29). In FP2 that was 68 slow laps, most of which the non-push filter would remove anyway, and 27 fast ones. 16 laps kept before #29 were dropped (4 FP1, 12 FP2), mostly 92–97 s push laps.
-  - **Fixed:** one multiplier per side, tuned over 12 weekends.
-    - **Code:** `IQR_MULTIPLIER` is replaced by `IQR_LOWER_MULTIPLIER` (fast side) and `IQR_UPPER_MULTIPLIER` (slow side) in `.env`. `apply_iqr_residual_filter()` logs each session's Q1, Q3, IQR and bounds and the laps removed on each side (`iqr_residual_fast` / `iqr_residual_slow` in `process_laps_removed_rows_summary.csv`), and saves every lap reaching the filter with its `residual` and `best_ratio` (lap / driver's best) to `process_laps_iqr_residuals_laps_p*.csv`.
-    - **Tuning:** `explore/tune_iqr.py` runs two methods on 12 non-sprint weekends (2024 Hungary, Saudi Arabia, Spain; 2025 Australia, Austria, Bahrain, Britain, Italy, Japan, Netherlands, Singapore, Spain; 36 sessions), running the pipeline stages with the multipliers as environment variables. Ten weekends were downloaded into `data/cache/` for it.
-      - **Label sweep:** a lap is a push lap when `best_ratio <= PUSH_LAP_MAX_BEST_RATIO` (1.15). At k = 3 the lower fence removed 488 push laps and 11 others; the upper fence 976 laps, 1 of them a push lap. The k at which the lower fence starts removing push laps is 2.4–6.1 in FP1 and 2.1–5.6 in FP3, but 11.3–16.7 in FP2 on 10 of 12 weekends and 49.71 on Spain 2025 FP2 (IQR 1.22 s, a push lap 60.9 s under its rolling median). Floor = the grid value at least 1.2× the largest: 60. The upper fence needs at most 4.21 (Japan 2025 FP2).
-      - **CV sweep:** k_lower {3, 6, 10, 20, 60} × k_upper {1.5, 2, 3, 5}; `process_laps` → `process_cardata` → `feature_engineer` rerun per pair and weekend; train_model.py's XGBoost scored by 5-fold stint-grouped CV × 2 seeds, on the 3,280 target rows common to every pair (615 stints), with the same stint folds for every pair. Pooled per-stint MAE: 1.2417 s at (3, 3), 1.2273 s at (60, 3), a gain of 0.014 s (one-sided t p = 0.017, Wilcoxon p = 0.003). No pair beats (60, 3) on both tests (closest: (10, 1.5), t p 0.14 / Wilcoxon p 0.06); k_upper 1.5–2 is ~0.002 s better, not significantly.
-      - **Rejected:** a medcouple-adjusted boxplot. The residuals are right-skewed, so it narrows the lower fence to ~0.07×IQR and removes 34–76 push laps per session.
-    - **Winner:** `IQR_LOWER_MULTIPLIER=60`, `IQR_UPPER_MULTIPLIER=3`, copied into `.env` by hand with the reasoning in its comment. At 60 the fast side removes nothing on any of the 36 sessions, so it is in effect switched off. The k needed grew as weekends were added (12 → 16 → 50), so rerun `tune_iqr.py` when weekends are added.
-    - **Since #27 Step 1 (2026-11-02):** rerun with the model-free stage-1 linear fall-off as the CV scorer. The k needed rose to 51.23 (2025 spain FP2, from #33's rebuilt sectors), so the floor is **62**. No pair beats (62, 3); against (3, 3) it is 0.9722 vs 0.9725 s per-stint MAE (t p 0.37, 1,071 stints). tune_iqr.py wrote `IQR_LOWER_MULTIPLIER=62` into `.env` itself. Bahrain's cleaned data is the same at 62 as at 60.
-    - **Removals (Bahrain 2025):** the IQR filter removes 1 / 68 / 1 laps, all slow (was 7 / 95 / 1). The non-push filter is unchanged at 146 / 65 / 120.
-    - **Rows:** 540 → 573 cleaned laps (182 / 271 / 87 → 188 / 298 / 87): the 33 laps the fast side used to remove, all push laps. 219 → 233 stints, 136 → 137 with a single clean lap. **Target rows: 273, unchanged** (same 56 stints, same session and compound split): a push lap between cool-down laps has no surviving lap *t+1* (#31), so the rescued laps reach the model only through `stint_avg_pace` and the training medians. Gaps to the next lap 48 → 67.
-    - **Car data:** 515 → 550 laps; 23 of 573 have none (was 25 of 540).
-    - **EDA:** degradation slopes +0.16 / +0.05 / +0.06 s/lap (SOFT / MEDIUM / HARD; was +0.17 / +0.06 / +0.04), from 35 / 38 / 23 multi-lap stints. Still 3 collinear groups. Target correlations: `i2_speed` +0.36, `session_FP2` −0.29, `stint_avg_pace` +0.28 (was +0.35).
-    - **Effect on metrics:**
-      - Grouped 5-fold CV MAE 1.17 s, RMSE 1.64 s (unchanged to two decimals), per fold MAE 0.92–1.34 s. OOF MAE 1.157 s, RMSE 1.634 s, mean residual −0.25 s.
-      - Held-out split (12 stints / 64 rows): MAE 1.34 s, RMSE 1.80 s, R² 0.078 (was 1.35 / 1.81 / 0.074).
-      - **Persistence test:** model better on 33 of 56 stints, paired t p = 0.0017, Wilcoxon p = 0.041 (was 0.052), median per-stint gain 0.08 s. Both tests pass, so the model now **beats persistence at 0.05**, though only just.
-    - **Feature importance:** XGB's top five are `session_FP3` 0.153, `full_throttle_pct` 0.073, `duration_sector_3` 0.059, `drs_open_pct` 0.059 and `air_temperature` 0.057. `tyre_age` is 10th (0.032).
-    - **Rollout behaviour** (car 16, 57-lap stint, fcp in s): seed unchanged (97.23 s on stint lap 1); 99.7–100.0 s on lap 2, 100.4–100.6 s on lap 3, then 100.1–101.5 s to lap 57. New sets within 0.15 s of each other on average (at most 0.86 s); SOFT(6) +0.05 s on average. Largest step 2.43–2.76 s (lap 1 to 2). Still nearly flat.
-    - **Effect on strategy (car 16):** MEDIUM(0)–HARD(0), pit on lap 29, 5819.18 s, tied with HARD(0)–MEDIUM(0) on lap 28 (was lap 33, 5819.52 s). Pit laps 27–31 are within 0.28 s, laps 26 and 32 about 2 s slower; best SOFT(0)–MEDIUM(0) +2.17 s, SOFT(0)–HARD(0) +3.15 s, best 2-stop (HARD(0)–MEDIUM(0)–MEDIUM(0), pits on 16 and 40) +12.86 s, best with SOFT(6) (a 2-stop) +15.63 s. Still **not** a valid recommendation (flat rollouts, #27).
-    - **Not rerun:** `explore/explore_master.py` (#27).
-    - **Docs:** readme.txt (Data Preparation step 2, a new "Tuning the IQR fences" subsection, and every count downstream), README.md, AGENTS.md.
+  - **Problem:** `NaN > 50` is False, so laps with a missing `i1_speed` / `st_speed` were dropped as "unrealistic speed": 102 laps, only 1 of them really slow, and mostly FP2 long-run laps.
+  - **Fixed:** a lap is dropped only when a *recorded* speed is ≤ `MIN_SPEED_KMH` (1 lap now). The extra FP2 laps shrank FP2's IQR, which exposed #32.
 
 - [x] **#30 Push-lap filter may be too strict for long runs** (was under "Things to explore")
-  - **Where:** `scripts/process_laps.py`: `apply_push_lap_filter()`, `PUSH_LAP_MAX_BEST_RATIO=1.15` in `.env` (#20).
-  - **Problem:** the cutoff is relative to the driver's best lap in the whole session, which is usually a low-fuel SOFT lap. Heavy-fuel long-run laps, which are what the race simulation needs, might sit close to that cutoff.
-  - **Effect:** 331 laps (146 / 65 / 120) are removed, the largest single filter.
-  - **Fixed (investigated, filter kept):** a stint test was added and tuned over 12 weekends; the current rule was kept.
-    - **Code:** `apply_push_lap_filter()` tags each lap with its stint from the raw stints (`lap_start` / `lap_end`, as `feature_engineer.assign_stint_numbers()`). A lap must pass two tests: the session test as before, and `PUSH_LAP_MAX_STINT_RATIO` × the driver's best in that stint (new `.env` key; 100 = off). The removals are logged as `non_push` and `non_push_stint`, and every lap reaching the filter is saved with both ratios to `process_laps_push_ratios_laps_p*.csv`. With the stint test off, the cleaned laps are byte-identical.
-    - **Tuning:** `explore/tune_push.py` is a copy of `tune_iqr.py`'s harness, run on the same 12 weekends (4,244 s).
-      - **Label sweep:** the label is independent of the ratios being tuned. With the push filter and car data's z-score filter off, each lap's `full_throttle_pct` / the driver's 90th percentile in the session gives push ≥ 0.8 and cool-down ≤ 0.6. That is 11,418 laps: 6,353 push, 3,984 cool-down, 1,065 ambiguous, 16 without telemetry. Over {1.10 … 1.30} × {1.04 … 1.12, off}, the best Youden J is at (1.15, 1.10): push laps kept 99.4%, cool-down 0.8% (J 0.986). For (1.15, off) the figures are 99.7% / 1.2% (J 0.984). With the stint test off: 1.10 keeps 97.4% of push laps, 1.20 lets in 3.3% of cool-down laps, and 1.30 lets in 14.2%. The best pair per session varies widely (r_session 1.10–1.30; r_stint off in 19 of 36 sessions).
-      - **CV sweep:** {1.10, 1.12, 1.15, 1.20, 1.25, 1.30} × {1.06, 1.08, 1.10, 1.12, off}, on 536 stints and 2,691 common rows. MAE falls steadily as the filter tightens, and the harness's rule picks the strictest corner, (1.10, 1.06): per-stint MAE 0.52 s, against 0.87 s for (1.15, off), with t and Wilcoxon p < 0.0001. The label pick (1.15, 1.10) is 0.11 s better than (1.15, off) (p < 0.003).
-      - **Why the CV is not trusted here:** the common rows are the strictest configuration's own target rows. That configuration trains on exactly the laps it is scored on, while looser ones also train on laps that are never scored. In #32 the winner was the loosest setting, so the same bias worked against it; here it favours the winner. (1.10, 1.06) drops 580 laps, 170 of them labelled push laps and 61% of them from runs of 8+ laps (the base rate is 47%).
-    - **Decision:** keep `PUSH_LAP_MAX_BEST_RATIO=1.15` and `PUSH_LAP_MAX_STINT_RATIO=100` (off). #30's concern doesn't hold: at 1.15, 2,785 of the 2,789 labelled push laps in runs of 8+ laps are kept. The ratio already sits at the gap, and the stint test would remove only 0.4 points more of the cool-down laps.
-    - **Effect:** none on Bahrain 2025. The cleaned laps, target rows, model and strategy are unchanged, so nothing downstream was rerun.
-    - **Since #27 Step 1 (2026-11-02, user's decision):** the label pick is used, so `PUSH_LAP_MAX_STINT_RATIO=1.1` (the stint test is on). The rerun with the model-free CV scorer gives the same label pick, (1.15, 1.10), J 0.986 vs 0.985 for (1.15, off). The CV again prefers the strict (1.10, 1.06), 0.452 vs 0.490 s, for information only. tune_push.py wrote the value into `.env` itself. On Bahrain 2025 the stint test removes 2 / 3 / 2 laps (573 → 566).
-    - **Open:** to judge filters fairly, the CV needs a common evaluation set that doesn't depend on the strictest configuration, e.g. rows scored at their features under every configuration. `tune_push.py`'s winner rule has a caution comment about this. #32's result isn't affected, since its bias went against its winner.
-    - **Docs:** readme.txt (Data Preparation step 2, a new "Tuning the push-lap filter" subsection), README.md, AGENTS.md, `.env` comment.
-
-- [x] **#33 Some dropped or median-filled data could be imputed instead** (was under "Things to explore")
-  - **Where:** `apply_domain_filters()` in `scripts/process_laps.py`; `zscore_outlier_filter()` in `scripts/process_cardata.py`; the median fill in `scripts/train_model.py` (`X.fillna(medians)`) and `scripts/validate_strategy.py` (`fillna(bundle["medians"])`).
-  - **Problem (Bahrain 2025):**
-    - **1. The car-data z-score filter dropped the whole lap:** 23 laps (8 target rows) lost all 10 aggregates, though 19 had only one aggregate past |z| > 3 (1 had two, 3 had three). Their real values were replaced by the field-wide training median.
-    - **2. Invalid-sector laps:** 6 laps (0 / 1 / 5) each miss one sector. 2 have `lap_duration` and the other two sectors, so the missing one is `lap_duration` minus the other two; 4 also miss `lap_duration` and can't be rebuilt.
-    - **3. The median fill:** 122 of 273 target rows (45%) had at least one median-filled input: `stint_avg_pace` 49 (a stint's first lap), `i1_speed` 47, `st_speed` 32, car data 8, segment counts 1–2. The median was pooled over every driver and session, and computed on all 273 rows before the split; `validate_strategy.py` filled every CV fold with it, so held-out rows fed their own fill.
-  - **Fixed:**
-    - **1. Cells, not laps:** `zscore_outlier_mask()` (was `zscore_outlier_filter()`) keeps the per-session z, but sets only the flagged aggregates to NaN and keeps the lap. It logs the masked cells per column and per lap and saves `process_cardata_zscore_masked_cells.csv`; the `zscore_outlier` stage is gone from `process_cardata_removed_rows_summary.csv`. `CARDATA_ZSCORE_THRESHOLD` keeps its meaning (`tune_push.py`'s 1e9 still switches it off).
-    - **2. Sector rebuild:** `rebuild_missing_sector()` runs first in `apply_domain_filters()`. A lap missing exactly one sector, with `lap_duration` and the other two (> 0) recorded, gets `lap_duration` − the other two; a result ≤ 0 stays NaN and the lap is dropped as before. Rebuilt laps are saved to `process_laps_rebuilt_sectors_laps_p*.csv`. No `.env` key: the rule is deterministic.
-    - **3a. Causal stint fill:** `feature_engineer.py` fills each column in `STINT_FILL_COLUMNS` (`feature_config.py`: the speed traps, segment counts and car-data aggregates) with the median of the same stint's *earlier* laps (`shift(1).expanding().median()` per `(driver_number, stint_number)`, NaN skipped), and saves `feature_engineer_stint_fill_summary.csv`. It is causal on purpose. A median over the whole stint would include lap *t+1*, the target lap (in a 2-lap stint, it *is* lap *t+1*'s value), which breaks the leakage rule. A stint's laps are all in one CV fold, so the fill needs no fitting.
-    - **3b. First-lap `stint_avg_pace`:** on a stint's first lap there are no earlier laps, so it is lap *t*'s own `lap_duration` (lap *t*'s data, no leakage), not the median. No new column. The simulator's `rollout_stint()` seeds stint lap 1 the same way (`stint_avg_pace` = the seed lap's raw time), and so does `explore_lib.rollout_stint()`; `explore_lib.baseline_predictions()` no longer needs its `fillna`.
-    - **3c. Fallback fitted on training rows:** what is still NaN gets a median fitted on training rows only. `train_model.py` computes it from `X_train` after the split and saves it as the bundle `medians` (format unchanged), which the simulator starts from. `validate_strategy.py` fits it per fold from the fold's training rows and no longer uses the bundle medians. `explore/` already did this (`SimpleImputer` per fold, train medians per fold in `tune_iqr.py` / `tune_push.py`) and inherits 3a through the engineered dataset.
-    - **Rejected:** group-wise (session × driver) medians and a regression from `i2_speed`. The causal stint median is the closest group and covers almost every gap.
-  - **Rows:** 573 cleaned laps, unchanged. The 2 rebuilt laps (FP2 car 22 lap 25, 152.3 s; FP3 car 16 lap 8, 174.1 s) are slow and are dropped later. They do move FP2's and FP3's IQR bounds (FP2 IQR 5.34 → 5.46 s), so 3 FP2 laps move from the IQR filter to the non-push filter: IQR 1 / 65 / 1 (was 1 / 68 / 1), non-push 146 / 69 / 121 (was 146 / 65 / 120). `laps_combined_clean.csv` is byte-identical. Target rows: 273, unchanged.
-  - **Car data:** 550 → 573 laps (all laps have car data); 30 cells are masked on the 23 recovered laps (`brake_pct` 7, `mean_rpm` 6, `mean_speed` / `full_throttle_pct` / `gear_changes` 4, `mean_throttle` 3, `max_rpm` 2; 19 laps with one, 1 with two, 3 with three).
-  - **Fill coverage** (573 laps): `i1_speed` 61 missing → 51 filled from the stint, `st_speed` 42 → 39, car data 30 → 23, segment counts 15 → 0 (no earlier lap of the stint has a value). In the target rows, 9 rows (`i1_speed` 7, segment counts 1–2) still need the fallback median, against 122 before; `stint_avg_pace` is never NaN (233 first laps).
-  - **Checks:**
-    - every masked cell is NaN in `cardata_per_lap_clean.csv`, and every other cell of the 550 old laps is unchanged
-    - the rebuilt sectors sum to `lap_duration` exactly
-    - every filled cell equals the median of its stint's earlier non-missing laps (recomputed independently, 0 mismatches)
-    - the first-lap `stint_avg_pace` equals its own `lap_duration`
-    - the bundle medians equal the `X_train` medians
-    - every age-1 rollout row has `stint_avg_pace` = its raw seed lap (99.25 s)
-    - `explore_master.py --skip-pipeline --quick` runs (its results were restored afterwards)
-  - **EDA:** 10 columns with missing values (was 16), at most 1.7% (`i1_speed` and `segments_sector_1`, 10 laps each). Collinear groups 3 → 2: `stint_avg_pace` joins `duration_sector_2` / `mean_speed`, since its first-lap value is now lap *t*'s own time, and the `st_speed` / `max_speed` pair is gone. `explore/` reads these groups, so its reduced feature set changes. `stint_avg_pace` drops out of the ten strongest target correlations (Pearson +0.28 before). The degradation slopes are unchanged (+0.16 / +0.05 / +0.06 s/lap).
-  - **Effect on metrics** (step 1 alone in brackets):
-    - Grouped 5-fold CV MAE 1.19 s, RMSE 1.70 s (1.16 / 1.65; was 1.17 / 1.64 s), per fold MAE 0.93–1.37 s. OOF MAE 1.18 s, RMSE 1.69 s, mean residual −0.25 s (was 1.16 / 1.63 / −0.25 s).
-    - Held-out split (12 stints / 64 rows): MAE 1.37 s, RMSE 1.90 s, R² −0.03 (1.32 / 1.80 / 0.086; was 1.34 / 1.80 / 0.078).
-    - The changes are well inside the fold spread (about 0.09 s standard error), so the imputation neither helps nor hurts measurably on 273 rows.
-    - **Persistence test:** model better on 30 of 56 stints (was 33), paired t p = 0.0019, Wilcoxon p = 0.041 (0.019 after step 1), median per-stint gain 0.05 s (was 0.08 s). Both tests pass, so the model still **beats persistence at 0.05**, only just.
-  - **Feature importance:** XGB's top five are `session_FP3` 0.095, `air_temperature` 0.094, `stint_avg_pace` 0.072 (it was not in the top five), `drs_open_pct` 0.056 and `i2_speed` 0.049. `tyre_age` is 15th (0.028; was 10th).
-  - **Rollout behaviour** (car 16, 57-lap stint, fcp in s): seed 99.25 s raw (97.25 s fcp). Every compound predicts 99.8 s on stint lap 2 and 100.8 s on lap 3, then 100.4–101.4 s to lap 57; the new sets are within 0.03 s of each other on average (at most 0.37 s), and SOFT(6) is +0.06 s (−0.35 to +0.41 s lap by lap). Largest step 2.38–2.60 s (lap 1 to 2). Still nearly flat.
-  - **Effect on strategy (car 16):** SOFT(0)–MEDIUM(0), pit on lap 28, 5818.28 s, tied with MEDIUM(0)–SOFT(0) on lap 29. Pit laps 26–30 are within 0.26 s. MEDIUM(0)–HARD(0) is +0.01 s, SOFT(0)–HARD(0) +0.81 s, the best with SOFT(6) (SOFT(6)–MEDIUM(0), pit on lap 10) +10.32 s, and the best 2-stop (MEDIUM(0)–HARD(0)–MEDIUM(0), pits on 19 and 38) +12.82 s (was MEDIUM(0)–HARD(0), pit on lap 29, 5819.18 s; after step 1 alone, lap 27, 5835.22 s). The compounds are within 1 s, so the pick is close to arbitrary. Still **not** a valid recommendation (flat rollouts, #27).
-  - **Not rerun:** `explore/explore_master.py` (#27) in full, and `tune_iqr.py` / `tune_push.py`; their CV inputs change with 1 and 3a.
-  - **Docs:** readme.txt (Data Preparation step 2, Feature Engineering, ML Modelling training, Race Simulation step 2, Evaluation, and the counts and results downstream), README.md, AGENTS.md, `.env` comment.
+  - **Problem:** the cutoff is relative to the driver's session best, usually a low-fuel SOFT lap, so heavy-fuel long-run laps might sit close to it.
+  - **Fixed:** a second test against the driver's best in the same stint (`PUSH_LAP_MAX_STINT_RATIO`), tuned with `explore/tune_push.py` over 12 weekends. The label (full-throttle share from car data, independent of the ratios) picks (1.15, 1.10): 99.4% of push laps and 0.8% of cool-down laps kept. 1.15 already keeps 2,785 of 2,789 labelled push laps in runs of 8+ laps, so the concern didn't hold.
+    - The CV sweep favours the strictest corner because it is scored on the strictest setting's own rows: a bias, so it is for information only. Kept at (1.15, off) in #30; the label pick (stint test on) was adopted in #27 Step 1 (user, 2026-11-02).
+    - **Open idea:** a CV evaluation set that doesn't depend on the strictest configuration would judge filters fairly (a caution comment is in `tune_push.py`'s winner rule).
 
 - [x] **#31 Next-lap target loses most rows** (was under "Things to explore")
-  - **Where:** `build_next_lap_target()` in `scripts/feature_config.py`, used by `train_model.py`, `validate_strategy.py`, `eda.py` and `explore/`.
-  - **Problem:**
-    - The target was the same driver's lap `lap_number + 1` in the same stint, and that lap also had to survive cleaning. Practice runs alternate push and cool-down laps, so dropping the cool-downs broke most pairs: 573 cleaned laps gave 273 rows (233 were a stint's last lap, 67 had a gap). #32 added 33 laps and no rows.
-    - The target also didn't fit the job. The strategy needs each compound's pace and how fast it falls off with tyre age, but next-lap absolute pace is mostly driver / session / fuel / run-type level. XGB's top inputs were `session_FP3` and `air_temperature`, `tyre_age` was 15th, the rollouts went back to the training mean within ~3 laps, and the compounds were within 1 s.
-  - **Fixed:** the model learns **tyre fall-off with age within a stint**, not next-lap pace: `fcp(lap) = level[stint] + fall_off(compound, tyre_age, conditions)`.
-    - **Stage 1, stint levels** (`fit_stint_levels()`): OLS of fcp on one level per stint + one `tyre_age` slope per compound, fitted on the training stints. The level absorbs everything constant over a run (driver, session, fuel plan, engine mode, quali sim or long run), so the slopes come from the change within stints only. The slopes are also the `baseline_linear` forecast.
-    - **Stage 2, the model:** target `fcp − level[stint]`, inputs `compound_*`, `tyre_age`, `track_temperature`, `air_temperature` (36 → 6). The curve is measured from a new set's first lap: `fall_off(c, age) = g(c, age) − g(c, 1)` at the training-median conditions (`fall_off_curve()`).
-    - **Stage 3, compound gap** (`fit_compound_gap()`): OLS of `fcp − fall_off` on one level per driver and session + HARD and MEDIUM indicators + `run_laps` (new, `lap_end − lap_start + 1`, `feature_engineer.py`), over every training lap including one-lap stints. It gives the gap between compounds on a new set and each driver-session's level.
-    - **Leakage:** the target is now the lap's own pace, so its own timing and telemetry (the sector times, speed traps, segment counts, car-data aggregates, `stint_avg_pace`; `LAP_TIMING_COLUMNS`) can't be inputs. `feature_config.py` asserts at import that none is in `MODEL_FEATURE_COLUMNS`. Those columns stay in the dataset for eda.py and tune_push.py's label. The session one-hots aren't needed either, since the stint level absorbs the session.
-    - **Rejected:**
-      - Imputing the missing target (the next surviving lap t+k with k as an input, or interpolating lap t+1): at most 273 → 340 rows, and the same target.
-      - Pace relative to a driver-session level: the run type (short quali sims vs long race-pace runs) confounded the slopes (0.4–0.6 s/lap). A `run_laps` control only halved the problem.
-      - Fitting the stint levels and XGBoost alternately (backfitting): it didn't converge, with the levels still moving 0.3–0.9 s after 8 rounds.
-  - **Code:**
-    - `feature_config.py`: new `MODEL_FEATURE_COLUMNS`, `LAP_TIMING_COLUMNS` and the assert, `COMPOUNDS`, `SECTOR_COLUMNS`, `STINT_GROUP_COLUMNS` (was `TARGET_GROUP_COLUMNS`), `PACE_GROUP_COLUMNS`, `FALL_OFF_ANCHOR_AGE`, and the shared helpers `multi_lap_rows()`, `fit_stint_levels()`, `fall_off_target()`, `linear_fall_off()`, `stint_shape_errors()`, `fall_off_curve()`, `fall_off_rows()`, `fit_compound_gap()`. `build_next_lap_target()` and `SIM_FEATURE_COLUMNS` are gone.
-    - `train_model.py`: split by stint as before, then stages 1–3 on the training side. It scores the held-out stints on curve shape against both baselines and saves `train_model_fall_off_curves.csv` / `.png` (`_pred_vs_true.png` removed). Bundle: `{"model", "features", "medians", "anchor_age", "compound_gap", "levels", "linear_slopes"}` (`session_weights` dropped).
-    - `strategy_simulator.py`: the autoregressive rollout (seed lap, fed-back sectors and `stint_avg_pace`, session averaging) is replaced by `stint_curve()`: `fcp = race level + gap[c] + fall_off(c, set age + stint lap)`, one vectorised predict per set, with the stint totals as a cumulative sum. `_stint_rollouts.csv` → `_stint_curves.csv`.
-    - `validate_strategy.py`: grouped CV over the multi-lap stints, with stage 1 and the medians fitted per fold. Score: within-stint shape MAE / RMSE (`stint_shape_errors()`: residual minus the stint's mean residual, since a held-out stint's level is unknown). Paired per-stint tests against `baseline_flat` (no fall-off) and `baseline_linear`, the fall-off at tyre ages 5 / 10 / 15 per fold (`_fold_curves.csv`) and the stage-3 gap per fold.
-    - `eda.py`:
-      - Correlations are against within-stint pace (fcp − stint mean) over the candidate inputs, and section 5 covers the multi-lap stints.
-      - **Slope bug fixed:** the degradation slope de-meaned the pace but not tyre age, so the spread of age between stints pulled it towards 0 (+0.16 / +0.05 / +0.06 s/lap). It is now the within-stint slope, the same as stage 1: **+0.365 / +0.227 / +0.306 s/lap** (SOFT / MEDIUM / HARD).
-    - `explore/`: rewritten for the fall-off target (see #27). `tune_iqr.py` / `tune_push.py` score shape MAE on fall-off with stage 1 per fold, against a flat baseline.
-  - **Rows:**
-    - 436 laps of 96 stints with two or more clean laps (FP1 153, FP2 259, FP3 24; SOFT 182, MEDIUM 168, HARD 86), against 273 next-lap rows from 56 stints. `tyre_age` 2–19 on every compound.
-    - The 137 one-lap stints carry no fall-off but feed stage 3.
-    - train_model.py's split: 186 stints / 471 laps train, 47 / 102 test; 365 / 71 fall-off laps (80 / 16 stints).
-  - **Effect on metrics** (within-stint shape, s):
-    - **Held-out split:** XGB MAE 1.12, RMSE 1.56, R²_within 0.16; flat 1.20 / 1.71 / 0; linear **0.95** / 1.41 / 0.32.
-    - **Grouped 5-fold CV:** XGB MAE 1.25, RMSE 1.82 (per fold 1.06–1.62); flat 1.19; linear **1.06**. XGB is better than flat on 48 of 96 stints (t p = 0.81, Wilcoxon p = 0.75) and better than linear on 33 (p = 0.97 / 1.00), so **the pipeline's XGBoost (depth 7, untuned) beats neither baseline**. The straight line per compound does best; see #27 for the tuned candidates.
-  - **Fall-off** (XGB, from a new set's first lap, at the training-median conditions; linear in brackets):
-    - SOFT +1.79 / +4.29 / +7.64 s at ages 5 / 10 / 15 (+1.45 / +3.25 / +5.06)
-    - MEDIUM +0.86 / +1.06 / +3.25 (+0.84 / +1.89 / +2.93)
-    - HARD +1.23 / +2.44 / +5.62 (+1.25 / +2.81 / +4.37)
-    - **Across the CV folds:** age 15 SOFT +5.6 to +7.9 s, MEDIUM +2.5 to +4.7, HARD +4.6 to +5.6. At age 5 every compound straddles 0. SOFT falls off most in every fold; HARD falling off faster than MEDIUM is not what tyre physics would suggest.
-    - **XGB importances:** `tyre_age` 0.261, `compound_MEDIUM` 0.190, `compound_SOFT` 0.158, `track_temperature` 0.157, `air_temperature` 0.136, `compound_HARD` 0.099.
-  - **Compound gap (stage 3):**
-    - MEDIUM +2.97 s and HARD +0.85 s slower than SOFT on a new set (training side, XGB fall-off); `run_laps` +0.25 s per lap of run.
-    - It moves a lot: per CV fold MEDIUM +0.78 to +2.04, HARD +0.46 to +1.98; with the linear fall-off on all laps MEDIUM +0.88, HARD +0.53.
-    - **Moved to #27:** MEDIUM slower than HARD is implausible. The gap can only come from comparing stints, and the run type still confounds it with `run_laps` in the fit. It is now part of #27 (the "Compound gap" fix item there), together with choosing the fall-off model.
-  - **Curves (car 16, simulator):**
-    - Race pace level 93.06 s (the mean of car 16's two driver-session levels).
-    - New SOFT: fall-off +8.24 s at stint lap 18, then flat (+8.46 s at lap 57). The tree can't extrapolate past age 19; the linear model would be at +20.2 s. MEDIUM +4.48 → +3.66, HARD +6.95 → +6.63.
-    - Largest step 2.4–3.6 s: the tree's curve moves in steps.
-  - **Effect on strategy (car 16):**
-    - **Winner:** SOFT(0)–SOFT(0)–HARD(0), pits on laps 14 and 28, **5649.51 s**, tied with SOFT–HARD–SOFT (14, 43) and HARD–SOFT–SOFT (29, 43).
-    - **Alternatives:**
-      - Pit laps one later: +0.17 s.
-      - Best with MEDIUM: +1.88 s.
-      - Best 1-stop: MEDIUM(0)–HARD(0), pit on lap 42, +28.36 s.
-      - The used SOFT(6) set is never the best choice.
-    - **Why 2 stops now:** the curves fall off steeply, so fresh tyres are worth a stop (it was 1 stop on flat rollouts). The 29-lap HARD stint runs past the oldest tyre in training, where the tree's curve is flat, which flatters long stints. Together with the gap above, this is **not** a valid recommendation yet.
-  - **Checks:**
-    - the leak assert holds, and the bundle's features hold nothing from `LAP_TIMING_COLUMNS`
-    - stage 2 uses only multi-lap stints, with no NaN after the fill
-    - `fall_off(c, 1) = 0` on every new set
-    - every stint total equals the cumulative sum of `_stint_curves.csv` (to 1e-12, after casting XGBoost's float32 predictions to float64)
-    - every `total_time` equals the summed stints + race fuel + 22 s × stops (to 2e-12 s, 12,210 rows)
-    - SOFT(6) costs more than SOFT(0) for every stint length (by at least 3.57 s)
-    - eda.py's within-stint slopes equal stage 1 on all rows
-    - the pipeline runs end to end on Bahrain 2025 from the cache
-  - **Not rerun:** `tune_iqr.py` / `tune_push.py` (they switch weekends; their #32 / #30 results predate the new target).
-  - **Docs:** readme.txt (input list, "What are we predicting?", Training, Model choice, Race Simulation step 2 and the results, Evaluation, the leakage notes in Feature Engineering, EDA counts), README.md, AGENTS.md, `.env` comments.
+  - **Problem:** the next-lap target needed lap *t+1* to survive cleaning, and practice alternates push and cool-down laps, so 573 cleaned laps gave only 273 rows. It also didn't fit the job: next-lap pace is mostly driver / session / run-type level, `tyre_age` was 15th in importance, and rollouts reverted to the training mean within ~3 laps.
+  - **Fixed:** the model learns **tyre fall-off with age within a stint**: `fcp(lap) = level[stint] + fall_off(compound, tyre_age, conditions)`, in three stages (stint levels + slope per compound; the model on `fcp − level`; the compound gap from stints). Every lap of a multi-lap stint is a row (427 now). The lap's own timing and telemetry can't be inputs (`LAP_TIMING_COLUMNS`, asserted). Validation scores the within-stint curve shape against flat and linear baselines. The simulator prices each stint from a fall-off curve, with no rollout.
+    - **Rejected:** imputing the missing next lap (at most 340 rows, same target); pace relative to a driver-session level (the run type confounded the slopes); backfitting stages 1 and 2 (didn't converge).
+    - eda.py's slope bug was fixed at the same time: it de-meaned the pace but not tyre age, pulling the slopes towards 0.
+    - The compound-gap problem found here moved to #27 (Step 2).
+
+- [x] **#32 IQR residual filter drops fast push laps run between cool-down laps**
+  - **Problem:** a push lap among cool-down laps has a cool-down lap as its rolling median, so its residual is far below 0, and in sessions full of long runs (FP2) the IQR is small, so one shared multiplier of 3 dropped those push laps (33 on Bahrain 2025).
+  - **Fixed:** one multiplier per side (`IQR_LOWER_MULTIPLIER`, `IQR_UPPER_MULTIPLIER`), tuned by `explore/tune_iqr.py` over 12 weekends (label sweep + CV sweep). A medcouple-adjusted boxplot was rejected (it narrows the lower fence and removes 34–76 push laps per session). Winner (60, 3), rerun in #27 Step 1 → **(62, 3)**; the fast side is in effect off. Rerun tune_iqr.py when weekends are added, since the k needed grows with the densest FP2 seen.
+
+- [x] **#33 Some dropped or median-filled data could be imputed instead** (was under "Things to explore")
+  - **Problem:** the car-data z-score filter dropped whole laps for one outlying aggregate; laps missing one sector were dropped though it could be rebuilt; and 45% of target rows had a median-filled input, with the median pooled over the field and computed before the split.
+  - **Fixed:** the z-score test masks only the flagged aggregate (`zscore_outlier_mask()`); a single missing sector is rebuilt as `lap_duration` minus the other two; missing speed traps, segment counts and car data are filled with the median of the same stint's *earlier* laps (`STINT_FILL_COLUMNS`); any fallback median is fitted on training rows only. Group-wise medians and a regression from `i2_speed` were rejected.
 
 ### P3: completeness and cleanup
 
 - [x] **#12 The starting compound setting has no effect**
-  - **Where:** `start_features` in `__main__` of `scripts/strategy_simulator.py`.
-  - **Problem:** `compound_HARD = 1` is set, but `precompute_lap_predictions()` (now `rollout_stint()`) overwrites the compound one-hots for every compound anyway. Since #7, `start_features` starts from the training medians, not zeros, but the compound override is still dead.
-  - **Fix:** remove the setting. #9 is done and seeds every stint from the medians with the stint's own compound, so the setting has no remaining use.
-  - **readme.txt:** Race Simulation step 2.
-  - **Fixed:** the `compound_HARD = 1` / `compound_MEDIUM = 0` / `compound_SOFT = 0` block is removed from `__main__`, so `start_features` is only the training medians. `rollout_stint()` sets every stint's compound one-hots, tyre age, sector times and `stint_avg_pace`, as before.
-    - **Checks:** `strategy_simulator.py` was re-run on the same model bundle. All seven files in `scripts/results/strategy_simulator/` (rollouts, stint totals, all strategy results, best strategy, summary, log, manifest) are byte-identical to the previous run. The best strategy is unchanged: MEDIUM(0)–HARD(0), pit on lap 10, 5774.26 s.
+  - **Fixed:** the dead `compound_HARD = 1` block in `strategy_simulator.py`'s `__main__` was removed; every output was byte-identical.
 
 - [x] **#14 The car-data stage is not functional**
-  - **Where:** `scripts/process_cardata.py`.
-  - **Problem:**
-    - It's a copy of `process_laps.py` and looks for `cardata_p*_*.csv`, but the files are named `car_data_p*_*.csv`.
-    - It filters on lap columns (`duration_sector_*`, `i1_speed`, `lap_duration`) that car data doesn't have.
-    - It isn't called from `master.py`.
-  - **Fix:** rename the inputs, clean the actual columns (`brake`, `throttle`, `speed`, `rpm`, `n_gear`, `drs`), and aggregate the ~4 Hz samples per lap by matching each sample's timestamp to the lap's time window. Then wire it into `master.py`.
-  - **readme.txt:** Data Collection step 5; Running the Pipeline; Data Preparation, CarData.
-  - **Fixed:** `process_cardata.py` rewritten to read `car_data_p*_*.csv` and keep `session_key`.
-    - **Sample cleaning:** drops duplicate timestamps, no-input samples (`brake`/`throttle` = 104, about a third of all samples, all stationary) and out-of-range readings.
-    - **Encoding:** `brake` → `braking` (0/1), `drs` codes → `drs_open` (0/1 for 10/12/14).
-    - **Per-lap aggregation:** each sample is assigned to its lap window `[date_start, date_start + lap_duration)` from the raw `laps_p*.csv` with `merge_asof` by `(session_key, driver_number)`. Samples are then aggregated per lap: speed, throttle, full-throttle share, braking share, rpm, gear, gear changes and DRS-open share.
-    - **Lap filters:**
-      - laps with less than half the expected samples are dropped
-      - laps not in `data/processed/laps_combined_clean.csv` are dropped (pit-out, invalid and outlier laps), so car data covers the same laps as the lap data
-      - per-session |z| > 3 outliers on the aggregates are dropped
-    - **Normalization:** per-session `StandardScaler`, the same scheme as the laps.
-    - **Output:** 90 laps (11–19 per driver-session) in `data/processed/cardata_per_lap_clean.csv`. Also written: an unscaled copy, and the cleaned samples per input file in `scripts/results/process_cardata/`.
-    - **Pipeline:** wired into `master.py` after `process_weather.py`. It is not a model input yet, see #16.
-    - **Since #16:** the data is full-field (60 files in `data/raw/car_data/`, 448 laps), the per-session scaling is removed, and the aggregates are model inputs.
-    - **Data fix:** `car_data_p1_1.csv` was driver #7 (Alpine). It was re-downloaded for #38, who ran Ferrari's #16 car in FP1.
+  - **Problem:** `process_cardata.py` was a copy of `process_laps.py` with the wrong file names and columns, and wasn't called from `master.py`.
+  - **Fixed:** rewritten to clean the real telemetry (duplicates, no-input 104 samples, out-of-range readings), encode brake / DRS, assign each ~4 Hz sample to its lap window and aggregate per lap, keeping only laps that survive `process_laps.py`. Wired into `master.py`. `car_data_p1_1.csv` was re-downloaded for #38, who drove Ferrari's #16 car in FP1.
 
 - [x] **#16 Car data is not a model input yet**
-  - **Where:** `scripts/feature_engineer.py` and `scripts/feature_config.py`, reading `data/processed/cardata_per_lap_clean.csv` (written by `scripts/process_cardata.py`).
-  - **Problem:**
-    - The car data is cleaned, aggregated per lap and scaled, but nothing reads it.
-    - It covers only the two Ferrari cars per session (2 of ~20 drivers), and the model is trained on the whole field. Adding it as a feature as-is would leave about 90% of training rows empty.
-  - **Fix:**
-    - Decide how to use it: a Ferrari-only model, a second model with the car-data features, or imputation for the other drivers.
-    - Merge on `(session_key, driver_number, lap_number)`, using only lap *t*'s car data to predict lap *t+1* (no leakage).
-    - Add the chosen columns to `MODEL_FEATURE_COLUMNS` / `SIM_FEATURE_COLUMNS` in `feature_config.py`, and decide what the simulator feeds for them.
-  - **Depends on:**
-    - #4 (fixed): the engineered dataset now keeps `session_key` and `driver_number`, so the merge keys are available.
-    - #7 (fixed): the laps are no longer scaled, but the car-data aggregates still are (per session). Leave them unscaled too before merging, so the inputs are physical units throughout and the simulator's median baseline stays meaningful.
-    - #9 (fixed): the simulator rolls a lap-*t* feature vector forward. Car-data features would need a seed value and a rule for how they evolve, or they stay at their medians like the speeds.
-  - **readme.txt:** Data Collection step 5; Data Preparation, CarData.
-  - **Fixed** (car data for the whole field, all 10 aggregates as lap-*t* inputs):
-    - **Download:** car data for every driver in each practice session's `laps_p*.csv` (20 per session, 60 files, ~66 MB). The files are now in `data/raw/car_data/` as `car_data_p<session>_<driver>.csv` (new `.env` key `CARDATA_DIR`; `CARDATA_GLOB` is unchanged). The six re-downloaded Ferrari files are identical to the old `car_data_p*_{1,2}.csv`, which are removed.
-    - **Unscaled:** `process_cardata.py` no longer scales the aggregates (#7), so they are in physical units, as the laps are. The `_per_lap_unscaled.csv` copy and `_scaling_summary.csv` are gone, and `_per_lap.csv` and the hand-off are the unscaled table. Medians: `mean_speed` 195 km/h, `mean_rpm` 9978, `full_throttle_pct` 0.46.
-    - **Columns:** `CARDATA_FEATURE_COLUMNS` in `feature_config.py` lists `mean_speed`, `max_speed`, `mean_throttle`, `full_throttle_pct`, `brake_pct`, `mean_rpm`, `max_rpm`, `mean_gear`, `gear_changes` and `drs_open_pct`. They are spliced into `MODEL_FEATURE_COLUMNS` after the weather, which gives 36 inputs. `process_cardata.py` takes its z-score columns from the same list.
-    - **Car-data laps:** 448 (all 20 drivers in every session, 1–15 per driver and session). Of the laps assigned, 129 are dropped for low coverage, 596 for not being in the cleaned lap data and 19 as z-score outliers (now judged per session across the whole field).
-    - **Merge:** `feature_engineer.py` left-merges the car data on `(session_key, driver_number, lap_number)` with `validate="one_to_one"`, after the weather. Each row gets its own lap *t*'s telemetry and the target is lap *t+1*, so nothing leaks. 467 rows before and after. 19 laps have no car data (dropped as outliers). `train_model.py` fills those with the training medians, as it does for other missing inputs. Of the 153 target rows, 148 have car data (was 19). Spot-checked: engineered rows match `process_cardata_per_lap.csv` for the same key and lap.
-    - **Simulator:** no logic change. The car-data inputs start at the training medians and stay there for the whole rollout, like the speed traps. That makes them a constant offset in the race, not a driving-style or tyre effect. A seed per car, or a rule for how they evolve, would be a separate change.
-    - **Effect on metrics:** held-out MAE 1.44 / 1.20 / 1.07 s, RMSE 1.90 / 1.68 / 1.60 s and R² 0.308 / 0.460 / 0.510 (LR/RF/XGB; was 1.67 / 1.13 / 1.03 s and R² 0.157 / 0.505 / 0.590). XGBoost 5-fold CV MAE 1.13 s, RMSE 1.60 s (was 1.19 / 1.67 s).
-      - Linear Regression gains the most. On the 31-row held-out split, RF and XGB are slightly worse, while CV (all 153 rows) is slightly better. With 36 inputs and 153 rows, both changes are within noise, and both splits still shuffle laps (#18).
-    - **Feature importance:** together the car-data inputs carry 0.249 of XGB's importance and 0.241 of RF's. XGB's top five are `stint_avg_pace` 0.145, `i2_speed` 0.100, `mean_gear` 0.080, `duration_sector_2` 0.066 and `air_temperature` 0.051, with `mean_speed` 6th (0.047). `tyre_age` is 7th (0.039) and `track_temperature` 21st. RF is led by `duration_sector_2` 0.201, `i2_speed` 0.153, `duration_sector_1` 0.096, `stint_avg_pace` 0.087 and `mean_gear` 0.075.
-    - **Rollout behaviour** (57-lap stint, fcp in s): the seed is unchanged (97.15 s fcp). Every compound and set age predicts 99.3–99.8 s on stint lap 2 and 101.1–101.4 s on lap 3, then stays within 100.55–101.53 s. The largest lap-to-lap step is 2.1–2.6 s. Still almost flat, and compounds and set ages are within ~0.4 s of each other.
-    - **Effect on strategy:** both cars still pick 1 stop, now on HARD and SOFT.
-      - **Car 16:** HARD(0)–SOFT(6), pit on lap 45, 5840.85 s (ties with SOFT(6)–HARD(0), pit on lap 12). Neighbouring pit laps are +0.24 s. The best 2-stop is SOFT(0)–SOFT(0)–HARD(0), pits on laps 16 and 34, +13.75 s. Was SOFT(6)–MEDIUM(0), pit on lap 46, 5838.86 s.
-      - **Car 44:** SOFT(4)–HARD(0), pit on lap 14, 5840.39 s (ties with the reverse, pit on lap 43). The best 2-stop is HARD(0)–SOFT(4)–SOFT(0), pits on laps 24 and 39, +13.38 s. Was SOFT(6)–MEDIUM(3), pit on lap 46, 5838.15 s.
-      - The top strategies are within ~0.3 s, so the compound and pit-lap choice are still close to arbitrary. This is still **not** a valid recommendation (#18).
+  - **Fixed:** car data downloaded for the whole field (20 drivers per session), left unscaled, and merged per lap on `(session_key, driver_number, lap_number)`. It was a lap-*t* input to the next-lap model; since #31 it is the lap's own telemetry, so not a model input (EDA and tune_push.py's label only).
 
 - [x] **#21 Race stints always start on a new tyre set**
-  - **Where:** `RACE_TYRE_AGE_AT_START` in `scripts/strategy_simulator.py`.
-  - **Problem:** every simulated stint has `tyre_age_at_start = 0`. In a real race, some stints start on sets already used in practice or qualifying, and the sets available depend on what is left of the weekend allocation.
-  - **What the data allows:**
-    - OpenF1 `stints` gives each stint's compound, lap range and `tyre_age_at_start`, but no set ID.
-    - Sets can be inferred by chaining: a stint that starts used, at the age an earlier stint of the same compound ended at, is probably the same set. For example, #44 in FP1 ran HARD for laps 1–9, then started stint 2 on HARD at age 8.
-    - This is a heuristic, and it is ambiguous when two sets share a compound and age.
-  - **Fix:**
-    - Infer Ferrari's sets and their ages from the stints.
-    - Add the qualifying stints. This broadens scope beyond FP1–FP3, so confirm first.
-    - Hard-code the allocation and return rules (typically 2 HARD / 3 MEDIUM / 8 SOFT per weekend, with sets returned after sessions), which OpenF1 doesn't provide.
-    - Let `generate_strategies()` choose from the sets left, and start each stint at its set's age.
-  - **readme.txt:** Race Simulation step 2.
-  - **Fixed** (practice only, both Ferraris; the real tyre age is also a model input now):
-    - **New stage `scripts/tyre_sets.py`** (in `master.py` after `process_stints.py`) chains each race car's practice stints into sets. It writes the sets left for the race to `data/processed/tyre_sets_race_inventory.csv`.
-      - A stint at `tyre_age_at_start` 0 takes a new set from the allocation.
-      - A used-set stint continues the same-compound set left at exactly that age, preferring the most recently used. If none matches, it is logged and takes a new set at that age.
-      - A set's age after a stint is `tyre_age_at_start + (lap_end − lap_start)`, which is how OpenF1 counts it.
-      - After practice session *i*, the `TYRE_RETURNS_PER_SESSION` most-worn sets are returned, keeping the `TYRE_RACE_RESERVED` new sets.
-      - New `.env` keys: `RACE_CARS=16,44`, `FP_STAND_INS=38:16`, `TYRE_ALLOCATION=SOFT:8,MEDIUM:3,HARD:2`, `TYRE_RETURNS_PER_SESSION=1,1,2`, `TYRE_RACE_RESERVED=HARD:1,MEDIUM:1` and `TYRE_SETS_FILE`. `RACE_TYRE_AGE_AT_START` is removed.
-    - **Chaining result:** 26 Ferrari stints (13 per car). 14 new sets, 11 exact matches and 1 ambiguous match (car 16, FP3: two SOFT sets at age 6; either choice gives the same inventory). No stint is unmatched. Assignments are in `tyre_sets_stint_set_assignment.csv` and returns in `tyre_sets_returned_sets.csv`.
-      - **Car 16:** returns HARD 12 (FP1), MEDIUM 17 (FP2), SOFT 15 and SOFT 7 (FP3). Races with SOFT 0, 0, 0, 0, 6, 6 / MEDIUM 0, 0 / HARD 0.
-      - **Car 44:** returns HARD 16, SOFT 12, then SOFT 8 and 7. Races with SOFT 0, 0, 4, 5, 6 / MEDIUM 0, 0, 3 / HARD 0.
-    - **Real tyre age feature:** `feature_engineer.py` adds `tyre_age = tyre_age_at_start + laps_since_stint_start` (laps on the set including lap *t*; 2–21 in training), which is in `MODEL_FEATURE_COLUMNS`. That gives 26 inputs; `tyre_age_at_start` and `laps_since_stint_start` are kept. Checked equal to the sum on all 839 rows; 514 rows after the target, unchanged.
-    - **Simulator:**
-      - `rollout_stint()` takes the set's age: `tyre_age_at_start` = set age, and `tyre_age` = set age + stint lap.
-      - Rollouts run once per (compound, set age) any car has (7 pairs, shared by both cars).
-      - `set_age_options()` lists the distinct set choices for a compound sequence, each set used at most once. For each sequence and set of pit laps, the fastest choice is kept.
-      - Sequences a car can't cover are skipped: 3,996 per car, since both have one HARD. That leaves 12,210 per car.
-      - Outputs gain `car_number`/`set_ages` (all-strategy CSV), `set_age_at_start` (rollouts, totals in long format), and a per-car `best_strategy.json`.
-      - Checked: every one of the 24,420 result rows uses only sets the car has, each at most once, and every rollout lap has `tyre_age = set_age_at_start + laps_since_stint_start`.
-    - **Effect on metrics:** held-out MAE 16.62 / 12.37 / 11.97 s, RMSE 20.44 / 16.85 / 15.92 s and R² 0.373 / 0.574 / 0.620 (LR/RF/XGB; was 12.54 / 12.06 MAE and R² 0.565 / 0.620 for RF/XGB). LR is unchanged, because `tyre_age` is a sum of two of its inputs. XGBoost 5-fold CV MAE 11.77 s, RMSE 16.16 s (was 12.02 / 16.32 s). `tyre_age` is XGB's 2nd feature (0.087, after `i2_speed` 0.130) and RF's 6th (0.062).
-    - **Rollout behaviour:**
-      - On a new set, every compound predicts its second lap at about 113 s, a 12–13 s jump, then drops back to 104–106 s before stepping up to 111–114 s around stint lap 20.
-      - Used sets (age 3–6) have no jump, and step up about 6 s around stint laps 14–17.
-      - Cause: in practice, new sets are mostly run as push lap then cool-down lap. The training median fcp on new-set stint lap 2 is 94.8 s and on stint lap 3 is 148.8 s. The model has learnt that pattern now that it can see the set's real age. This is #20, not tyre physics.
-    - **Effect on strategy:**
-      - **Car 16:** SOFT(6)–SOFT(0)–HARD(0), pits on laps 18 and 38, 5890.48 s (tied with SOFT(6)–HARD(0)–SOFT(0), since the last two stints are both 19 laps). Its best with new sets only is 5901.72 s, and its best 1-stop is HARD(0)–SOFT(6) at 6101.64 s.
-      - **Car 44:** MEDIUM(3)–SOFT(4)–SOFT(5), pits on laps 18 and 38, 5856.92 s. Its best 1-stop is MEDIUM(3)–SOFT(4) at 6072.59 s.
-      - The previous winner, HARD–HARD–SOFT (6023.36 s), needs two HARD sets, which neither car has left.
-      - Both cars prefer used sets because of the new-set second lap above, and #11 still drops the pit laps. So this is still **not** a valid recommendation.
-    - **Still open (limitations):**
-      - Qualifying stints aren't used (scope kept to FP1–FP3), so sets used in qualifying are counted as available.
-      - The allocation, the return counts, returning the most-worn sets and the reserved sets are assumptions in `.env`. They should be checked against the season's sporting regulations.
-      - Chaining is a heuristic: it assumes OpenF1's `tyre_age_at_start` counts every lap on the set.
-    - **Since #23:** `tyre_sets.py` builds an inventory for every car in practice, not just the Ferraris, and the simulator runs for the one car in `SIM_DRIVER`. `RACE_CARS` is removed.
-    - **Since #24:** `FP_STAND_INS` is removed; the stand-ins are derived from OpenF1's per-session entry lists.
+  - **Problem:** every simulated stint started at tyre age 0, whatever sets the car had left.
+  - **Fixed:** new stage `scripts/tyre_sets.py` chains each car's practice stints into sets (OpenF1 has no set ID: a used-set stint continues the same-compound set left at exactly that age), applies the allocation, returns and reserved sets from `.env`, and writes each car's race inventory. The simulator uses only the car's sets, each at most once, and `tyre_age` (set age + laps on it) is a feature.
+    - **Limitations:** qualifying isn't used (scope is FP1–FP3), so sets used there count as available; the allocation and return rules are `.env` assumptions to check against the sporting regulations; chaining is a heuristic.
 
 - [x] **#22 Settings are hardcoded across scripts**
-  - **Where:** all 8 stage scripts and `scripts/feature_config.py`.
-  - **Problem:** the race constants (`PIT_LOSS = 22.0`, `NUM_LAPS = 57`, `FUEL_PENALTY_PER_LAP`, the pit window `range(10, total_laps - 10)`, stops `[0, 1, 2]`) and `FUEL_EFFECT_K` were literals. So were the cleaning thresholds (30 s, 2× median, 50 km/h, IQR × 3, weather and car-data |z| > 3, car-data limits), the 5 min weather-merge tolerance, the model hyperparameters, the split and CV settings, `random_state=42`, and every data/results path and file name. Trying a different pit loss or another weekend's files meant editing code, and the same value (e.g. the model bundle path, the seed) was repeated across scripts.
-  - **Fix:** move them to one settings file that every script reads.
-  - **Fixed:** settings live in `.env` at the repo root, which is committed: there are no secrets, and a fresh clone runs as-is. The new `scripts/env_config.py` parses it, with no new dependency. Variables already set in the environment win, so `$env:PIT_LOSS_S="25"; python strategy_simulator.py` overrides one run. The getters (`env_str` / `env_int` / `env_float` / `env_list`) raise `KeyError` on a missing key instead of falling back to a hidden default. Each script reads its keys once at module level. `FUEL_EFFECT_K` stays exported from `feature_config.py`, so its importers are unchanged.
-    - **Kept in code** (schema or format, not settings): the column lists and `COMPOUNDS`, the throttle 0–100 / brake {0, 100} encodings, the XGBoost objective, `n_jobs`, plot cosmetics, the t-test placeholder (#5) and the dead `compound_HARD = 1` start setting (#12, removed since).
-    - **Checks:** the full pipeline was run before and after. All 69 output CSV/JSON/TXT files are identical (CSVs to rtol 1e-9; the RandomForest RMSE differs only in the last digit between runs anyway). The exceptions are the unseeded t-test samples and p-value (#5) and one log line now reading "within 5min". The best strategy is unchanged (SOFT–SOFT–SOFT, pits 12 and 13, 5695.12 s). With `PIT_LOSS_S=30` it becomes 5711.12 s, which is 2 stops × 8 s more, as expected.
-  - **readme.txt:** Running the Pipeline.
+  - **Fixed:** settings live in the committed `.env` (no secrets), read by `scripts/env_config.py`; a missing key raises, and an environment variable overrides one run. Schema definitions (column lists, `COMPOUNDS`, encodings) stay in code. All outputs were identical before and after.
 
 - [x] **#23 Strategy is only produced for the two Ferraris**
-  - **Where:** `RACE_CARS=16,44` in `.env`, read by `scripts/tyre_sets.py` and `scripts/strategy_simulator.py`.
-  - **Problem:** the model is trained on the whole field and has no driver input, but `tyre_sets.py` built set inventories for the two Ferraris only, and the simulator looped over both. Each car could fit only its own sets, so every run declared two results, and no other car could be simulated.
-  - **Fix:** run the race for one chosen car, with inventories available for every car.
-  - **readme.txt:** intro; Data Collection step 5 (stand-ins); Race Simulation, tyre sets and step 4.
-  - **Fixed:**
-    - **`.env`:** `RACE_CARS` is replaced by `SIM_DRIVER=16`, the race car the strategy is simulated for. `FP_STAND_INS` now maps all six FP1 stand-ins to their race cars: `38:16,34:14,37:1,46:55,50:87,72:63`. This comes from OpenF1's `drivers` endpoint, FP1 (session 10007) against FP2 (10008); each team ran exactly one stand-in. OpenF1 lists #38 as Dino Beganovic, not Bearman as the old comment said.
-    - **`tyre_sets.py`:** loops over every car in the practice stints after the stand-in mapping (20 cars), with no logic change, and logs the field-wide match counts. Of 275 stints, 143 are new, 108 matched, 16 ambiguous and 8 unmatched (cars 4, 5, 10, 12, 18, 22, 23, 55: no set left at that age, so they take a new set at that age). Cars 6, 10, 22 and 55 run past the MEDIUM allocation and car 23 past the HARD one, which adds a set with a warning. Car 30 has no MEDIUM left for the race.
-    - **`strategy_simulator.py`:** filters the inventory to `SIM_DRIVER`. An unknown number raises `ValueError` listing the available cars. The per-car loop is gone; set choice, infeasible-sequence skipping and the rollouts are unchanged. `best_strategy.json` is flat (`time_units`, `car_number`, `best_compound_sequence`, `best_set_ages_at_start`, `best_pit_laps`, `best_total_time`), and `final_summary.txt` has one line. Only the chosen car's (compound, set age) pairs are rolled out (4 for car 16, was 7 for both cars).
-    - **Checks:** the inventory rows for cars 16 and 44 are identical to before. The train and CV metrics are unchanged (the RandomForest RMSE differs only in the last digits between runs anyway). `SIM_DRIVER=16` reproduces the previous car-16 result exactly, and `SIM_DRIVER=44` the car-44 one. `SIM_DRIVER=99` raises with the list of 20 cars.
-    - **Effect on strategy:** for car 16 (default), HARD(0)–SOFT(6), pit on lap 45, 5840.85 s, from 12,210 feasible strategies (3,996 skipped). Other cars, e.g.:
-      - Car 1: same result as car 16.
-      - Car 44: SOFT(4)–HARD(0), pit on lap 14, 5840.39 s.
-      - Car 30: no MEDIUM left, so only 2,072 strategies are feasible; SOFT(3)–HARD(0), pit on lap 10, 5839.87 s.
-      - Cars differ only through their sets, and the rollouts are almost flat, so the gaps are below 1 s. This is still **not** a valid recommendation (#18).
-    - **Since #24:** `FP_STAND_INS` is derived from `data/raw/drivers/` instead of set in `.env`; for Bahrain 2025 it gives the same six pairs.
+  - **Fixed:** `tyre_sets.py` builds inventories for every car in practice (20), and the simulator runs for the one car in `SIM_DRIVER` (default 16); an unknown number raises with the list of cars.
 
 - [x] **#24 The race weekend is fixed to Bahrain 2025 and raw data is downloaded by hand**
-  - **Where:** `data/raw/` (filled with the curl commands in README.md), and the weekend constants in `.env`: `NUM_LAPS=57` and `FP_STAND_INS`.
-  - **Problem:** running another weekend meant looking up its session and meeting keys, re-downloading ~70 files by hand over the current ones, and editing the race length and stand-ins. Switching back meant downloading Bahrain again.
-  - **Fix:** choose the weekend in `.env` from a hardcoded table of 2024 and 2025 session keys, and have `master.py` fetch it, keeping every weekend fetched in a local cache.
-  - **readme.txt:** Data Collection; Running the Pipeline; Race Simulation, tyre sets.
-  - **Fixed:**
-    - **New stage `scripts/race_weekend.py`** (step 0 of `master.py`, before `process_laps.py`).
-      - `WEEKENDS` hardcodes every non-sprint 2024 and 2025 weekend (36): meeting key, FP1–FP3 session keys and scheduled race laps. The keys come from OpenF1 `/v1/sessions?session_type=Practice` and `/v1/meetings`. The race laps were checked against the highest race lap in OpenF1 and all match, except 2025 Austria, which ran 70 laps, so the table uses 70.
-      - The 12 sprint weekends (FP1 only) are listed in `SPRINT_WEEKENDS` and raise an error that says why. An unknown name raises with the valid names for that year.
-      - Session keys rise FP1 → FP3 on every weekend (2024 Abu Dhabi too: 9461, 9656, 9657), so `tyre_sets.py`'s sorted-key session order still holds.
-      - `selected_weekend()` is importable with no side effects; `strategy_simulator.py` takes its race laps from it.
-    - **Cache:** `data/cache/<year>_<name>/` mirrors `data/raw/` and is gitignored (~67 MB per weekend); `data/raw/` stays the active weekend, so no stage's paths changed.
-      - If raw already holds the complete selected weekend (`meeting_key` in `laps_p1.csv`), the stage does nothing.
-      - Otherwise raw is moved into its own weekend's cache folder (a file already cached is kept and the raw copy dropped), the selected weekend's folder is completed from OpenF1, and it is copied into raw.
-      - Downloads write to `.part` and rename, so an interrupted run resumes. They wait `OPENF1_REQUEST_DELAY_S` between requests and retry HTTP 429/5xx and network errors with backoff.
-      - Laps, stints, drivers and weather with no results raise. A car-data query with no results leaves a `.nodata` marker, so it isn't requested again.
-      - It uses `urllib` from the standard library: `requests` is pinned in requirements.txt but isn't installed in `.venv`.
-    - **Car numbers follow the weekend:** car data is requested for the drivers in each session's downloaded laps file, after the laps are in.
-    - **Stand-ins:** `tyre_sets.py` derives them from the new `data/raw/drivers/drivers_p1-3.csv` (OpenF1 `drivers` per session). The FP3 lineup is taken as the race cars. In FP1/FP2, a driver not in it is paired with the one driver of the same team who sat that session out; anything else is logged and left unmapped. This also covers drivers replaced before FP3.
-    - **`process_cardata.py`** clears its per-file `process_cardata_cleaned_car_data_*.csv` outputs first, since the driver numbers in their names change between weekends.
-    - **`.env`:**
-      - New keys: `RACE_YEAR=2025`, `RACE_WEEKEND=bahrain`, `OPENF1_BASE_URL`, `OPENF1_REQUEST_DELAY_S=2.0`, `OPENF1_MAX_RETRIES=5`, `OPENF1_TIMEOUT_S=120`, `RAW_DIR`, `DRIVERS_DIR`, `CACHE_DIR`, `DRIVERS_FILES` and `CARDATA_FILE_FORMAT`.
-      - Removed: `NUM_LAPS` and `FP_STAND_INS`.
-    - **Checks:**
-      - **First run on the committed Bahrain 2025 data:** it moved 67 files into the cache and downloaded only the 3 drivers files. Every other raw file is byte-identical (no git diff). A second run does nothing.
-      - **Stand-ins:** the derived stand-ins for Bahrain 2025 are exactly the old `38:16,34:14,37:1,46:55,50:87,72:63`, and the tyre-set inventory is unchanged.
-      - **Full pipeline, Bahrain 2025:** the same strategy as before, HARD(0)–SOFT(6), pit on lap 45, 5840.85 s. The only differences are log lines, the RandomForest's last digits and the unseeded t-test (#5).
-      - **`RACE_YEAR=2024 RACE_WEEKEND=saudi_arabia`:** downloads 70 files (all 60 car-data files present, ~290 s) and runs end to end. The field includes #2, #3, #11, #20, #24 and #77, with #38 in FP3 only. Derived stand-ins: `55:38` (Bearman for Sainz). 50 race laps. Car 16: SOFT(0)–MEDIUM(3), pit on lap 16, 4827.39 s.
-      - **Switching back to Bahrain 2025:** loaded from the cache with no requests, and the results match the Bahrain run above.
-      - `RACE_WEEKEND=miami`, `nowhere` and `RACE_YEAR=2023` each raise the expected error.
-    - **Still open:** the tyre allocation and return rules, `PIT_LOSS_S`, the fuel settings and the cleaning thresholds are the same for every weekend and were tuned on Bahrain 2025. Results on other weekends carry every open item above (#18 in particular).
+  - **Fixed:** new stage `scripts/race_weekend.py` (step 0 of `master.py`) with a hardcoded table of every non-sprint 2024 and 2025 weekend (meeting key, FP1–FP3 session keys, race laps; sprint weekends raise). It fetches the weekend set by `RACE_YEAR` / `RACE_WEEKEND` from OpenF1 into a gitignored cache, `data/cache/<year>_<name>/`, and copies it into `data/raw/`; resumable downloads, `.nodata` markers, `urllib` only. Stand-ins are derived from OpenF1's per-session entry lists. Checked on Jeddah 2024 and back on Bahrain 2025 (no requests).
+    - **Still open:** the tyre rules, `PIT_LOSS_S` and the fuel settings are the same for every weekend.
 
 - [x] **#25 No exploratory data analysis**
-  - **Where:** no script. `readme.txt` has an "EXPLORATORY DATA ANALYSIS AND STATISTICAL Inference" heading with nothing under it, and `master.py` has no EDA stage.
-  - **Problem:** nothing looks at the data before it is modelled. The only plots judge the model after training: the prediction overlay, metric chart and feature importance in `train_model.py`, and the residual plot in `validate_strategy.py` (#6).
-  - **Effect:** the cleaning thresholds, the feature set (36 inputs on 153 target rows) and the reading of the flat rollouts (#16, #20) aren't backed by a look at the data. For example, nothing shows whether the practice laps contain a compound or tyre-age effect for the model to learn.
-  - **Fix:** a new stage `scripts/eda.py`, run after `feature_engineer.py` in `master.py`, with its own `results/eda/` directory, log and manifest. It reads `data/processed/final_engineered_dataset.csv`. Cover:
-    - [x] **Summary statistics and missing values** per column and session.
-    - [x] **Distributions** of `lap_duration` / `fuel_corrected_pace` by session and compound.
-    - [x] **Pace against tyre age:** `fuel_corrected_pace` against `tyre_age` per compound, i.e. the degradation the model is meant to learn.
-    - [x] **Correlations** between the 36 inputs and with the target, flagging collinear groups (sector times, speed traps and car-data aggregates).
-    - [x] **Row coverage:** rows per session, compound and stint before and after the next-lap target shift (467 → 153, with only 7 FP3 rows).
-  - Any thresholds go in `.env`; take the column lists from `feature_config.py`.
-  - **readme.txt:** Exploratory Data Analysis and Statistical Inference.
-  - **Fixed:**
-    - **`scripts/eda.py`:** a new stage, run by `master.py` between `feature_engineer.py` and `train_model.py`. It reads `final_engineered_dataset.csv`, writes only to `results/eda/` (log, manifest, 9 CSVs, 4 plots) and has no hand-off file, so the model, simulator and validation are unchanged. Column lists come from `feature_config.py`, and the target rows from `build_next_lap_target()`. `lap_duration` (dropped by `feature_engineer.py`) is rebuilt as `fuel_corrected_pace + FUEL_EFFECT_K × laps_remaining`, and matches the sector sum on all 467 laps.
-    - **`.env`:** `EDA_COLLINEAR_THRESHOLD=0.8`, the |Pearson r| at which two inputs are flagged as collinear.
-    - **Findings, Bahrain 2025:**
-      - **Missing / constant:** `stint_avg_pace` is NaN on 223 rows (47.8%, every stint's first lap), the car-data aggregates on 19 (4.1%). `segments_sector_1`, `segments_sector_2` and `rainfall` are constant, so 3 of the 36 inputs carry nothing.
-      - **Degradation:** with each stint's mean removed, a linear fit of `fuel_corrected_pace` on `tyre_age` gives +0.168 s/lap on SOFT, +0.041 on MEDIUM and +0.053 on HARD (35 / 31 / 21 multi-lap stints). Descriptive only; #26 now tests the (post-#31) slopes.
-      - **Correlations (153 target rows):** 18 input pairs at |r| ≥ 0.8 in 4 groups: `session_FP1`/`session_FP2` with air and track temperature, humidity and pressure; `duration_sector_2` with `mean_speed`; `st_speed` with `max_speed`; `mean_throttle` with `full_throttle_pct`. The sector times and speed traps are not collinear among themselves at 0.8. The top target correlations are `full_throttle_pct` (+0.44), `i2_speed` (+0.44) and `mean_throttle` (+0.36); `tyre_age` is +0.02 and the compound one-hots within ±0.13, as between-stint pace levels swamp the within-stint trend.
-      - **Coverage:** 467 laps in 223 stints, 136 of them with a single clean lap; 153 target rows in 50 stints (FP1 45 / FP2 101 / FP3 7; SOFT 64 / MEDIUM 63 / HARD 26).
+  - **Fixed:** new stage `scripts/eda.py` between `feature_engineer.py` and `train_model.py`, writing only to `results/eda/`: summary statistics and missing values, pace distributions, pace against tyre age (the within-stint slope, = stage 1), correlations with collinear groups (`EDA_COLLINEAR_THRESHOLD`) and row coverage.
 
 - [x] **#26 No statistical inference on the practice data**
-  - **Where:** no script. The only statistical test is in `validate_strategy.py` (#5), and it tests the model's errors against a persistence baseline, not effects in the data.
-  - **Problem:** nothing tests whether the effects the strategy depends on are real in the data: differences in pace between compounds, tyre degradation, and pace changes between sessions.
-  - **Fix:** add tests on the real laps, in the #25 stage or next to it:
-    - [x] **Compound pace:** do SOFT, MEDIUM and HARD differ in `fuel_corrected_pace`? Use pairwise Welch t-tests or one-way ANOVA / Kruskal–Wallis, within session so the session's pace level doesn't confound it.
-    - [x] **Degradation:** is the slope of `fuel_corrected_pace` against `tyre_age` per compound different from 0? Report the slope with a confidence interval.
-    - [x] **Session pace:** do FP1, FP2 and FP3 differ (track evolution)?
-  - **Watch out:** laps within one stint aren't independent (the same issue as #18), so per-lap tests overstate significance. Test on stint-level values (e.g. per-stint slopes or means) or account for the grouping.
-  - `scipy` is already pinned. `statsmodels` isn't installed, so confirm before adding a dependency.
-  - **Since #31:** train_model.py's stage 1 (stint levels + one `tyre_age` slope per compound) is the within-stint degradation estimate this item asks to test: +0.362 / +0.210 / +0.312 s/lap on the training stints, +0.365 / +0.227 / +0.306 on all rows (= eda.py's slopes, now within-stint). A CI on those slopes, with stint-level resampling, would close the degradation part. The compound gap (stage 3) is the compound-pace part, and comparing stints confounds it (see #31).
-  - **Depends on:** #25 (same data, likely the same stage).
-  - **readme.txt:** Exploratory Data Analysis and Statistical Inference.
-  - **Fixed:** a new section 6 in `scripts/eda.py`, "Statistical inference". `statsmodels` wasn't needed: scipy only. Every test is on stints, or on driver-session means (or resamples whole stints), never single laps. alpha is `SIGNIFICANCE_LEVEL` (0.05) with 95% intervals, and each family of three comparisons is Holm-corrected. Outputs: `eda_inference_degradation.csv`, `_slope_differences.csv`, `_stint_slopes.csv`, `_compound_pace.csv`, `_session_pace.csv` and `eda_inference.png`.
-    - **`.env`:** `EDA_BOOTSTRAP_RESAMPLES=2000`. eda.py also reads `RANDOM_STATE` and `SIGNIFICANCE_LEVEL` (comments updated).
-    - **Degradation:** stage 1's slopes (`fit_stint_levels` on the multi-lap stints), with a stint cluster bootstrap, resampling within each compound. Each resample's slope is the pooled within-stint ΣSxy / ΣSxx, which equals stage 1 with one level per stint (asserted on the point estimate); this runs in milliseconds instead of refitting 2000 times. The per-stint OLS slopes get a one-sample t-test and a Wilcoxon test as a check.
-      - SOFT +0.365 s/lap [+0.299, +0.505], MEDIUM +0.227 [+0.133, +0.336], HARD +0.306 [+0.039, +0.539]; bootstrap p < 0.0005 / < 0.0005 / 0.034.
-      - Per stint: 35/35 SOFT stints rise (Wilcoxon p < 0.0001), 27/38 MEDIUM (p 0.0003), 15/23 HARD (p 0.18). HARD's fall-off is the least certain.
-      - Slope differences: none significant after Holm (SOFT − MEDIUM +0.14 s/lap, p 0.028, Holm 0.084; the others p ≈ 0.6). HARD above MEDIUM is within the noise.
-    - **Compound pace:** each stint's new-set pace (stage-1 level + slope at `FALL_OFF_ANCHOR_AGE`, fitted on all 573 laps) is averaged per driver, session and compound, and compounds are paired within the driver-session (44 of 60 ran two compounds).
-      - MEDIUM − SOFT +1.47 s [+0.32, +2.63] (27 pairs, Wilcoxon Holm p 0.003); HARD − SOFT +1.72 s [+0.86, +2.58] (16 pairs, Holm p 0.003).
-      - HARD − MEDIUM: only 1 driver-session ran both, so it can't be tested, and the data can't order MEDIUM and HARD.
-      - The run-type confound remains (median `run_laps` SOFT 4, MEDIUM / HARD 6), as in #27's compound-gap item. Stage 3 with the linear fall-off gives MEDIUM +0.88 / HARD +0.53 s.
-    - **Session pace:** new-set pace paired within driver and compound. FP2 − FP1 −2.36 s [−3.42, −1.29] (15 pairs, Holm p 0.002); FP3 − FP1 −1.71 s [−2.40, −1.01] (13, Holm p 0.002); FP3 − FP2 +0.02 s (21, p 0.71). Friedman on the 11 driver-compounds with all three sessions: p 0.004. Track evolution can't be separated from the conditions (FP2 runs in the evening), fuel or engine modes.
-    - **Since #27 Step 1 (2026-11-02, 566 laps, tuned thresholds):** slopes SOFT +0.341 [+0.287, +0.440], MEDIUM +0.227 [+0.135, +0.336], HARD +0.211 [−0.052, +0.460]. HARD is no longer significant (bootstrap p 0.118; 14 of 23 stints rise), and no slope difference is significant (Holm p ≥ 0.255). Compound pace MEDIUM − SOFT +1.61 s, HARD − SOFT +2.23 s (both Holm p ≤ 0.006). Session pace FP2 − FP1 −2.77 s, FP3 − FP1 −1.68 s, FP3 − FP2 +0.25 s (not significant); Friedman p 0.0008. Model-free stage 3 on all laps: MEDIUM +0.978, HARD +1.228 s.
-    - **Checks:** eda.py exits 0 with output redirected (cp1252) in ~4 s. The point slopes equal `eda_degradation_slopes.csv` and stage 1. Two runs give byte-identical CSVs (seeded). Sections 1–5 and every other stage are unchanged.
+  - **Fixed:** section 6 of `eda.py` (scipy only), every test on stints or driver-session means, never single laps, with Holm within each family. Degradation: stage 1's slopes with a stint cluster bootstrap (`EDA_BOOTSTRAP_RESAMPLES`). Compound pace and session pace: new-set pace paired within driver-session / driver-compound (t, Wilcoxon, Friedman). Current results are in readme.txt (EDA step 6).
 
 - [x] **#28 Redirected output crashes on non-ASCII log text**
-  - **Where:** the `log()` helper in all 11 stage scripts.
-  - **Problem:** when stdout is a file or pipe on Windows (`python master.py > run.txt`), Python encodes it with the ANSI code page (cp1252), which has no `→` or `✅`. The helper's "remove unsupported characters" step encoded and decoded with UTF-8, which never replaces anything, so `print` raised `UnicodeEncodeError`. `→` is logged by `process_laps.py`, `process_stints.py`, `process_weather.py`, `process_cardata.py`, `feature_engineer.py` (also `✅`), `train_model.py` and `validate_strategy.py`, so the pipeline stopped at `process_laps.py`. An interactive console was unaffected (Python 3.10 writes UTF-16 to it), and `PYTHONIOENCODING=utf-8` worked around it.
-  - **Fixed:** `log()` encodes with `sys.stdout.encoding` and `errors="replace"`, so redirected cp1252 output shows `?` in place of those characters instead of crashing. The UTF-8 log file gets the original message, so the tracked `*_log.txt` files are unchanged. No log text changed.
-    - **Checks:** with stdout redirected (cp1252) and no `PYTHONIOENCODING`, `process_laps.py` and the full `master.py` run exit 0 (all 11 stages). No tracked output changes apart from the RandomForest's last digits, which differ between runs anyway.
+  - **Problem:** redirected stdout on Windows is cp1252, which can't hold `→`, so `print` raised `UnicodeEncodeError` and `python master.py > run.txt` stopped at `process_laps.py`.
+  - **Fixed:** `log()` encodes the printed copy with `sys.stdout.encoding` and `errors="replace"`; the UTF-8 log file keeps the original text.
